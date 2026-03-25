@@ -64,11 +64,14 @@ class ModelSettings:
     provider: str
     model_name: str
     fallback_model_name: str | None
+    vision_model_name: str | None
+    vision_fallback_model_name: str | None
     endpoint: str
     api_key: str
     timeout_seconds: int
     temperature: float
     max_tokens: int
+    vision_frame_count: int
 
 
 @dataclass(frozen=True)
@@ -167,11 +170,19 @@ def load_settings(config_path: str | Path | None = None) -> Settings:
             model_name=_env("AI_CUT_MODEL_NAME", model.get("model_name", "qwen-max-latest")) or "qwen-max-latest",
             fallback_model_name=_env("AI_CUT_MODEL_FALLBACK_NAME", model.get("fallback_model_name", "qwen-plus"))
             or "qwen-plus",
+            vision_model_name=_env("AI_CUT_VISION_MODEL_NAME", model.get("vision_model_name", "qwen-vl-plus-latest"))
+            or "qwen-vl-plus-latest",
+            vision_fallback_model_name=_env(
+                "AI_CUT_VISION_MODEL_FALLBACK_NAME",
+                model.get("vision_fallback_model_name", "qwen3-vl-flash"),
+            )
+            or "qwen3-vl-flash",
             endpoint=_env("AI_CUT_MODEL_ENDPOINT", model.get("endpoint", "")) or "",
             api_key=_env("AI_CUT_MODEL_API_KEY", model.get("api_key", "")) or "",
             timeout_seconds=int(_env("AI_CUT_MODEL_TIMEOUT", str(model.get("timeout_seconds", 45))) or 45),
             temperature=float(_env("AI_CUT_MODEL_TEMPERATURE", str(model.get("temperature", 0.15))) or 0.15),
             max_tokens=int(_env("AI_CUT_MODEL_MAX_TOKENS", str(model.get("max_tokens", 2000))) or 2000),
+            vision_frame_count=int(_env("AI_CUT_VISION_FRAME_COUNT", str(model.get("vision_frame_count", 6))) or 6),
         ),
         pipeline=PipelineSettings(
             default_aspect_ratio=_env("AI_CUT_DEFAULT_ASPECT_RATIO", pipeline.get("default_aspect_ratio", "9:16"))

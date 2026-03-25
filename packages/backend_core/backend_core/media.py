@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from array import array
 from pathlib import Path
 import json
+import math
 import subprocess
 import tempfile
 from typing import Iterable
+import wave
 
 from .schemas import MediaProbe
 
@@ -18,6 +21,18 @@ class MediaToolError(RuntimeError):
 class RenderResult:
     output_path: Path
     duration_seconds: float
+
+
+@dataclass(frozen=True)
+class VideoFrameSample:
+    timestamp_seconds: float
+    image_path: Path
+
+
+@dataclass(frozen=True)
+class AudioPeakSample:
+    timestamp_seconds: float
+    energy: float
 
 
 def _run_command(command: list[str]) -> str:
@@ -64,6 +79,121 @@ def probe_media(path: str | Path) -> MediaProbe:
         hasAudio=audio_stream is not None,
         fps=fps,
     )
+
+
+def sample_video_frames(
+    source_path: str | Path,
+    output_dir: str | Path,
+    duration_seconds: float,
+    frame_count: int = 6,
+    max_width: int = 576,
+    timestamps: list[float] | None = None,
+) -> list[VideoFrameSample]:
+    source = Path(source_path)
+    target_dir = Path(output_dir)
+    target_dir.mkdir(parents=True, exist_ok=True)
+
+    safe_duration = max(0.6, float(duration_seconds))
+    if timestamps:
+        raw_timestamps = [
+            min(max(0.0, float(timestamp)), max(0.0, safe_duration - 0.2))
+            for timestamp in timestamps[:12]
+        ]
+    else:
+        normalized_count = max(1, min(frame_count, 12))
+        raw_timestamps = [
+            min(max(0.0, safe_duration * ((index + 0.5) / normalized_count)), max(0.0, safe_duration - 0.2))
+            for index in range(normalized_count)
+        ]
+
+    samples: list[VideoFrameSample] = []
+    seen: set[float] = set()
+    for index, timestamp in enumerate(raw_timestamps, start=1):
+        rounded = round(timestamp, 3)
+        if rounded in seen:
+            continue
+        seen.add(rounded)
+        image_path = target_dir / f"frame_{index:02d}.jpg"
+        command = [
+            "ffmpeg",
+            "-y",
+            "-ss",
+            f"{rounded:.3f}",
+            "-i",
+            str(source),
+            "-frames:v",
+            "1",
+            "-vf",
+            f"scale={max_width}:-2:force_original_aspect_ratio=decrease",
+            "-q:v",
+            "5",
+            str(image_path),
+        ]
+        _run_command(command)
+        if image_path.exists():
+            samples.append(VideoFrameSample(timestamp_seconds=rounded, image_path=image_path))
+    return samples
+
+
+def sample_audio_peaks(
+    source_path: str | Path,
+    duration_seconds: float,
+    peak_count: int = 6,
+    sample_rate: int = 16000,
+    window_seconds: float = 1.0,
+) -> list[AudioPeakSample]:
+    safe_duration = max(0.6, float(duration_seconds))
+    normalized_count = max(1, min(peak_count, 12))
+    with tempfile.TemporaryDirectory(prefix="ai-cut-audio-") as temp_dir:
+        wav_path = Path(temp_dir) / "mono.wav"
+        command = [
+            "ffmpeg",
+            "-y",
+            "-i",
+            str(source_path),
+            "-vn",
+            "-ac",
+            "1",
+            "-ar",
+            str(sample_rate),
+            "-acodec",
+            "pcm_s16le",
+            str(wav_path),
+        ]
+        _run_command(command)
+
+        with wave.open(str(wav_path), "rb") as handle:
+            frames = handle.readframes(handle.getnframes())
+            rate = handle.getframerate()
+
+    samples = array("h")
+    samples.frombytes(frames)
+    if not samples:
+        return []
+
+    window_size = max(1, int(rate * max(0.4, window_seconds)))
+    minimum_gap = max(2.5, safe_duration / max(4.0, normalized_count * 1.4))
+    windows: list[AudioPeakSample] = []
+    for start in range(0, len(samples), window_size):
+        chunk = samples[start : start + window_size]
+        if not chunk:
+            continue
+        squares = sum(int(sample) * int(sample) for sample in chunk)
+        rms = math.sqrt(squares / max(1, len(chunk))) / 32768.0
+        timestamp = min(max(0.0, (start / rate) + (len(chunk) / rate) / 2), max(0.0, safe_duration - 0.2))
+        windows.append(AudioPeakSample(timestamp_seconds=round(timestamp, 3), energy=round(rms, 6)))
+
+    ranked = sorted(windows, key=lambda item: item.energy, reverse=True)
+    selected: list[AudioPeakSample] = []
+    for peak in ranked:
+        if peak.energy <= 0:
+            continue
+        if any(abs(peak.timestamp_seconds - item.timestamp_seconds) < minimum_gap for item in selected):
+            continue
+        selected.append(peak)
+        if len(selected) >= normalized_count:
+            break
+    return sorted(selected, key=lambda item: item.timestamp_seconds)
 
 
 def target_resolution(aspect_ratio: str) -> tuple[int, int]:

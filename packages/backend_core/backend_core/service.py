@@ -17,6 +17,7 @@ from .schemas import (
     CreateTaskRequest,
     MediaProbe,
     SourceAssetSummary,
+    TaskDeleteResult,
     TaskDraft,
     TaskDetail,
     TaskListItem,
@@ -28,7 +29,7 @@ from .schemas import (
 )
 from .storage import MediaStorage
 from .task_trace import TaskTraceWriter, read_task_trace
-from .utils import clamp, isoformat_utc, new_id, truncate_text
+from .utils import clamp, isoformat_utc, new_id, truncate_text, utcnow
 
 
 def _iso(value: datetime | None) -> str:
@@ -133,7 +134,7 @@ class TaskService:
             task.id,
             "api",
             "task.created",
-            "Task created from API request.",
+            "任务已创建，等待进入处理流程。",
             {
                 "title": payload.title,
                 "platform": payload.platform,
@@ -227,6 +228,33 @@ class TaskService:
         self.dispatch_task(task_id)
         return self.get_task_detail(task_id)
 
+    def delete_task(self, task_id: str) -> TaskDeleteResult:
+        with self.session() as session:
+            task = session.scalar(
+                select(Task)
+                .options(selectinload(Task.outputs))
+                .where(Task.id == task_id)
+            )
+            if task is None:
+                raise LookupError("task not found")
+            if task.status in {"ANALYZING", "PLANNING", "RENDERING"}:
+                raise ValueError("进行中的任务不能直接删除，请等待任务完成或失败后再删除。")
+
+            self._trace(
+                task_id,
+                "api",
+                "task.delete_requested",
+                "已收到删除任务请求。",
+                {"status": task.status},
+                "WARN",
+            )
+            self._delete_outputs(session, task)
+            session.delete(task)
+            session.commit()
+
+        self.storage.remove_task_artifacts(task_id)
+        return TaskDeleteResult(taskId=task_id, deleted=True)
+
     def list_pending_task_ids(self, limit: int = 10) -> list[str]:
         with self.session() as session:
             rows = session.scalars(
@@ -243,7 +271,7 @@ class TaskService:
                 task_id,
                 "dispatch",
                 "task.dispatched_inline",
-                "Dispatching task using inline thread execution.",
+                "任务通过本地线程直接开始执行。",
                 {"execution_mode": self.settings.app.execution_mode},
             )
             thread = threading.Thread(target=self.process_task, args=(task_id,), daemon=True)
@@ -255,7 +283,7 @@ class TaskService:
                 task_id,
                 "dispatch",
                 "task.enqueued",
-                "Task enqueued to Redis job queue.",
+                "任务已进入队列，等待 worker 处理。",
                 {"queue_mode": True},
             )
         except Exception:
@@ -263,7 +291,7 @@ class TaskService:
                 task_id,
                 "dispatch",
                 "task.enqueue_failed",
-                "Queue enqueue failed, falling back to inline thread execution.",
+                "任务入队失败，已回退为本地线程执行。",
                 {"queue_mode": True},
                 "WARN",
             )
@@ -277,7 +305,7 @@ class TaskService:
             task_id,
             "pipeline",
             "task.processing_started",
-            "Task processing started.",
+            "任务进入处理流水线。",
             {},
         )
 
@@ -295,7 +323,7 @@ class TaskService:
                     task_id,
                     "pipeline",
                     "task.source_missing",
-                    "Source asset is missing, task cannot continue.",
+                    "任务源素材不存在，流程终止。",
                     {"source_asset_id": task.source_asset_id},
                     "ERROR",
                 )
@@ -316,7 +344,7 @@ class TaskService:
                     task_id,
                     "analysis",
                     "analysis.started",
-                    "Media analysis started.",
+                    "开始分析源视频素材。",
                     {"source_path": source_path.as_posix()},
                 )
 
@@ -325,7 +353,7 @@ class TaskService:
                 task_id,
                 "analysis",
                 "analysis.completed",
-                "Media analysis completed.",
+                "素材分析完成。",
                 probe.model_dump(),
             )
             with self.session() as session:
@@ -351,7 +379,7 @@ class TaskService:
                     task_id,
                     "planning",
                     "planning.started",
-                    "Planning started.",
+                    "开始生成剪辑规划方案。",
                     {
                         "has_transcript": bool(transcript_text),
                         "transcript_cue_count": len(transcript_cues),
@@ -359,6 +387,8 @@ class TaskService:
                         "model_provider": self.settings.model.provider,
                         "primary_model": self.settings.model.model_name,
                         "fallback_model": self.settings.model.fallback_model_name,
+                        "vision_model": self.settings.model.vision_model_name,
+                        "vision_fallback_model": self.settings.model.vision_fallback_model_name,
                     },
                 )
 
@@ -377,6 +407,7 @@ class TaskService:
                     ),
                     source=probe,
                     transcriptText=transcript_text,
+                    sourcePath=source_path.as_posix(),
                     trace=lambda stage, event, message, payload=None, level="INFO": self._trace(
                         task_id,
                         stage,
@@ -390,7 +421,7 @@ class TaskService:
                 if not clips:
                     clips = self._fallback_clips(task, probe, transcript_text=transcript_text)
                 else:
-                    clips = self._sanitize_clips(task, probe, clips)
+                    clips = self._sanitize_clips(task, probe, clips, transcript_text=transcript_text)
                     if not clips:
                         clips = self._fallback_clips(task, probe, transcript_text=transcript_text)
                 task.plan_json = json.dumps([clip.model_dump() for clip in clips], ensure_ascii=False)
@@ -400,10 +431,13 @@ class TaskService:
                     task_id,
                     "planning",
                     "planning.completed",
-                    "Planning completed.",
+                    "剪辑规划方案已生成。",
                     {
                         "clip_count": len(clips),
                         "clip_titles": [clip.title for clip in clips[:5]],
+                        "dialogue_safe_boundaries": bool(transcript_text and parse_transcript_cues(transcript_text)),
+                        "lead_in_seconds": 0.35,
+                        "lead_out_seconds": 0.3,
                     },
                 )
 
@@ -426,7 +460,7 @@ class TaskService:
                     task_id,
                     "pipeline",
                     "task.completed",
-                    "Task completed successfully.",
+                    "任务处理完成，所有输出已生成。",
                     {
                         "output_count": len(clips),
                     },
@@ -444,7 +478,7 @@ class TaskService:
                 task_id,
                 "pipeline",
                 "task.failed",
-                "Task failed during processing.",
+                "任务处理失败。",
                 {
                     "error": str(exc),
                 },
@@ -464,7 +498,7 @@ class TaskService:
                 task_id,
                 "pipeline",
                 "task.claimed",
-                "Task claimed for execution.",
+                "任务已被执行器接管，准备开始处理。",
                 {
                     "status": task.status,
                 },
@@ -487,22 +521,49 @@ class TaskService:
             ),
             source=probe,
             transcriptText=transcript_text,
+            sourcePath=None,
         )
         from .planner import HeuristicPlanner
 
         return HeuristicPlanner(self.settings).plan(context)
 
-    def _sanitize_clips(self, task: Task, probe: MediaProbe, clips: list[ClipPlan]) -> list[ClipPlan]:
+    def _sanitize_clips(
+        self,
+        task: Task,
+        probe: MediaProbe,
+        clips: list[ClipPlan],
+        transcript_text: str | None = None,
+    ) -> list[ClipPlan]:
         normalized: list[ClipPlan] = []
         source_duration = max(1.0, probe.durationSeconds)
         minimum = float(task.min_duration_seconds)
         maximum = float(task.max_duration_seconds)
+        transcript_cues = parse_transcript_cues(transcript_text)
+        lead_in = 0.35
+        lead_out = 0.3
         for index, clip in enumerate(clips[: task.output_count], start=1):
             start_seconds = clamp(float(clip.startSeconds), 0.0, max(0.0, source_duration - 0.5))
             requested_end = float(clip.endSeconds)
             if requested_end <= start_seconds:
                 requested_end = start_seconds + max(minimum, 1.0)
             end_seconds = clamp(requested_end, start_seconds + 0.5, source_duration)
+
+            if transcript_cues:
+                start_seconds, end_seconds = self._snap_clip_to_transcript_boundaries(
+                    start_seconds,
+                    end_seconds,
+                    transcript_cues,
+                    minimum=minimum,
+                    maximum=maximum,
+                    source_duration=source_duration,
+                    lead_in=lead_in,
+                    lead_out=lead_out,
+                )
+            else:
+                # Keep a little visual runway so clips do not start/end on a harsh mid-action frame.
+                start_seconds = max(0.0, start_seconds - lead_in)
+                end_seconds = min(source_duration, end_seconds + lead_out)
+
             duration_seconds = end_seconds - start_seconds
             if duration_seconds < minimum:
                 end_seconds = clamp(start_seconds + minimum, start_seconds + 0.5, source_duration)
@@ -523,6 +584,57 @@ class TaskService:
             )
         return normalized
 
+    def _snap_clip_to_transcript_boundaries(
+        self,
+        start_seconds: float,
+        end_seconds: float,
+        transcript_cues,
+        *,
+        minimum: float,
+        maximum: float,
+        source_duration: float,
+        lead_in: float,
+        lead_out: float,
+    ) -> tuple[float, float]:
+        overlapping = [
+            cue
+            for cue in transcript_cues
+            if cue.endSeconds >= start_seconds - 0.6 and cue.startSeconds <= end_seconds + 0.6
+        ]
+        if not overlapping:
+            return max(0.0, start_seconds - lead_in), min(source_duration, end_seconds + lead_out)
+
+        first_cue = overlapping[0]
+        last_cue = overlapping[-1]
+
+        # Do not cut through spoken lines. Snap to surrounding cue boundaries and add a small buffer.
+        snapped_start = max(0.0, first_cue.startSeconds - lead_in)
+        snapped_end = min(source_duration, last_cue.endSeconds + lead_out)
+
+        if snapped_end - snapped_start < minimum:
+            deficit = minimum - (snapped_end - snapped_start)
+            snapped_start = max(0.0, snapped_start - deficit * 0.45)
+            snapped_end = min(source_duration, snapped_end + deficit * 0.55)
+
+        if snapped_end - snapped_start > maximum:
+            # Prefer preserving complete dialogue on both ends. If too long, trim from outside first.
+            overflow = (snapped_end - snapped_start) - maximum
+            left_room = max(0.0, first_cue.startSeconds - snapped_start)
+            right_room = max(0.0, snapped_end - last_cue.endSeconds)
+            trim_left = min(left_room, overflow * 0.5)
+            trim_right = min(right_room, overflow - trim_left)
+            snapped_start += trim_left
+            snapped_end -= trim_right
+            remaining_overflow = max(0.0, (snapped_end - snapped_start) - maximum)
+            if remaining_overflow > 0:
+                # Fall back to centered trim only when the cue envelope itself is too long.
+                snapped_start += remaining_overflow * 0.5
+                snapped_end -= remaining_overflow * 0.5
+
+        snapped_start = clamp(snapped_start, 0.0, max(0.0, source_duration - 0.5))
+        snapped_end = clamp(snapped_end, snapped_start + 0.5, source_duration)
+        return snapped_start, snapped_end
+
     def _render_outputs(
         self,
         task_id: str,
@@ -541,7 +653,7 @@ class TaskService:
             task_id,
             "render",
             "render.started",
-            "Rendering outputs started.",
+            "开始执行 FFmpeg 剪辑输出。",
             {
                 "clip_count": len(clips),
             },
@@ -559,7 +671,7 @@ class TaskService:
                 task_id,
                 "render",
                 "render.clip_started",
-                f"Rendering clip {clip.clipIndex}.",
+                f"开始剪辑第 {clip.clipIndex} 条素材。",
                 {
                     "clip_index": clip.clipIndex,
                     "title": clip.title,
@@ -568,16 +680,34 @@ class TaskService:
                     "output_path": output_path.as_posix(),
                 },
             )
-            render_output(
-                source_path=source_path,
-                output_path=output_path,
-                start_seconds=clip.startSeconds,
-                end_seconds=clip.endSeconds,
-                aspect_ratio=aspect_ratio,
-                intro_template=intro_template,
-                outro_template=outro_template,
-                has_audio=probe.hasAudio,
-            )
+            try:
+                render_output(
+                    source_path=source_path,
+                    output_path=output_path,
+                    start_seconds=clip.startSeconds,
+                    end_seconds=clip.endSeconds,
+                    aspect_ratio=aspect_ratio,
+                    intro_template=intro_template,
+                    outro_template=outro_template,
+                    has_audio=probe.hasAudio,
+                )
+            except Exception as exc:
+                self._trace(
+                    task_id,
+                    "render",
+                    "render.clip_failed",
+                    f"第 {clip.clipIndex} 条 FFmpeg 剪辑失败。",
+                    {
+                        "clip_index": clip.clipIndex,
+                        "title": clip.title,
+                        "start_seconds": clip.startSeconds,
+                        "end_seconds": clip.endSeconds,
+                        "output_path": output_path.as_posix(),
+                        "error": str(exc),
+                    },
+                    "ERROR",
+                )
+                raise
             with self.session() as session:
                 task = session.get(Task, task_id)
                 if task is None:
@@ -602,9 +732,10 @@ class TaskService:
                 task_id,
                 "render",
                 "render.clip_completed",
-                f"Rendered clip {clip.clipIndex}.",
+                f"第 {clip.clipIndex} 条素材剪辑完成。",
                 {
                     "clip_index": clip.clipIndex,
+                    "title": clip.title,
                     "output_path": output_path.as_posix(),
                     "progress": min(95, 35 + int(60 * (index / total))),
                 },

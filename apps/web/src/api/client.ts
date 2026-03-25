@@ -68,3 +68,9 @@ export async function postForm<T>(path: string, body: FormData) {
     body
   });
 }
+
+export async function deleteJson<T>(path: string) {
+  return request<T>(path, {
+    method: "DELETE"
+  });
+}

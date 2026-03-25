@@ -75,6 +75,11 @@ class TaskTraceEvent(BaseModel):
     payload: dict[str, object] = Field(default_factory=dict)
 
 
+class TaskDeleteResult(BaseModel):
+    taskId: str
+    deleted: bool = True
+
+
 class TaskListItem(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException, Query, Request
 
-from backend_core.schemas import CreateTaskRequest, TaskDetail, TaskDraft, TaskListItem, TaskStatus, TaskTraceEvent
+from backend_core.schemas import CreateTaskRequest, TaskDeleteResult, TaskDetail, TaskDraft, TaskListItem, TaskStatus, TaskTraceEvent
 
 
 router = APIRouter(tags=["tasks"])
@@ -70,3 +70,15 @@ def retry_task(request: Request, task_id: str) -> TaskDetail:
         return request.app.state.runtime.service.retry_task(task_id)
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+@router.delete("/tasks/{task_id}", response_model=TaskDeleteResult)
+def delete_task(request: Request, task_id: str) -> TaskDeleteResult:
+    try:
+        return request.app.state.runtime.service.delete_task(task_id)
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc

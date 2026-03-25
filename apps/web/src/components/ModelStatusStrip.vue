@@ -33,6 +33,11 @@
           <p class="mt-1 text-xs text-slate-400">主模型失败时自动回退</p>
         </div>
         <div class="rounded-2xl border border-white/8 bg-slate-950/50 p-3">
+          <p class="text-xs uppercase tracking-[0.22em] text-slate-400">视觉模型</p>
+          <p class="mt-2 text-sm font-semibold text-white">{{ health.runtime.model.vision_model || "未配置" }}</p>
+          <p class="mt-1 text-xs text-slate-400">{{ health.runtime.model.vision_fallback_model || "无回退视觉模型" }}</p>
+        </div>
+        <div class="rounded-2xl border border-white/8 bg-slate-950/50 p-3">
           <p class="text-xs uppercase tracking-[0.22em] text-slate-400">Endpoint</p>
           <p class="mt-2 truncate text-sm font-semibold text-white">{{ health.runtime.model.endpoint_host || "未配置" }}</p>
           <p class="mt-1 text-xs text-slate-400">只展示 host，不暴露 key</p>
@@ -54,6 +59,26 @@
           <div class="flex items-center justify-between">
             <span>字幕语义规划</span>
             <span class="font-medium text-white">{{ yesNo(health.runtime.planning_capabilities.transcript_semantic_planning) }}</span>
+          </div>
+          <div class="flex items-center justify-between">
+            <span>视频内容理解</span>
+            <span class="font-medium text-white">{{ yesNo(health.runtime.planning_capabilities.visual_content_analysis) }}</span>
+          </div>
+          <div class="flex items-center justify-between">
+            <span>视觉事件识别</span>
+            <span class="font-medium text-white">{{ yesNo(health.runtime.planning_capabilities.visual_event_reasoning) }}</span>
+          </div>
+          <div class="flex items-center justify-between">
+            <span>字幕 + 视频融合</span>
+            <span class="font-medium text-white">{{ yesNo(health.runtime.planning_capabilities.subtitle_visual_fusion) }}</span>
+          </div>
+          <div class="flex items-center justify-between">
+            <span>音频峰值信号</span>
+            <span class="font-medium text-white">{{ yesNo(health.runtime.planning_capabilities.audio_peak_signal) }}</span>
+          </div>
+          <div class="flex items-center justify-between">
+            <span>融合时间轴规划</span>
+            <span class="font-medium text-white">{{ yesNo(health.runtime.planning_capabilities.fusion_timeline_planning) }}</span>
           </div>
           <div class="flex items-center justify-between">
             <span>启发式回退</span>

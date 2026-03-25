@@ -99,6 +99,18 @@ const modelDescription = computed(() => {
     return "正在读取 API、模型和规划能力配置。";
   }
   if (health.value.runtime.model.ready) {
+    if (health.value.runtime.planning_capabilities.audio_peak_signal && health.value.runtime.planning_capabilities.fusion_timeline_planning) {
+      return "已启用两阶段规划：先做视觉事件识别，再融合字幕、音频卡点和时间轴输出最终切点。";
+    }
+    if (health.value.runtime.planning_capabilities.visual_event_reasoning) {
+      return "已启用视觉事件识别，会先分析关键帧里的冲突、反转和高燃点，再交给规划模型决定切点。";
+    }
+    if (health.value.runtime.planning_capabilities.subtitle_visual_fusion) {
+      return "已启用视频内容理解 + 字幕时间轴融合，会把关键帧高点和对白冲突点一起拿来决定切点。";
+    }
+    if (health.value.runtime.planning_capabilities.visual_content_analysis) {
+      return "已启用视频内容理解规划，会先分析关键帧里的冲突、反转和高燃点，再决定切点。";
+    }
     return health.value.runtime.planning_capabilities.timed_transcript_supported
       ? "支持带时间戳字幕驱动的语义规划，不需要消耗 token 做在线自检。"
       : "已配置模型，但语义规划能力未完全打开。";

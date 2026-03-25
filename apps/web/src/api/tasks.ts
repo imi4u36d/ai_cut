@@ -1,7 +1,8 @@
-import { getJson, postForm, postJson } from "./client";
+import { deleteJson, getJson, postForm, postJson } from "./client";
 import type {
   CreateTaskRequest,
   TaskCloneDraft,
+  TaskDeleteResult,
   TaskDetail,
   TaskFilters,
   TaskListItem,
@@ -49,6 +50,10 @@ export function retryTask(taskId: string) {
 
 export function cloneTask(taskId: string) {
   return postJson<TaskCloneDraft>(`/tasks/${taskId}/clone`, {});
+}
+
+export function deleteTask(taskId: string) {
+  return deleteJson<TaskDeleteResult>(`/tasks/${taskId}`);
 }
 
 export function fetchPresets() {

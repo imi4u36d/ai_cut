@@ -59,6 +59,8 @@ class BackendRuntime:
                 "provider": self.settings.model.provider,
                 "primary_model": self.settings.model.model_name,
                 "fallback_model": self.settings.model.fallback_model_name,
+                "vision_model": self.settings.model.vision_model_name,
+                "vision_fallback_model": self.settings.model.vision_fallback_model_name,
                 "endpoint_host": endpoint_host,
                 "api_key_present": bool(self.settings.model.api_key),
                 "ready": model_ready,
@@ -69,6 +71,11 @@ class BackendRuntime:
             "planning_capabilities": {
                 "timed_transcript_supported": True,
                 "transcript_semantic_planning": True,
+                "visual_content_analysis": bool(self.settings.model.vision_model_name),
+                "visual_event_reasoning": bool(self.settings.model.vision_model_name),
+                "subtitle_visual_fusion": True,
+                "audio_peak_signal": True,
+                "fusion_timeline_planning": bool(self.settings.model.model_name),
                 "fallback_heuristic_enabled": True,
             },
         }

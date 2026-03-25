@@ -125,3 +125,9 @@ class MediaStorage:
         work_dir = self.temp_root / task_id
         if work_dir.exists():
             shutil.rmtree(work_dir, ignore_errors=True)
+
+    def remove_task_artifacts(self, task_id: str) -> None:
+        self.remove_output_bundle(task_id)
+        for path in (self.task_context_path(task_id), self.task_trace_path(task_id)):
+            if path.exists():
+                path.unlink(missing_ok=True)

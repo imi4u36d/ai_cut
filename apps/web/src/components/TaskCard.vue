@@ -13,6 +13,13 @@
       </div>
     </div>
 
+    <div class="mt-4 flex flex-wrap gap-2">
+      <span v-if="task.hasTimedTranscript" class="rounded-full border border-sky-400/20 bg-sky-500/10 px-3 py-1 text-[11px] font-medium text-sky-100">时间轴字幕</span>
+      <span v-else-if="task.hasTranscript" class="rounded-full border border-fuchsia-400/20 bg-fuchsia-500/10 px-3 py-1 text-[11px] font-medium text-fuchsia-100">文本语义</span>
+      <span v-if="task.status === 'FAILED'" class="rounded-full border border-rose-400/20 bg-rose-500/10 px-3 py-1 text-[11px] font-medium text-rose-100">需要处理</span>
+      <span v-if="task.status === 'COMPLETED'" class="rounded-full border border-emerald-400/20 bg-emerald-500/10 px-3 py-1 text-[11px] font-medium text-emerald-100">可复盘</span>
+    </div>
+
     <div class="mt-4 grid grid-cols-2 gap-3 text-sm text-slate-300">
       <div class="rounded-2xl border border-white/8 bg-white/[0.04] p-3">
         <p class="text-xs uppercase tracking-[0.24em] text-slate-400">进度</p>
@@ -45,8 +52,25 @@
       <RouterLink :to="`/tasks/${task.id}`" class="rounded-full border border-white/10 bg-white/[0.04] px-4 py-2 text-sm text-slate-100 transition duration-200 hover:border-rose-300/40 hover:bg-white/10">
         查看详情
       </RouterLink>
-      <button class="rounded-full bg-rose-500 px-4 py-2 text-sm font-medium text-white transition duration-200 hover:bg-rose-400" type="button" @click="$emit('clone', task)">
+      <button class="rounded-full bg-rose-500 px-4 py-2 text-sm font-medium text-white transition duration-200 hover:bg-rose-400 disabled:cursor-not-allowed disabled:opacity-50" :disabled="busy" type="button" @click="$emit('clone', task)">
         复制参数
+      </button>
+      <button
+        v-if="task.status === 'FAILED'"
+        class="rounded-full border border-amber-300/25 bg-amber-500/10 px-4 py-2 text-sm font-medium text-amber-100 transition duration-200 hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+        :disabled="busy"
+        type="button"
+        @click="$emit('retry', task)"
+      >
+        失败重试
+      </button>
+      <button
+        class="rounded-full border border-white/10 bg-slate-950/50 px-4 py-2 text-sm text-slate-200 transition duration-200 hover:border-rose-300/35 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+        :disabled="busy || running"
+        type="button"
+        @click="$emit('delete', task)"
+      >
+        删除
       </button>
     </div>
   </article>
@@ -60,10 +84,13 @@ import { formatTaskRange, getTaskLifecycleGroup } from "@/utils/task";
 
 const props = defineProps<{
   task: TaskListItem;
+  busy?: boolean;
 }>();
 
 defineEmits<{
   (event: "clone", task: TaskListItem): void;
+  (event: "retry", task: TaskListItem): void;
+  (event: "delete", task: TaskListItem): void;
 }>();
 
 const completedOutputCount = computed(() => props.task.completedOutputCount ?? 0);
@@ -75,6 +102,7 @@ const durationLabel = computed(() => {
   return "待配置";
 });
 const updatedAtLabel = computed(() => new Date(props.task.updatedAt).toLocaleString());
+const running = computed(() => getTaskLifecycleGroup(props.task.status) === "running");
 const lifecycleLabel = computed(() => {
   const lifecycle = getTaskLifecycleGroup(props.task.status);
   switch (lifecycle) {

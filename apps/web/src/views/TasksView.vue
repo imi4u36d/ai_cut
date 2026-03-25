@@ -54,12 +54,30 @@
             </select>
           </label>
           <div class="rounded-2xl border border-white/10 bg-slate-950/50 px-4 py-3 text-sm text-slate-300">
-            <p class="text-xs uppercase tracking-[0.24em] text-slate-400">运营提醒</p>
-            <p class="mt-2">优先关注带时间戳字幕的任务，它们更容易让模型给出稳定切点。</p>
+            <p class="text-xs uppercase tracking-[0.24em] text-slate-400">工作台提示</p>
+            <p class="mt-2">高密度模式更适合任务多时巡检，卡片模式更适合看单个任务摘要。</p>
           </div>
         </div>
 
-        <div class="mt-4 flex flex-wrap gap-2">
+        <div class="mt-4 flex flex-wrap items-center gap-2">
+          <div class="inline-flex rounded-full border border-white/10 bg-slate-950/55 p-1">
+            <button
+              class="min-h-[40px] rounded-full px-4 text-sm transition duration-200"
+              :class="viewMode === 'rows' ? 'bg-white text-slate-950' : 'text-slate-300 hover:bg-white/10 hover:text-white'"
+              type="button"
+              @click="viewMode = 'rows'"
+            >
+              紧凑行
+            </button>
+            <button
+              class="min-h-[40px] rounded-full px-4 text-sm transition duration-200"
+              :class="viewMode === 'cards' ? 'bg-white text-slate-950' : 'text-slate-300 hover:bg-white/10 hover:text-white'"
+              type="button"
+              @click="viewMode = 'cards'"
+            >
+              卡片视图
+            </button>
+          </div>
           <button
             class="rounded-full border px-4 py-2 text-sm transition duration-200"
             :class="isFilterActive ? 'border-rose-300/40 bg-rose-500/15 text-rose-100' : 'border-white/10 bg-white/[0.04] text-slate-200 hover:border-rose-300/40 hover:bg-white/10'"
@@ -70,6 +88,9 @@
           </button>
           <div class="rounded-full border border-white/10 bg-white/[0.04] px-4 py-2 text-sm text-slate-300">
             当前筛选：{{ filteredTasks.length }} / {{ tasks.length }}
+          </div>
+          <div class="rounded-full border border-white/10 bg-white/[0.04] px-4 py-2 text-sm text-slate-300">
+            当前视图：{{ viewMode === "rows" ? "紧凑巡检" : "卡片摘要" }}
           </div>
         </div>
       </div>
@@ -137,10 +158,43 @@
               <h3 class="text-lg font-semibold text-white">{{ group.title }}</h3>
               <p class="mt-1 text-sm text-slate-400">{{ group.description }}</p>
             </div>
-            <span class="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-xs font-medium text-slate-200">{{ group.items.length }} 条</span>
+            <div class="flex flex-wrap items-center gap-2">
+              <span class="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-xs font-medium text-slate-200">{{ group.items.length }} 条</span>
+              <button
+                class="min-h-[40px] rounded-full border border-white/10 bg-slate-950/50 px-4 py-2 text-sm text-slate-200 transition duration-200 hover:border-rose-300/35 hover:text-white"
+                type="button"
+                @click="toggleGroup(group.key)"
+              >
+                {{ isGroupCollapsed(group.key) ? "展开" : "折叠" }}
+              </button>
+            </div>
           </div>
-          <div v-if="group.items.length" class="grid min-w-0 gap-4 xl:grid-cols-2 2xl:grid-cols-3">
-            <TaskCard v-for="task in group.items" :key="task.id" :task="task" @clone="handleClone" />
+          <div v-if="!isGroupCollapsed(group.key) && group.items.length">
+            <div v-if="viewMode === 'cards'" class="grid min-w-0 gap-4 xl:grid-cols-2 2xl:grid-cols-3">
+              <TaskCard
+                v-for="task in group.items"
+                :key="task.id"
+                :busy="managingTaskId === task.id"
+                :task="task"
+                @clone="handleClone"
+                @retry="handleRetry"
+                @delete="handleDelete"
+              />
+            </div>
+            <div v-else class="grid gap-3">
+              <TaskRow
+                v-for="task in group.items"
+                :key="task.id"
+                :busy="managingTaskId === task.id"
+                :task="task"
+                @clone="handleClone"
+                @retry="handleRetry"
+                @delete="handleDelete"
+              />
+            </div>
+          </div>
+          <div v-else class="rounded-[22px] border border-dashed border-white/10 bg-white/[0.03] p-4 text-sm text-slate-400">
+            该分组已折叠，点击右上角可展开查看。
           </div>
         </section>
       </div>
@@ -153,10 +207,11 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
-import { fetchTasks } from "@/api/tasks";
+import { deleteTask, fetchTasks, retryTask } from "@/api/tasks";
 import type { TaskListItem, TaskStatus } from "@/types";
 import PageHeader from "@/components/PageHeader.vue";
 import TaskCard from "@/components/TaskCard.vue";
+import TaskRow from "@/components/TaskRow.vue";
 import { usePolling } from "@/composables/usePolling";
 import { getTaskLifecycleGroup, TASK_LIFECYCLE_GROUP_LABELS } from "@/utils/task";
 
@@ -171,6 +226,9 @@ const searchText = ref("");
 const statusFilter = ref<TaskStatus | "all">("all");
 const platformFilter = ref<string | "all">("all");
 const sortMode = ref<"updated_desc" | "created_desc" | "progress_desc" | "semantic_desc">("updated_desc");
+const viewMode = ref<"rows" | "cards">("rows");
+const managingTaskId = ref("");
+const collapsedGroups = ref<Record<string, boolean>>({});
 
 const platformOptions = computed(() => {
   return Array.from(new Set(tasks.value.map((task) => task.platform).filter(Boolean))).sort();
@@ -202,6 +260,9 @@ function applyRouteFilters() {
   sortMode.value = ["updated_desc", "created_desc", "progress_desc", "semantic_desc"].includes(nextSort)
     ? (nextSort as typeof sortMode.value)
     : "updated_desc";
+
+  const nextView = normalizeQueryValue(route.query.view);
+  viewMode.value = nextView === "cards" ? "cards" : "rows";
 }
 
 const filteredTasks = computed(() => {
@@ -308,6 +369,9 @@ function writeQuery() {
   if (sortMode.value !== "updated_desc") {
     query.sort = sortMode.value;
   }
+  if (viewMode.value !== "rows") {
+    query.view = viewMode.value;
+  }
 
   const currentQuery = route.query;
   const nextQuery = query;
@@ -315,7 +379,8 @@ function writeQuery() {
     (normalizeQueryValue(currentQuery.q) || "") === (nextQuery.q || "") &&
     (normalizeQueryValue(currentQuery.status) || "") === (nextQuery.status || "") &&
     (normalizeQueryValue(currentQuery.platform) || "") === (nextQuery.platform || "") &&
-    (normalizeQueryValue(currentQuery.sort) || "") === (nextQuery.sort || "");
+    (normalizeQueryValue(currentQuery.sort) || "") === (nextQuery.sort || "") &&
+    (normalizeQueryValue(currentQuery.view) || "") === (nextQuery.view || "");
 
   if (!sameQuery) {
     router.replace({ query: nextQuery });
@@ -331,6 +396,53 @@ function clearFilters() {
 
 function handleClone(task: TaskListItem) {
   router.push({ path: "/tasks/new", query: { cloneFrom: task.id } });
+}
+
+function isGroupCollapsed(groupKey: string) {
+  return Boolean(collapsedGroups.value[groupKey]);
+}
+
+function toggleGroup(groupKey: string) {
+  collapsedGroups.value = {
+    ...collapsedGroups.value,
+    [groupKey]: !collapsedGroups.value[groupKey]
+  };
+}
+
+async function handleRetry(task: TaskListItem) {
+  if (managingTaskId.value) {
+    return;
+  }
+  managingTaskId.value = task.id;
+  errorMessage.value = "";
+  try {
+    await retryTask(task.id);
+    await loadTasks();
+  } catch (error) {
+    errorMessage.value = error instanceof Error ? error.message : "任务重试失败";
+  } finally {
+    managingTaskId.value = "";
+  }
+}
+
+async function handleDelete(task: TaskListItem) {
+  if (managingTaskId.value) {
+    return;
+  }
+  const ok = window.confirm(`确认删除任务“${task.title}”吗？已生成的输出和日志也会一并清理。`);
+  if (!ok) {
+    return;
+  }
+  managingTaskId.value = task.id;
+  errorMessage.value = "";
+  try {
+    await deleteTask(task.id);
+    await loadTasks();
+  } catch (error) {
+    errorMessage.value = error instanceof Error ? error.message : "删除任务失败";
+  } finally {
+    managingTaskId.value = "";
+  }
 }
 
 function platformLabel(platform: string) {
@@ -358,7 +470,7 @@ watch(
   { immediate: true, deep: true }
 );
 
-watch([searchText, statusFilter, platformFilter, sortMode], () => {
+watch([searchText, statusFilter, platformFilter, sortMode, viewMode], () => {
   writeQuery();
   void loadTasks();
 });

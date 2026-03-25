@@ -87,6 +87,11 @@ export interface TaskCloneDraft {
   transcriptCueCount?: number;
 }
 
+export interface TaskDeleteResult {
+  taskId: string;
+  deleted: boolean;
+}
+
 export interface TaskFilters {
   q?: string;
   status?: TaskStatus | "all";
@@ -161,6 +166,8 @@ export interface HealthModelSummary {
   provider: string;
   primary_model: string;
   fallback_model?: string | null;
+  vision_model?: string | null;
+  vision_fallback_model?: string | null;
   endpoint_host?: string;
   api_key_present: boolean;
   ready: boolean;
@@ -172,6 +179,11 @@ export interface HealthModelSummary {
 export interface HealthPlanningCapabilities {
   timed_transcript_supported: boolean;
   transcript_semantic_planning: boolean;
+  visual_content_analysis: boolean;
+  visual_event_reasoning: boolean;
+  subtitle_visual_fusion: boolean;
+  audio_peak_signal: boolean;
+  fusion_timeline_planning: boolean;
   fallback_heuristic_enabled: boolean;
 }
 
