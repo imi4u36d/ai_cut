@@ -10,8 +10,8 @@
       </RouterLink>
     </PageHeader>
 
-    <div class="grid gap-4 lg:grid-cols-[1.15fr_0.85fr]">
-      <div class="rounded-[28px] border border-white/10 bg-[linear-gradient(180deg,rgba(15,15,35,0.82),rgba(8,11,24,0.68))] p-5 shadow-[0_20px_70px_rgba(0,0,0,0.28)]">
+    <div class="grid min-w-0 gap-4 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]">
+      <div class="min-w-0 rounded-[28px] border border-white/10 bg-[linear-gradient(180deg,rgba(15,15,35,0.82),rgba(8,11,24,0.68))] p-5 shadow-[0_20px_70px_rgba(0,0,0,0.28)]">
         <div class="grid gap-3 md:grid-cols-[1.3fr_0.7fr_0.7fr]">
           <label class="grid gap-2 text-sm text-slate-200">
             搜索任务
@@ -74,33 +74,33 @@
         </div>
       </div>
 
-      <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-        <div class="rounded-[24px] border border-white/10 bg-white/[0.04] p-4">
+      <div class="grid min-w-0 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        <div class="min-w-0 rounded-[24px] border border-white/10 bg-white/[0.04] p-4">
           <p class="text-xs uppercase tracking-[0.24em] text-slate-400">总任务数</p>
           <p class="mt-3 text-3xl font-semibold text-white">{{ metrics.total }}</p>
           <p class="mt-2 text-xs text-slate-400">包含所有状态的任务</p>
         </div>
-        <div class="rounded-[24px] border border-white/10 bg-white/[0.04] p-4">
+        <div class="min-w-0 rounded-[24px] border border-white/10 bg-white/[0.04] p-4">
           <p class="text-xs uppercase tracking-[0.24em] text-slate-400">进行中</p>
           <p class="mt-3 text-3xl font-semibold text-white">{{ metrics.running }}</p>
           <p class="mt-2 text-xs text-slate-400">分析、规划和渲染中的任务</p>
         </div>
-        <div class="rounded-[24px] border border-white/10 bg-white/[0.04] p-4">
+        <div class="min-w-0 rounded-[24px] border border-white/10 bg-white/[0.04] p-4">
           <p class="text-xs uppercase tracking-[0.24em] text-slate-400">已完成</p>
           <p class="mt-3 text-3xl font-semibold text-white">{{ metrics.completed }}</p>
           <p class="mt-2 text-xs text-slate-400">可直接预览和下载</p>
         </div>
-        <div class="rounded-[24px] border border-white/10 bg-white/[0.04] p-4">
+        <div class="min-w-0 rounded-[24px] border border-white/10 bg-white/[0.04] p-4">
           <p class="text-xs uppercase tracking-[0.24em] text-slate-400">失败任务</p>
           <p class="mt-3 text-3xl font-semibold text-white">{{ metrics.failed }}</p>
           <p class="mt-2 text-xs text-slate-400">可重试或复用参数再建</p>
         </div>
-        <div class="rounded-[24px] border border-white/10 bg-white/[0.04] p-4">
+        <div class="min-w-0 rounded-[24px] border border-white/10 bg-white/[0.04] p-4">
           <p class="text-xs uppercase tracking-[0.24em] text-slate-400">语义任务</p>
           <p class="mt-3 text-3xl font-semibold text-white">{{ metrics.semantic }}</p>
           <p class="mt-2 text-xs text-slate-400">已提供字幕或台词文本</p>
         </div>
-        <div class="rounded-[24px] border border-white/10 bg-white/[0.04] p-4">
+        <div class="min-w-0 rounded-[24px] border border-white/10 bg-white/[0.04] p-4">
           <p class="text-xs uppercase tracking-[0.24em] text-slate-400">带时间戳字幕</p>
           <p class="mt-3 text-3xl font-semibold text-white">{{ metrics.timedSemantic }}</p>
           <p class="mt-2 text-xs text-slate-400">更适合模型按剧情切点规划</p>
@@ -139,7 +139,7 @@
             </div>
             <span class="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-xs font-medium text-slate-200">{{ group.items.length }} 条</span>
           </div>
-          <div v-if="group.items.length" class="grid gap-4 xl:grid-cols-2 2xl:grid-cols-3">
+          <div v-if="group.items.length" class="grid min-w-0 gap-4 xl:grid-cols-2 2xl:grid-cols-3">
             <TaskCard v-for="task in group.items" :key="task.id" :task="task" @clone="handleClone" />
           </div>
         </section>

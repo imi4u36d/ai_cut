@@ -1,5 +1,5 @@
 <template>
-  <article class="group rounded-[28px] border border-white/10 bg-[linear-gradient(180deg,rgba(15,15,35,0.84),rgba(8,11,24,0.7))] p-5 shadow-[0_20px_60px_rgba(0,0,0,0.32)] transition duration-200 hover:-translate-y-0.5 hover:border-rose-300/30 hover:shadow-[0_24px_80px_rgba(225,29,72,0.12)]">
+  <article class="group min-w-0 rounded-[28px] border border-white/10 bg-[linear-gradient(180deg,rgba(15,15,35,0.84),rgba(8,11,24,0.7))] p-5 shadow-[0_20px_60px_rgba(0,0,0,0.32)] transition duration-200 hover:-translate-y-0.5 hover:border-rose-300/30 hover:shadow-[0_24px_80px_rgba(225,29,72,0.12)]">
     <div class="flex items-start justify-between gap-4">
       <div class="min-w-0">
         <p class="text-xs font-semibold uppercase tracking-[0.3em] text-slate-400">{{ task.platform }} / {{ task.aspectRatio ?? "9:16" }}</p>
@@ -8,7 +8,9 @@
           {{ task.sourceFileName || "源文件信息待同步" }}
         </p>
       </div>
-      <StatusBadge :status="task.status" />
+      <div class="shrink-0">
+        <StatusBadge :status="task.status" />
+      </div>
     </div>
 
     <div class="mt-4 grid grid-cols-2 gap-3 text-sm text-slate-300">

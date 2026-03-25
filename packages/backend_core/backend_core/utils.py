@@ -10,6 +10,18 @@ def utcnow() -> datetime:
     return datetime.now(timezone.utc)
 
 
+def ensure_utc(value: datetime) -> datetime:
+    if value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc)
+
+
+def isoformat_utc(value: datetime | None) -> str:
+    if value is None:
+        return utcnow().isoformat()
+    return ensure_utc(value).isoformat()
+
+
 def new_id(prefix: str) -> str:
     return f"{prefix}_{uuid.uuid4().hex}"
 

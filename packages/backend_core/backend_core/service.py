@@ -28,19 +28,17 @@ from .schemas import (
 )
 from .storage import MediaStorage
 from .task_trace import TaskTraceWriter, read_task_trace
-from .utils import clamp, new_id, truncate_text, utcnow
+from .utils import clamp, isoformat_utc, new_id, truncate_text
 
 
 def _iso(value: datetime | None) -> str:
-    if value is None:
-        return utcnow().isoformat()
-    return value.isoformat()
+    return isoformat_utc(value)
 
 
 def _optional_iso(value: datetime | None) -> str | None:
     if value is None:
         return None
-    return value.isoformat()
+    return isoformat_utc(value)
 
 
 def _task_status(value: str) -> str:

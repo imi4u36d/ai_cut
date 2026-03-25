@@ -1,6 +1,6 @@
 <template>
-  <section class="grid gap-6 xl:grid-cols-[0.98fr_1.02fr]">
-    <div class="rounded-[30px] border border-white/10 bg-[linear-gradient(180deg,rgba(15,15,35,0.88),rgba(8,11,24,0.78))] p-6 shadow-[0_24px_80px_rgba(0,0,0,0.35)]">
+  <section class="grid min-w-0 gap-6 xl:grid-cols-[minmax(0,0.98fr)_minmax(0,1.02fr)]">
+    <div class="min-w-0 rounded-[30px] border border-white/10 bg-[linear-gradient(180deg,rgba(15,15,35,0.88),rgba(8,11,24,0.78))] p-6 shadow-[0_24px_80px_rgba(0,0,0,0.35)]">
       <PageHeader
         eyebrow="Progress"
         :title="task?.title || '任务详情'"
@@ -69,41 +69,41 @@
         </div>
 
         <div class="mt-6 grid gap-4 rounded-[28px] border border-white/10 bg-slate-950/45 p-5">
-          <div class="grid gap-1">
+          <div class="grid gap-1 min-w-0">
             <span class="text-xs uppercase tracking-[0.24em] text-slate-400">任务配置</span>
-            <span class="text-sm text-slate-200">{{ task.platform }} · {{ task.aspectRatio }} · {{ task.minDurationSeconds }}-{{ task.maxDurationSeconds }} 秒 · {{ task.outputCount }} 条</span>
+            <span class="break-words text-sm text-slate-200">{{ task.platform }} · {{ task.aspectRatio }} · {{ task.minDurationSeconds }}-{{ task.maxDurationSeconds }} 秒 · {{ task.outputCount }} 条</span>
           </div>
           <div class="grid gap-4 sm:grid-cols-2">
-            <div>
+            <div class="min-w-0">
               <p class="text-xs uppercase tracking-[0.24em] text-slate-400">源文件</p>
-              <p class="mt-2 text-sm text-white">{{ task.sourceFileName }}</p>
-              <p v-if="task.source?.originalFileName" class="mt-1 text-xs text-slate-400">原始资产：{{ task.source.originalFileName }}</p>
+              <p class="mt-2 break-all text-sm text-white">{{ task.sourceFileName }}</p>
+              <p v-if="task.source?.originalFileName" class="mt-1 break-all text-xs text-slate-400">原始资产：{{ task.source.originalFileName }}</p>
             </div>
-            <div v-if="task.creativePrompt">
+            <div v-if="task.creativePrompt" class="min-w-0">
               <p class="text-xs uppercase tracking-[0.24em] text-slate-400">创意补充</p>
-              <p class="mt-2 text-sm leading-6 text-slate-300">{{ task.creativePrompt }}</p>
+              <p class="mt-2 break-words text-sm leading-6 text-slate-300">{{ task.creativePrompt }}</p>
             </div>
           </div>
 
-          <div v-if="task.hasTranscript" class="rounded-[22px] border border-white/8 bg-white/[0.04] p-4">
+          <div v-if="task.hasTranscript" class="min-w-0 rounded-[22px] border border-white/8 bg-white/[0.04] p-4">
             <p class="text-xs uppercase tracking-[0.24em] text-slate-400">语义规划输入</p>
             <p class="mt-2 text-sm font-medium text-white">{{ task.hasTimedTranscript ? "已提供带时间戳字幕/台词" : "已提供纯文本台词/字幕" }}</p>
             <p class="mt-1 text-xs text-slate-400">时间轴片段：{{ task.transcriptCueCount ?? 0 }} 条</p>
-            <p v-if="task.transcriptPreview" class="mt-2 text-sm leading-6 text-slate-300">{{ task.transcriptPreview }}</p>
+            <p v-if="task.transcriptPreview" class="mt-2 break-words text-sm leading-6 text-slate-300">{{ task.transcriptPreview }}</p>
           </div>
 
-          <div v-if="task.plan?.length" class="rounded-[22px] border border-white/8 bg-white/[0.04] p-4">
+          <div v-if="task.plan?.length" class="min-w-0 rounded-[22px] border border-white/8 bg-white/[0.04] p-4">
             <p class="text-xs uppercase tracking-[0.24em] text-slate-400">规划方案</p>
             <div v-if="task.plan?.length" class="mt-4 grid gap-3">
-              <article v-for="clip in task.plan" :key="clip.clipIndex" class="rounded-2xl border border-white/8 bg-slate-950/50 p-4">
+              <article v-for="clip in task.plan" :key="clip.clipIndex" class="min-w-0 rounded-2xl border border-white/8 bg-slate-950/50 p-4">
                 <div class="flex items-start justify-between gap-4">
-                  <div>
-                    <p class="text-sm font-semibold text-white">#{{ clip.clipIndex }} {{ clip.title }}</p>
-                    <p class="mt-2 text-sm leading-6 text-slate-300">{{ clip.reason }}</p>
+                  <div class="min-w-0">
+                    <p class="break-words text-sm font-semibold text-white">#{{ clip.clipIndex }} {{ clip.title }}</p>
+                    <p class="mt-2 break-words text-sm leading-6 text-slate-300">{{ clip.reason }}</p>
                   </div>
-                  <span class="rounded-full bg-white/5 px-3 py-1 text-xs font-semibold text-slate-200">{{ clip.durationSeconds.toFixed(1) }}s</span>
+                  <span class="shrink-0 rounded-full bg-white/5 px-3 py-1 text-xs font-semibold text-slate-200">{{ clip.durationSeconds.toFixed(1) }}s</span>
                 </div>
-                <div class="mt-4 grid grid-cols-3 gap-3 text-xs text-slate-400">
+                <div class="mt-4 grid gap-3 text-xs text-slate-400 sm:grid-cols-3">
                   <div>起点 {{ clip.startSeconds.toFixed(1) }}s</div>
                   <div>终点 {{ clip.endSeconds.toFixed(1) }}s</div>
                   <div>时长 {{ clip.durationSeconds.toFixed(1) }}s</div>
@@ -153,7 +153,7 @@
             <article
               v-for="entry in traceEvents"
               :key="`${entry.timestamp}-${entry.event}`"
-              class="rounded-2xl border border-white/8 bg-white/[0.04] p-4"
+              class="min-w-0 overflow-hidden rounded-2xl border border-white/8 bg-white/[0.04] p-4"
             >
               <div class="flex flex-wrap items-center gap-2">
                 <span :class="traceStageClass(entry.stage)" class="rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.24em]">
@@ -164,16 +164,19 @@
                 </span>
                 <span class="text-xs text-slate-500">{{ formatTime(entry.timestamp) }}</span>
               </div>
-              <p class="mt-3 text-sm font-medium text-white">{{ entry.message }}</p>
-              <p class="mt-1 font-mono text-xs text-slate-500">{{ entry.event }}</p>
-              <pre v-if="Object.keys(entry.payload || {}).length" class="mt-3 overflow-x-auto rounded-xl border border-white/8 bg-slate-950/70 p-3 text-xs leading-6 text-slate-300">{{ formatTracePayload(entry.payload) }}</pre>
+              <p class="mt-3 break-words text-sm font-medium text-white">{{ entry.message }}</p>
+              <p class="mt-1 break-all font-mono text-xs text-slate-500">{{ entry.event }}</p>
+              <pre
+                v-if="Object.keys(entry.payload || {}).length"
+                class="mt-3 max-w-full overflow-x-auto whitespace-pre-wrap break-all rounded-xl border border-white/8 bg-slate-950/70 p-3 text-xs leading-6 text-slate-300"
+              >{{ formatTracePayload(entry.payload) }}</pre>
             </article>
           </div>
         </div>
       </template>
     </div>
 
-    <div class="rounded-[30px] border border-white/10 bg-[linear-gradient(180deg,rgba(15,15,35,0.86),rgba(8,11,24,0.72))] p-6 shadow-[0_24px_80px_rgba(0,0,0,0.32)]">
+    <div class="min-w-0 rounded-[30px] border border-white/10 bg-[linear-gradient(180deg,rgba(15,15,35,0.86),rgba(8,11,24,0.72))] p-6 shadow-[0_24px_80px_rgba(0,0,0,0.32)]">
       <PageHeader
         eyebrow="Outputs"
         title="生成结果"
@@ -200,20 +203,20 @@
           </div>
         </div>
 
-        <article v-for="output in task.outputs" :key="output.id" class="rounded-[24px] border border-white/10 bg-slate-950/45 p-4">
+        <article v-for="output in task.outputs" :key="output.id" class="min-w-0 rounded-[24px] border border-white/10 bg-slate-950/45 p-4">
           <div class="flex flex-col gap-4 xl:flex-row">
-            <video :src="resolveStorageUrl(output.previewUrl)" controls class="aspect-[9/16] w-full max-w-[240px] rounded-2xl border border-white/10 bg-black object-cover"></video>
-            <div class="flex-1">
+            <video :src="resolveStorageUrl(output.previewUrl)" controls class="aspect-[9/16] w-full max-w-[240px] shrink-0 rounded-2xl border border-white/10 bg-black object-cover"></video>
+            <div class="min-w-0 flex-1">
               <div class="flex items-start justify-between gap-4">
-                <div>
-                  <h3 class="text-lg font-semibold text-white">{{ output.title }}</h3>
-                  <p class="mt-2 text-sm leading-6 text-slate-300">{{ output.reason }}</p>
+                <div class="min-w-0">
+                  <h3 class="break-words text-lg font-semibold text-white">{{ output.title }}</h3>
+                  <p class="mt-2 break-words text-sm leading-6 text-slate-300">{{ output.reason }}</p>
                 </div>
-                <a :href="resolveStorageUrl(output.downloadUrl)" class="rounded-full bg-rose-500 px-4 py-2 text-sm font-medium text-white transition duration-200 hover:bg-rose-400" download>
+                <a :href="resolveStorageUrl(output.downloadUrl)" class="shrink-0 rounded-full bg-rose-500 px-4 py-2 text-sm font-medium text-white transition duration-200 hover:bg-rose-400" download>
                   下载
                 </a>
               </div>
-              <div class="mt-4 grid grid-cols-2 gap-3 text-sm text-slate-300 sm:grid-cols-4">
+              <div class="mt-4 grid gap-3 text-sm text-slate-300 sm:grid-cols-2 xl:grid-cols-4">
                 <div>序号：{{ output.clipIndex }}</div>
                 <div>起点：{{ output.startSeconds.toFixed(1) }}s</div>
                 <div>终点：{{ output.endSeconds.toFixed(1) }}s</div>
