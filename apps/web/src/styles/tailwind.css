@@ -1,15 +1,36 @@
+@import url("https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600;700&family=Fira+Sans:wght@300;400;500;600;700;800&display=swap");
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 :root {
   color-scheme: dark;
-  font-family: "Avenir Next", "PingFang SC", "Noto Sans SC", sans-serif;
+  font-family: "Fira Sans", "PingFang SC", "Noto Sans SC", sans-serif;
+  --bg-base: #000000;
+  --bg-panel: rgba(15, 15, 35, 0.82);
+  --bg-soft: rgba(30, 27, 75, 0.45);
+  --text-primary: #f8fafc;
+  --text-secondary: #cbd5e1;
+  --text-muted: #94a3b8;
+  --cta: #e11d48;
+}
+
+html {
+  background: var(--bg-base);
+  scroll-behavior: smooth;
 }
 
 body {
   margin: 0;
   min-width: 320px;
+  background:
+    radial-gradient(circle at top left, rgba(225, 29, 72, 0.2), transparent 24%),
+    radial-gradient(circle at top right, rgba(59, 130, 246, 0.12), transparent 28%),
+    linear-gradient(180deg, #0f0f23 0%, #030712 54%, #000000 100%);
+  color: var(--text-primary);
+  font-family: "Fira Sans", "PingFang SC", "Noto Sans SC", sans-serif;
+  text-rendering: geometricPrecision;
 }
 
 a {
@@ -18,4 +39,21 @@ a {
 
 * {
   box-sizing: border-box;
+}
+
+::selection {
+  background: rgba(225, 29, 72, 0.28);
+  color: var(--text-primary);
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+:focus-visible {
+  outline: 2px solid rgba(251, 191, 36, 0.9);
+  outline-offset: 3px;
 }

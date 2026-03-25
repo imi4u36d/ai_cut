@@ -33,12 +33,15 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     headers
   });
   if (!response.ok) {
-    const body = await readResponse<{ message?: string } | string | null>(response);
+    const body = await readResponse<{ message?: string; detail?: string } | string | null>(response);
     if (typeof body === "string" && body.trim()) {
       throw new Error(body);
     }
     if (body && typeof body === "object" && "message" in body && body.message) {
       throw new Error(body.message);
+    }
+    if (body && typeof body === "object" && "detail" in body && body.detail) {
+      throw new Error(body.detail);
     }
     throw new Error(`请求失败（${response.status}）`);
   }

@@ -1,5 +1,13 @@
 import { getJson, postForm, postJson } from "./client";
-import type { CreateTaskRequest, TaskDetail, TaskListItem, UploadResponse } from "@/types";
+import type {
+  CreateTaskRequest,
+  TaskCloneDraft,
+  TaskDetail,
+  TaskFilters,
+  TaskListItem,
+  TaskPreset,
+  UploadResponse
+} from "@/types";
 
 export function uploadVideo(file: File) {
   const form = new FormData();
@@ -11,8 +19,19 @@ export function createTask(payload: CreateTaskRequest) {
   return postJson<TaskDetail>("/tasks", payload);
 }
 
-export function fetchTasks() {
-  return getJson<TaskListItem[]>("/tasks");
+export function fetchTasks(filters?: TaskFilters) {
+  const params = new URLSearchParams();
+  if (filters?.q?.trim()) {
+    params.set("q", filters.q.trim());
+  }
+  if (filters?.status && filters.status !== "all") {
+    params.set("status", filters.status);
+  }
+  if (filters?.platform && filters.platform !== "all") {
+    params.set("platform", filters.platform);
+  }
+  const query = params.toString();
+  return getJson<TaskListItem[]>(query ? `/tasks?${query}` : "/tasks");
 }
 
 export function fetchTask(taskId: string) {
@@ -23,3 +42,10 @@ export function retryTask(taskId: string) {
   return postJson<TaskDetail>(`/tasks/${taskId}/retry`, {});
 }
 
+export function cloneTask(taskId: string) {
+  return postJson<TaskCloneDraft>(`/tasks/${taskId}/clone`, {});
+}
+
+export function fetchPresets() {
+  return getJson<TaskPreset[]>("/presets");
+}

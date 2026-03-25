@@ -5,20 +5,24 @@ import json
 import threading
 
 from sqlalchemy import delete, select
-from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.orm import Session, selectinload, sessionmaker
 
 from .config import Settings
 from .media import probe_media, render_output
 from .models import SourceAsset, Task, TaskOutput
+from .presets import get_task_presets
 from .planner import PlannerChain, PlannerContext
 from .schemas import (
     ClipPlan,
     CreateTaskRequest,
     MediaProbe,
+    SourceAssetSummary,
+    TaskDraft,
     TaskDetail,
     TaskListItem,
     TaskOutput as TaskOutputSchema,
     TaskSpec,
+    TaskPreset,
     UploadResponse,
 )
 from .storage import MediaStorage
@@ -28,6 +32,12 @@ from .utils import clamp, new_id, truncate_text, utcnow
 def _iso(value: datetime | None) -> str:
     if value is None:
         return utcnow().isoformat()
+    return value.isoformat()
+
+
+def _optional_iso(value: datetime | None) -> str | None:
+    if value is None:
+        return None
     return value.isoformat()
 
 
@@ -76,6 +86,9 @@ class TaskService:
             sizeBytes=stored.size_bytes,
         )
 
+    def list_task_presets(self) -> list[TaskPreset]:
+        return get_task_presets()
+
     def create_task(self, payload: CreateTaskRequest) -> TaskDetail:
         if payload.minDurationSeconds > payload.maxDurationSeconds:
             raise ValueError("minDurationSeconds must be less than or equal to maxDurationSeconds")
@@ -112,14 +125,49 @@ class TaskService:
         self.dispatch_task(task.id)
         return self.get_task_detail(task.id)
 
-    def list_tasks(self) -> list[TaskListItem]:
+    def clone_task(self, task_id: str) -> TaskDraft:
         with self.session() as session:
-            rows = session.scalars(select(Task).order_by(Task.created_at.desc())).all()
+            task = session.get(Task, task_id)
+            if task is None:
+                raise LookupError("task not found")
+            asset = session.get(SourceAsset, task.source_asset_id)
+            return self._task_to_draft(task, asset)
+
+    def list_tasks(
+        self,
+        q: str | None = None,
+        status: str | None = None,
+        platform: str | None = None,
+    ) -> list[TaskListItem]:
+        with self.session() as session:
+            stmt = select(Task).options(selectinload(Task.outputs))
+            filters = []
+            if q:
+                pattern = f"%{q}%"
+                filters.append(
+                    (
+                        Task.title.ilike(pattern)
+                        | Task.source_file_name.ilike(pattern)
+                        | Task.creative_prompt.ilike(pattern)
+                    )
+                )
+            if status:
+                filters.append(Task.status == status)
+            if platform:
+                filters.append(Task.platform == platform)
+            if filters:
+                stmt = stmt.where(*filters)
+            rows = session.scalars(stmt.order_by(Task.created_at.desc())).all()
             return [self._task_to_list_item(row) for row in rows]
 
     def get_task_detail(self, task_id: str) -> TaskDetail:
         with self.session() as session:
-            task = session.get(Task, task_id)
+            stmt = (
+                select(Task)
+                .options(selectinload(Task.outputs), selectinload(Task.source_asset))
+                .where(Task.id == task_id)
+            )
+            task = session.scalars(stmt).one_or_none()
             if task is None:
                 raise LookupError("task not found")
             return self._task_to_detail(task)
@@ -389,6 +437,71 @@ class TaskService:
             outputCount=task.output_count,
             createdAt=_iso(task.created_at),
             updatedAt=_iso(task.updated_at),
+            sourceFileName=task.source_file_name,
+            aspectRatio=task.aspect_ratio,
+            minDurationSeconds=task.min_duration_seconds,
+            maxDurationSeconds=task.max_duration_seconds,
+            retryCount=task.retry_count or 0,
+            startedAt=_optional_iso(task.started_at),
+            finishedAt=_optional_iso(task.finished_at),
+            completedOutputCount=len(task.outputs),
+        )
+
+    def _source_asset_summary(self, asset: SourceAsset | None) -> SourceAssetSummary | None:
+        if asset is None:
+            return None
+        return SourceAssetSummary(
+            assetId=asset.id,
+            originalFileName=asset.original_file_name,
+            storedFileName=asset.stored_file_name,
+            fileUrl=self.storage.build_public_url(asset.storage_path),
+            mimeType=asset.mime_type,
+            sizeBytes=asset.size_bytes,
+            sha256=asset.sha256,
+            durationSeconds=asset.duration_seconds,
+            width=asset.width,
+            height=asset.height,
+            hasAudio=asset.has_audio,
+            createdAt=_iso(asset.created_at),
+            updatedAt=_iso(asset.updated_at),
+        )
+
+    def _parse_plan(self, task: Task) -> list[ClipPlan]:
+        if not task.plan_json:
+            return []
+        try:
+            raw = json.loads(task.plan_json)
+        except Exception:
+            return []
+        if not isinstance(raw, list):
+            return []
+
+        plan: list[ClipPlan] = []
+        for item in raw:
+            try:
+                plan.append(ClipPlan.model_validate(item))
+            except Exception:
+                continue
+        return plan
+
+    def _task_to_draft(self, task: Task, asset: SourceAsset | None) -> TaskDraft:
+        title = task.title.strip()
+        if title and not title.endswith("复制版"):
+            title = f"{title} 复制版"
+        return TaskDraft(
+            sourceTaskId=task.id,
+            sourceAssetId=task.source_asset_id,
+            sourceFileName=task.source_file_name,
+            title=title or task.title,
+            platform=task.platform,
+            aspectRatio=task.aspect_ratio,
+            minDurationSeconds=task.min_duration_seconds,
+            maxDurationSeconds=task.max_duration_seconds,
+            outputCount=task.output_count,
+            introTemplate=task.intro_template,
+            outroTemplate=task.outro_template,
+            creativePrompt=task.creative_prompt,
+            source=self._source_asset_summary(asset),
         )
 
     def _task_to_detail(self, task: Task) -> TaskDetail:
@@ -408,6 +521,8 @@ class TaskService:
                     downloadUrl=self.storage.build_public_url(output.download_path),
                 )
             )
+        source_asset = task.source_asset if hasattr(task, "source_asset") else None
+        plan = self._parse_plan(task)
         return TaskDetail(
             id=task.id,
             title=task.title,
@@ -425,5 +540,11 @@ class TaskService:
             outroTemplate=task.outro_template,
             creativePrompt=task.creative_prompt,
             errorMessage=task.error_message,
+            startedAt=_optional_iso(task.started_at),
+            finishedAt=_optional_iso(task.finished_at),
+            retryCount=task.retry_count or 0,
+            completedOutputCount=len(outputs),
+            source=self._source_asset_summary(source_asset),
+            plan=plan,
             outputs=outputs,
         )

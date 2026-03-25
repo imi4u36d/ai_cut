@@ -35,6 +35,22 @@ class CreateTaskRequest(BaseModel):
     creativePrompt: str | None = None
 
 
+class SourceAssetSummary(BaseModel):
+    assetId: str
+    originalFileName: str
+    storedFileName: str
+    fileUrl: str
+    mimeType: str | None = None
+    sizeBytes: int
+    sha256: str | None = None
+    durationSeconds: float | None = None
+    width: int | None = None
+    height: int | None = None
+    hasAudio: bool
+    createdAt: str
+    updatedAt: str
+
+
 class TaskOutput(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -60,6 +76,30 @@ class TaskListItem(BaseModel):
     outputCount: int
     createdAt: str
     updatedAt: str
+    sourceFileName: str
+    aspectRatio: str
+    minDurationSeconds: int
+    maxDurationSeconds: int
+    retryCount: int = 0
+    startedAt: str | None = None
+    finishedAt: str | None = None
+    completedOutputCount: int = 0
+
+
+class TaskDraft(BaseModel):
+    sourceTaskId: str
+    sourceAssetId: str
+    sourceFileName: str
+    title: str
+    platform: str
+    aspectRatio: str
+    minDurationSeconds: int
+    maxDurationSeconds: int
+    outputCount: int
+    introTemplate: str
+    outroTemplate: str
+    creativePrompt: str | None = None
+    source: SourceAssetSummary | None = None
 
 
 class TaskDetail(TaskListItem):
@@ -71,6 +111,12 @@ class TaskDetail(TaskListItem):
     outroTemplate: str
     creativePrompt: str | None = None
     errorMessage: str | None = None
+    startedAt: str | None = None
+    finishedAt: str | None = None
+    retryCount: int = 0
+    completedOutputCount: int = 0
+    source: SourceAssetSummary | None = None
+    plan: list[ClipPlan] = Field(default_factory=list)
     outputs: list[TaskOutput] = Field(default_factory=list)
 
 
@@ -93,6 +139,21 @@ class MediaProbe(BaseModel):
 
 class TaskSpec(BaseModel):
     title: str
+    platform: str
+    aspectRatio: str
+    minDurationSeconds: int
+    maxDurationSeconds: int
+    outputCount: int
+    introTemplate: str
+    outroTemplate: str
+    creativePrompt: str | None = None
+
+
+class TaskPreset(BaseModel):
+    key: str
+    name: str
+    description: str
+    defaultTitle: str
     platform: str
     aspectRatio: str
     minDurationSeconds: int
