@@ -12,9 +12,11 @@ __pycache__/
 storage/uploads/*
 storage/outputs/*
 storage/temp/*
-storage/mysql/
+storage/mysql/*
 storage/mysql.bak_*/
-storage/redis/
+storage/redis/*
 !storage/uploads/.gitkeep
 !storage/outputs/.gitkeep
 !storage/temp/.gitkeep
+!storage/mysql/.gitkeep
+!storage/redis/.gitkeep
