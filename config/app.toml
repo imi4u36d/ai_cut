@@ -7,7 +7,7 @@ web_origin = "http://localhost:5173"
 execution_mode = "inline"
 
 [database]
-url = "mysql+pymysql://root:root@127.0.0.1:3306/ai_cut?charset=utf8mb4_general_ci"
+url = "mysql+pymysql://root:root@127.0.0.1:3306/ai_cut?charset=utf8mb4"
 echo = false
 
 [redis]

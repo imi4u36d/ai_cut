@@ -4,8 +4,8 @@ export interface RuntimeConfig {
 }
 
 const defaultRuntimeConfig: RuntimeConfig = {
-  apiBaseUrl: "http://127.0.0.1:8000/api/v1",
-  storageBaseUrl: "http://127.0.0.1:8000/storage"
+  apiBaseUrl: "/api/v1",
+  storageBaseUrl: "/storage"
 };
 
 let runtimeConfig: RuntimeConfig = { ...defaultRuntimeConfig };

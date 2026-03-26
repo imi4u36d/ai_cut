@@ -1,0 +1,15 @@
+.git
+.gitignore
+.venv
+**/__pycache__
+**/.pytest_cache
+**/.mypy_cache
+**/.DS_Store
+apps/web/node_modules
+apps/web/dist
+storage/mysql
+storage/mysql.bak_*
+storage/redis
+storage/temp
+storage/outputs
+

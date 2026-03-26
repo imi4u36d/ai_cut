@@ -27,12 +27,33 @@ from .routers.tasks import router as tasks_router
 from .routers.uploads import router as uploads_router
 
 
+def _build_allowed_origins(web_origin: str) -> list[str]:
+    origins: list[str] = []
+    for raw_origin in web_origin.split(","):
+        origin = raw_origin.strip()
+        if origin and origin not in origins:
+            origins.append(origin)
+
+    aliases: list[str] = []
+    for origin in origins:
+        if "127.0.0.1" in origin:
+            aliases.append(origin.replace("127.0.0.1", "localhost"))
+        if "localhost" in origin:
+            aliases.append(origin.replace("localhost", "127.0.0.1"))
+
+    for alias in aliases:
+        if alias not in origins:
+            origins.append(alias)
+
+    return origins
+
+
 runtime = build_runtime()
 
 app = FastAPI(title=runtime.settings.app.name, version="0.1.0")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[runtime.settings.app.web_origin],
+    allow_origins=_build_allowed_origins(runtime.settings.app.web_origin),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
