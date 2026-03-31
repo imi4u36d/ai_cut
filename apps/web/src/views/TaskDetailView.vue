@@ -1,24 +1,33 @@
 <template>
-  <section class="grid min-w-0 gap-6">
-    <div class="relative min-w-0 overflow-hidden rounded-[30px] border border-white/10 bg-[linear-gradient(180deg,rgba(15,15,35,0.9),rgba(8,11,24,0.8))] p-6 shadow-[0_24px_80px_rgba(0,0,0,0.35)]">
-      <div class="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/20 to-transparent"></div>
-      <PageHeader
-        eyebrow="Progress"
-        :title="task?.title || '任务详情'"
-        description="查看任务状态、阶段进度、规划方案和渲染输出，快速判断当前素材的生产质量。"
-      >
-        <div class="flex flex-wrap gap-2">
+  <section class="task-detail-shell">
+    <div v-if="errorMessage" class="task-alert">
+      <p>{{ errorMessage }}</p>
+      <button class="btn-secondary btn-sm" type="button" @click="loadTask">重新加载</button>
+    </div>
+
+    <div v-if="loading" class="glass-panel glass-placeholder">
+      正在加载任务详情...
+    </div>
+
+    <div v-else-if="task" class="glass-panel">
+      <header class="glass-hero">
+        <div class="hero-copy">
+          <div class="hero-title-row">
+            <p class="eyebrow">{{ statusHint }}</p>
+            <HintBell
+              title="详情页说明"
+              text="这里只保留当前任务的执行状态、配置摘要和规划结果。更偏帮助性的解释都放在这里。"
+              :items="['先看进度和时间线', '再看配置摘要', '最后再检查 planning deck 和输出']"
+              align="left"
+            />
+          </div>
+          <h1>{{ task.title || '任务详情' }}</h1>
+        </div>
+        <div class="hero-actions">
+          <button class="button primary" :disabled="actionLoading" type="button" @click="openCloneFlow">复制参数</button>
           <button
-            class="btn-primary"
-            :disabled="actionLoading"
-            type="button"
-            @click="openCloneFlow"
-          >
-            复制参数
-          </button>
-          <button
-            v-if="task?.status === 'FAILED'"
-            class="btn-warning"
+            v-if="task.status === 'FAILED'"
+            class="button warning"
             :disabled="actionLoading"
             type="button"
             @click="handleRetry"
@@ -26,7 +35,7 @@
             失败重试
           </button>
           <button
-            class="btn-danger"
+            class="button danger"
             :disabled="actionLoading || runningTask"
             type="button"
             @click="handleDelete"
@@ -34,577 +43,118 @@
             删除任务
           </button>
         </div>
-      </PageHeader>
+      </header>
 
-      <div v-if="task" class="mb-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <div class="rounded-[22px] border border-white/10 bg-white/[0.04] p-4">
-          <p class="text-[11px] uppercase tracking-[0.24em] text-slate-400">当前状态</p>
-          <p class="mt-2 text-lg font-semibold text-white">{{ statusHint }}</p>
-        </div>
-        <div class="rounded-[22px] border border-white/10 bg-white/[0.04] p-4">
-          <p class="text-[11px] uppercase tracking-[0.24em] text-slate-400">任务进度</p>
-          <p class="mt-2 text-lg font-semibold text-white">{{ task.progress }}%</p>
-        </div>
-        <div class="rounded-[22px] border border-white/10 bg-white/[0.04] p-4">
-          <p class="text-[11px] uppercase tracking-[0.24em] text-slate-400">输出 / 目标</p>
-          <p class="mt-2 text-lg font-semibold text-white">{{ completedOutputCount }} / {{ task.outputCount }}</p>
-        </div>
-        <div class="rounded-[22px] border border-white/10 bg-white/[0.04] p-4">
-          <p class="text-[11px] uppercase tracking-[0.24em] text-slate-400">规划模式</p>
-          <p class="mt-2 text-sm font-semibold text-white">{{ planningModeSummary.label }}</p>
-        </div>
+      <div class="glass-stats">
+        <article>
+          <span>进度</span>
+          <strong>{{ task.progress }}%</strong>
+          <small>{{ completedOutputCount }} / {{ task.outputCount }} 输出</small>
+        </article>
+        <article>
+          <span>输出轨</span>
+          <strong>{{ completedOutputCount }}</strong>
+          <small>已完成 {{ task.outputCount }} 条</small>
+        </article>
+        <article>
+          <span>时间</span>
+          <strong>{{ formatTime(task.startedAt) }}</strong>
+          <small>{{ formatTime(task.finishedAt) }}</small>
+        </article>
+        <article>
+          <span>重试</span>
+          <strong>{{ task.retryCount ?? 0 }}</strong>
+          <small>保留 {{ task.retryCount ?? 0 }} 次</small>
+        </article>
       </div>
 
-      <div v-if="errorMessage" class="mb-4 rounded-[24px] border border-rose-500/20 bg-rose-500/10 p-4 text-sm text-rose-100">
-        <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <p>{{ errorMessage }}</p>
-          <button class="btn-secondary btn-sm" type="button" @click="loadTask">
-            重新加载
+      <div class="glass-timeline">
+        <TimelineStage label="素材分析" description="读取源/切点" :state="getStageState('analysis')" />
+        <TimelineStage label="剪辑规划" description="构建剪辑方案" :state="getStageState('planning')" />
+        <TimelineStage label="视频渲染" description="渲染输出素材" :state="getStageState('rendering')" />
+      </div>
+
+      <div class="glass-config">
+        <dl>
+          <div>
+            <dt>平台 / 比例</dt>
+            <dd>{{ task.platform }} · {{ task.aspectRatio }}</dd>
+          </div>
+          <div>
+            <dt>时长 / 输出</dt>
+            <dd>{{ task.minDurationSeconds }} - {{ task.maxDurationSeconds }} 秒 · {{ task.outputCount }} 条</dd>
+          </div>
+          <div>
+            <dt>模式</dt>
+            <dd>{{ planningModeSummary.label }}</dd>
+          </div>
+          <div>
+            <dt>语义</dt>
+            <dd>{{ task.hasTranscript ? (task.hasTimedTranscript ? '带时间戳字幕' : '文本语义') : '无' }}</dd>
+          </div>
+        </dl>
+        <div class="config-row">
+          <div>
+            <p class="label">主素材</p>
+            <p>{{ task.source?.originalFileName || task.sourceFileName }}</p>
+          </div>
+          <div>
+            <p class="label">策略速览</p>
+            <p>{{ strategyOverviewHeadline }}</p>
+          </div>
+        </div>
+        <p v-if="task.creativePrompt" class="creative">{{ task.creativePrompt }}</p>
+      </div>
+
+      <div v-if="task.plan?.length" class="glass-plan">
+        <div class="plan-head">
+          <div>
+            <p class="eyebrow">Planning Deck</p>
+            <div class="flex items-center gap-3">
+              <h2>{{ planningDeckTitle }}</h2>
+              <HintBell
+                title="Deck 指南"
+                :text="planningDeckDescription"
+                align="left"
+              />
+            </div>
+          </div>
+          <div class="plan-metrics">
+            <span>{{ planOverview.clipCount }} 方案</span>
+            <span>{{ planOverview.sourceCount }} 素材</span>
+          </div>
+        </div>
+
+        <div class="plan-tabs">
+          <button
+            v-for="(clip, index) in task.plan"
+            :key="clip.clipIndex"
+            :class="['plan-tab', { active: index === activePlanIndex }]"
+            type="button"
+            @click="activePlanIndex = index"
+          >
+            <p>Plan {{ clip.clipIndex }}</p>
+            <strong>{{ clip.title }}</strong>
+            <span>{{ clip.durationSeconds.toFixed(1) }}s · {{ clip.segments?.length ?? 1 }} 单元</span>
           </button>
         </div>
+
+        <article v-if="currentPlanClip" class="plan-hero">
+          <div class="plan-title">
+            <h3>#{{ currentPlanClip.clipIndex }} {{ currentPlanClip.title }}</h3>
+            <span>{{ currentPlanClip.durationSeconds.toFixed(1) }}s</span>
+          </div>
+          <p>{{ currentPlanClip.reason }}</p>
+          <div class="plan-tags">
+            <span>{{ editingModeLabel }}</span>
+            <span>转场 · {{ storyboardTransitionLabel(currentPlanClip.transitionStyle || task.mixcutTransitionStyle, task.mixcutStylePreset) }}</span>
+          </div>
+        </article>
       </div>
-
-      <div v-if="loading" class="rounded-[24px] border border-white/10 bg-white/[0.04] p-6 text-sm text-slate-300">
-        正在加载任务详情...
-      </div>
-
-      <template v-else-if="task">
-        <div class="grid gap-4 rounded-[28px] border border-white/10 bg-white/[0.04] p-5 shadow-[0_16px_50px_rgba(0,0,0,0.18)]">
-          <div class="flex flex-wrap items-center gap-3">
-            <StatusBadge :status="task.status" />
-            <span class="text-sm text-slate-300">{{ task.progress }}%</span>
-            <span class="text-sm text-slate-400">{{ statusHint }}</span>
-          </div>
-
-          <div :class="focusCardClass(planningModeSummary.tone)" class="rounded-[24px] border p-4">
-            <div class="flex flex-wrap items-center gap-2">
-              <span :class="toneBadgeClass(planningModeSummary.tone)" class="rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.24em]">
-                规划方式
-              </span>
-              <span class="text-xs text-slate-500">{{ planningModeSummary.label }}</span>
-            </div>
-            <p class="mt-3 text-base font-semibold text-white">{{ planningModeSummary.title }}</p>
-            <p class="mt-1 break-words text-sm leading-6 text-slate-300">{{ planningModeSummary.detail }}</p>
-          </div>
-
-          <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            <div class="rounded-2xl border border-white/8 bg-slate-950/50 p-4">
-              <p class="text-xs uppercase tracking-[0.24em] text-slate-400">输出数量</p>
-              <p class="mt-2 text-lg font-semibold text-white">{{ completedOutputCount }} / {{ task.outputCount }}</p>
-            </div>
-            <div class="rounded-2xl border border-white/8 bg-slate-950/50 p-4">
-              <p class="text-xs uppercase tracking-[0.24em] text-slate-400">重试次数</p>
-              <p class="mt-2 text-lg font-semibold text-white">{{ task.retryCount ?? 0 }}</p>
-            </div>
-            <div class="rounded-2xl border border-white/8 bg-slate-950/50 p-4">
-              <p class="text-xs uppercase tracking-[0.24em] text-slate-400">开始时间</p>
-              <p class="mt-2 text-sm font-semibold text-white">{{ formatTime(task.startedAt) }}</p>
-            </div>
-            <div class="rounded-2xl border border-white/8 bg-slate-950/50 p-4">
-              <p class="text-xs uppercase tracking-[0.24em] text-slate-400">结束时间</p>
-              <p class="mt-2 text-sm font-semibold text-white">{{ formatTime(task.finishedAt) }}</p>
-            </div>
-          </div>
-
-          <div class="grid gap-3">
-            <TimelineStage label="素材分析" description="读取源文件、探测时长和基础轨道信息。" :state="getStageState('analysis')" />
-            <TimelineStage label="剪辑规划" description="生成切条方案，选择更适合投放的片段。" :state="getStageState('planning')" />
-            <TimelineStage label="视频渲染" description="输出预览版和下载版素材。" :state="getStageState('rendering')" />
-          </div>
-        </div>
-
-        <div class="mt-6 grid gap-4 rounded-[28px] border border-white/10 bg-slate-950/45 p-5 shadow-[0_16px_50px_rgba(0,0,0,0.16)]">
-          <div class="grid gap-1 min-w-0">
-            <span class="text-xs uppercase tracking-[0.24em] text-slate-400">任务配置</span>
-            <span class="break-words text-sm text-slate-200">{{ task.platform }} · {{ task.aspectRatio }} · {{ task.minDurationSeconds }}-{{ task.maxDurationSeconds }} 秒 · {{ task.outputCount }} 条</span>
-          </div>
-          <div class="grid gap-4 sm:grid-cols-2">
-            <div class="min-w-0">
-              <p class="text-xs uppercase tracking-[0.24em] text-slate-400">源文件</p>
-              <p class="mt-2 break-all text-sm text-white">{{ task.sourceFileName }}</p>
-              <p v-if="task.source?.originalFileName" class="mt-1 break-all text-xs text-slate-400">原始资产：{{ task.source.originalFileName }}</p>
-              <p class="mt-1 text-xs text-slate-400">
-                {{ sourceModeSummary }}
-              </p>
-              <div v-if="task.sourceAssets?.length" class="mt-3 flex flex-wrap gap-2">
-                <span
-                  v-for="asset in task.sourceAssets"
-                  :key="asset.assetId"
-                  class="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-xs text-slate-200"
-                >
-                  {{ asset.originalFileName }}
-                </span>
-              </div>
-            </div>
-            <div v-if="task.creativePrompt" class="min-w-0">
-              <p class="text-xs uppercase tracking-[0.24em] text-slate-400">创意补充</p>
-              <p class="mt-2 break-words text-sm leading-6 text-slate-300">{{ task.creativePrompt }}</p>
-            </div>
-          </div>
-
-          <div class="grid gap-3 rounded-[22px] border border-white/8 bg-white/[0.04] p-4">
-            <div class="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <p class="text-xs uppercase tracking-[0.24em] text-slate-400">{{ strategyOverviewTitle }}</p>
-                <p class="mt-2 text-base font-semibold text-white">
-                  {{ strategyOverviewHeadline }}
-                </p>
-              </div>
-              <span class="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-200">
-                {{ strategyOverviewBadge }}
-              </span>
-            </div>
-            <div class="flex flex-wrap gap-2">
-              <span class="surface-chip">{{ editingModeLabel }}</span>
-              <span class="surface-chip">片头 · {{ introTemplateLabel(task.introTemplate) }}</span>
-              <span v-if="isMixcutMode" class="surface-chip">题材 · {{ mixcutContentTypeLabel(task.mixcutContentType) }}</span>
-              <span v-if="isMixcutMode" class="surface-chip">风格 · {{ mixcutStyleLabel(task.mixcutContentType, task.mixcutStylePreset) }}</span>
-              <span v-if="isMixcutMode && task.mixcutTemplate" class="surface-chip">模板 · {{ mixcutTemplateLabel(task.mixcutTemplate) }}</span>
-              <span v-if="!isMixcutMode" class="surface-chip">对白完整优先</span>
-              <span v-if="!isMixcutMode" class="surface-chip">高燃卡点优先</span>
-              <span class="surface-chip">片尾 · {{ outroTemplateLabel(task.outroTemplate) }}</span>
-            </div>
-            <div class="grid gap-3 md:grid-cols-3">
-              <div class="rounded-[20px] border border-white/8 bg-slate-950/45 p-4">
-                <p class="text-[11px] uppercase tracking-[0.24em] text-slate-400">{{ isMixcutMode ? "开场" : "高燃起势" }}</p>
-                <p class="mt-2 text-sm font-semibold text-white">{{ introTemplateLabel(task.introTemplate) }}</p>
-                <p class="mt-2 text-xs leading-5 text-slate-400">{{ introTemplateHint(task.introTemplate) }}</p>
-              </div>
-              <div class="rounded-[20px] border border-white/8 bg-slate-950/45 p-4">
-                <p class="text-[11px] uppercase tracking-[0.24em] text-slate-400">{{ isMixcutMode ? "推进" : "剧情推进" }}</p>
-                <p class="mt-2 text-sm font-semibold text-white">{{ strategyCenterHeadline }}</p>
-                <p class="mt-2 text-xs leading-5 text-slate-400">{{ strategyCenterDetail }}</p>
-              </div>
-              <div class="rounded-[20px] border border-white/8 bg-slate-950/45 p-4">
-                <p class="text-[11px] uppercase tracking-[0.24em] text-slate-400">{{ isMixcutMode ? "收束" : "悬念收束" }}</p>
-                <p class="mt-2 text-sm font-semibold text-white">{{ outroTemplateLabel(task.outroTemplate) }}</p>
-                <p class="mt-2 text-xs leading-5 text-slate-400">{{ outroTemplateHint(task.outroTemplate) }}</p>
-              </div>
-            </div>
-          </div>
-
-          <div v-if="task.hasTranscript" class="min-w-0 rounded-[22px] border border-white/8 bg-white/[0.04] p-4">
-            <p class="text-xs uppercase tracking-[0.24em] text-slate-400">语义规划输入</p>
-            <p class="mt-2 text-sm font-medium text-white">{{ task.hasTimedTranscript ? "已提供带时间戳字幕/台词" : "已提供纯文本台词/字幕" }}</p>
-            <p class="mt-1 text-xs text-slate-400">时间轴片段：{{ task.transcriptCueCount ?? 0 }} 条</p>
-            <p v-if="task.transcriptPreview" class="mt-2 break-words text-sm leading-6 text-slate-300">{{ task.transcriptPreview }}</p>
-          </div>
-
-          <div v-if="task.plan?.length" class="min-w-0 rounded-[28px] border border-white/8 bg-white/[0.04] p-5">
-            <div class="planning-panel-header">
-              <div class="min-w-0">
-                <p class="text-xs uppercase tracking-[0.28em] text-slate-400">Planning Deck</p>
-                <h3 class="mt-3 text-xl font-semibold text-white">{{ planningDeckTitle }}</h3>
-                <p class="mt-2 max-w-3xl text-sm leading-6 text-slate-300">{{ planningDeckDescription }}</p>
-              </div>
-              <div class="planning-overview-grid">
-                <article class="planning-overview-card">
-                  <span class="planning-overview-label">方案数</span>
-                  <strong class="planning-overview-value">{{ planOverview.clipCount }}</strong>
-                  <span class="planning-overview-note">本次规划输出</span>
-                </article>
-                <article class="planning-overview-card">
-                  <span class="planning-overview-label">镜头单元</span>
-                  <strong class="planning-overview-value">{{ planOverview.segmentCount }}</strong>
-                  <span class="planning-overview-note">静帧 + 运动镜头</span>
-                </article>
-                <article class="planning-overview-card">
-                  <span class="planning-overview-label">静帧镜头</span>
-                  <strong class="planning-overview-value">{{ planOverview.frameCount }}</strong>
-                  <span class="planning-overview-note">定格 / 预埋信息</span>
-                </article>
-                <article class="planning-overview-card">
-                  <span class="planning-overview-label">覆盖素材</span>
-                  <strong class="planning-overview-value">{{ planOverview.sourceCount }}</strong>
-                  <span class="planning-overview-note">参与编排的来源</span>
-                </article>
-              </div>
-            </div>
-
-            <div class="planning-selector mt-5">
-              <button
-                v-for="(clip, index) in task.plan"
-                :key="clip.clipIndex"
-                type="button"
-                class="planning-selector-tab"
-                :class="index === activePlanIndex ? 'planning-selector-tab-active' : ''"
-                @click="activePlanIndex = index"
-              >
-                <span class="text-[11px] uppercase tracking-[0.28em] text-slate-500">Plan {{ clip.clipIndex }}</span>
-                <strong class="mt-2 line-clamp-2 text-sm font-semibold text-white">{{ clip.title }}</strong>
-                <span class="mt-2 text-xs text-slate-400">{{ clip.durationSeconds.toFixed(1) }}s · {{ clip.segments?.length ?? 1 }} 单元</span>
-              </button>
-            </div>
-
-            <article v-if="currentPlanClip" class="planning-clip-card mt-5 min-w-0 overflow-hidden rounded-[30px] border border-white/8 p-5">
-              <div class="planning-focus-layout">
-                <section class="planning-focus-main min-w-0">
-                  <div class="planning-focus-hero">
-                    <div class="flex flex-wrap items-start justify-between gap-3">
-                      <div class="min-w-0">
-                        <p class="text-[11px] uppercase tracking-[0.3em] text-slate-500">Current Focus</p>
-                        <h4 class="mt-3 break-words text-2xl font-semibold text-white">#{{ currentPlanClip.clipIndex }} {{ currentPlanClip.title }}</h4>
-                      </div>
-                      <div class="flex flex-wrap justify-end gap-2">
-                        <span class="surface-chip">{{ currentPlanClip.durationSeconds.toFixed(1) }}s</span>
-                        <span class="surface-chip">{{ currentPlanClip.segments?.length ? `${currentPlanClip.segments.length} 个镜头单元` : "单段直剪" }}</span>
-                      </div>
-                    </div>
-                    <p class="mt-4 max-w-3xl break-words text-sm leading-7 text-slate-300">{{ currentPlanClip.reason }}</p>
-                    <div class="mt-5 flex flex-wrap gap-2">
-                      <span class="surface-chip">{{ editingModeLabel }}</span>
-                      <span class="surface-chip">{{ clipSegmentSourcesLabel(currentPlanClip) }}</span>
-                      <span class="surface-chip">转场 · {{ storyboardTransitionLabel(currentPlanClip.transitionStyle || task.mixcutTransitionStyle, task.mixcutStylePreset) }}</span>
-                      <span class="surface-chip">静帧 {{ clipFrameCount(currentPlanClip) }}</span>
-                      <span class="surface-chip">插叙 {{ clipInsertCount(currentPlanClip) }}</span>
-                    </div>
-                  </div>
-
-                  <div class="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                    <article class="planning-metric-card">
-                      <span class="planning-metric-label">时间窗</span>
-                      <strong class="planning-metric-value">{{ currentPlanClip.startSeconds.toFixed(1) }}s → {{ currentPlanClip.endSeconds.toFixed(1) }}s</strong>
-                      <span class="planning-metric-note">模型与规则共同收敛后的执行区间</span>
-                    </article>
-                    <article class="planning-metric-card">
-                      <span class="planning-metric-label">覆盖素材</span>
-                      <strong class="planning-metric-value">{{ clipUniqueSourceCount(currentPlanClip) }}</strong>
-                      <span class="planning-metric-note">当前方案使用的来源数量</span>
-                    </article>
-                    <article class="planning-metric-card">
-                      <span class="planning-metric-label">导演脚本</span>
-                      <strong class="planning-metric-value">{{ storyboardLanes(currentPlanClip).length }}</strong>
-                      <span class="planning-metric-note">当前方案被拆成的叙事段落</span>
-                    </article>
-                    <article class="planning-metric-card">
-                      <span class="planning-metric-label">运动镜头</span>
-                      <strong class="planning-metric-value">{{ clipMotionCount(currentPlanClip) }}</strong>
-                      <span class="planning-metric-note">承担推进、承接和落点的运动片段</span>
-                    </article>
-                  </div>
-                </section>
-
-                <section v-if="currentPlanClip.segments?.length" class="planning-focus-side min-w-0">
-                  <div class="planning-script-stage rounded-[26px] border border-white/8 bg-[linear-gradient(180deg,rgba(5,10,22,0.88),rgba(8,16,32,0.72))] p-4">
-                    <div class="flex flex-wrap items-center justify-between gap-3">
-                      <div>
-                        <p class="text-[11px] uppercase tracking-[0.26em] text-slate-500">Director Beats</p>
-                        <p class="mt-2 text-sm font-semibold text-white">当前方案分镜脚本</p>
-                      </div>
-                      <span class="surface-chip text-[11px] font-semibold">{{ currentPlanClip.segments.length }} 个单元</span>
-                    </div>
-
-                    <div class="mt-4 grid gap-3">
-                      <article
-                        v-for="lane in storyboardLanes(currentPlanClip)"
-                        :key="`${currentPlanClip.clipIndex}-${lane.key}`"
-                        :class="focusCardClass(lane.tone)"
-                        class="rounded-[22px] border p-4"
-                      >
-                        <div class="flex items-start justify-between gap-3">
-                          <div class="min-w-0">
-                            <p class="text-[11px] uppercase tracking-[0.26em] text-slate-500">{{ lane.label }}</p>
-                            <p class="mt-2 text-sm font-semibold text-white">{{ lane.title }}</p>
-                          </div>
-                          <span class="planning-beat-pill" :class="storyboardSegmentClass(lane.tone)">{{ lane.segments.length }} 段</span>
-                        </div>
-                        <p class="mt-2 text-xs leading-5 text-slate-400">{{ lane.detail }}</p>
-                      </article>
-                    </div>
-
-                    <div class="mt-4 overflow-hidden rounded-[24px] border border-white/8 bg-[linear-gradient(180deg,rgba(2,6,23,0.46),rgba(15,23,42,0.2))] p-4">
-                      <div class="flex items-center gap-2 text-[11px] uppercase tracking-[0.26em] text-slate-500">
-                        <span>镜头轨道</span>
-                        <span class="text-slate-600">·</span>
-                        <span>{{ currentPlanClip.startSeconds.toFixed(1) }}s</span>
-                        <span class="text-slate-600">→</span>
-                        <span>{{ currentPlanClip.endSeconds.toFixed(1) }}s</span>
-                      </div>
-                      <div class="storyboard-track mt-4">
-                        <article
-                          v-for="(segment, segmentIndex) in currentPlanClip.segments"
-                          :key="`${currentPlanClip.clipIndex}-${segment.sourceAssetId}-${segmentIndex}`"
-                          class="storyboard-segment rounded-[24px] border p-4 transition duration-200 hover:-translate-y-0.5 hover:bg-slate-950/80"
-                          :class="[storyboardSegmentClass(storyboardSegmentMeta(currentPlanClip, segment, segmentIndex).tone)]"
-                          :style="storyboardSegmentStyle(currentPlanClip, segment, segmentIndex, storyboardSegmentMeta(currentPlanClip, segment, segmentIndex).tone)"
-                        >
-                          <div class="flex items-start justify-between gap-3">
-                            <div class="min-w-0">
-                              <p class="text-[11px] uppercase tracking-[0.26em] text-slate-500">镜头 {{ segmentIndex + 1 }}</p>
-                              <p class="mt-2 break-words text-sm font-semibold text-white">{{ storyboardSegmentMeta(currentPlanClip, segment, segmentIndex).label }}</p>
-                              <p class="mt-2 text-[11px] leading-5 text-slate-300">{{ storyboardSegmentMeta(currentPlanClip, segment, segmentIndex).detail }}</p>
-                            </div>
-                            <span class="shrink-0 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-[11px] font-semibold text-slate-200">
-                              {{ segment.durationSeconds.toFixed(1) }}s
-                            </span>
-                          </div>
-                          <div class="mt-4 flex items-center gap-2">
-                            <div class="h-2 flex-1 overflow-hidden rounded-full bg-white/10">
-                              <div class="h-full rounded-full transition-all duration-300" :class="progressBarClass(storyboardSegmentMeta(currentPlanClip, segment, segmentIndex).tone)" :style="{ width: `${Math.max(25, Math.min(100, (segment.durationSeconds / currentPlanClip.durationSeconds) * 100))}%` }"></div>
-                            </div>
-                            <span v-if="segmentIndex < currentPlanClip.segments.length - 1" class="shrink-0 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-[11px] font-semibold text-slate-100">
-                              {{ storyboardTransitionLabel(currentPlanClip.transitionStyle || task.mixcutTransitionStyle, task.mixcutStylePreset) }}
-                            </span>
-                          </div>
-                          <div class="mt-3 grid gap-2 text-[11px] text-slate-400 sm:grid-cols-2">
-                            <span class="rounded-full border border-white/8 bg-white/[0.03] px-3 py-1">{{ storyboardSourceLabel(segment, segmentIndex) }}</span>
-                            <span class="rounded-full border border-white/8 bg-white/[0.03] px-3 py-1">{{ storyboardSegmentRole(currentPlanClip, segment, segmentIndex) }}</span>
-                            <span class="rounded-full border border-white/8 bg-white/[0.03] px-3 py-1">{{ storyboardSegmentRange(segment) }}</span>
-                            <span v-if="segment.frameTimestampSeconds !== undefined && segment.frameTimestampSeconds !== null" class="rounded-full border border-white/8 bg-white/[0.03] px-3 py-1">
-                              静帧点 {{ segment.frameTimestampSeconds.toFixed(1) }}s
-                            </span>
-                          </div>
-                        </article>
-                      </div>
-                    </div>
-                  </div>
-                </section>
-              </div>
-            </article>
-          </div>
-
-          <div v-if="task.source" class="grid gap-3 sm:grid-cols-2">
-            <div class="rounded-2xl border border-white/8 bg-white/[0.04] p-4">
-              <p class="text-xs uppercase tracking-[0.24em] text-slate-400">素材信息</p>
-              <p class="mt-2 text-sm text-white">{{ formatDuration(task.source.durationSeconds) }}</p>
-              <p class="mt-1 text-xs text-slate-400">{{ formatResolution(task.source.width, task.source.height) }}</p>
-            </div>
-            <div class="rounded-2xl border border-white/8 bg-white/[0.04] p-4">
-              <p class="text-xs uppercase tracking-[0.24em] text-slate-400">音轨 / 体积</p>
-              <p class="mt-2 text-sm text-white">{{ task.source.hasAudio === false ? "无音轨" : "含音轨" }}</p>
-              <p class="mt-1 text-xs text-slate-400">{{ formatBytes(task.source.sizeBytes) }}</p>
-            </div>
-          </div>
-
-          <div v-if="task.errorMessage" class="rounded-2xl border border-rose-500/20 bg-rose-500/10 p-4 text-rose-200">
-            {{ task.errorMessage }}
-          </div>
-        </div>
-
-        <div class="mt-6 rounded-[28px] border border-white/10 bg-slate-950/45 p-5 shadow-[0_16px_50px_rgba(0,0,0,0.16)]">
-          <div class="flex flex-wrap items-end justify-between gap-3">
-            <div>
-              <p class="text-xs uppercase tracking-[0.24em] text-slate-400">Outputs Panel</p>
-              <h3 class="mt-2 text-lg font-semibold text-white">生成结果</h3>
-              <p class="mt-1 text-sm text-slate-400">结果区改成折叠面板，先看任务与规划，需要时再展开预览和下载。</p>
-            </div>
-            <div class="flex flex-wrap items-center gap-3">
-              <div class="grid grid-cols-2 gap-3 rounded-[18px] border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-slate-300">
-                <div>
-                  <p class="text-[11px] uppercase tracking-[0.24em] text-slate-400">完成输出</p>
-                  <p class="mt-1 text-base font-semibold text-white">{{ completedOutputCount }}</p>
-                </div>
-                <div>
-                  <p class="text-[11px] uppercase tracking-[0.24em] text-slate-400">渲染目标</p>
-                  <p class="mt-1 text-base font-semibold text-white">{{ task.outputCount }}</p>
-                </div>
-              </div>
-              <button class="btn-secondary" type="button" @click="outputsExpanded = !outputsExpanded">
-                {{ outputsExpanded ? "收起结果面板" : "展开结果面板" }}
-              </button>
-            </div>
-          </div>
-
-          <div v-if="task.outputs.length === 0" class="mt-4 rounded-[24px] border border-dashed border-white/15 bg-slate-950/40 p-8 text-center text-sm text-slate-300">
-            任务完成后会在这里展示剪辑结果。
-          </div>
-
-          <div v-else-if="!outputsExpanded" class="mt-4 grid gap-4">
-            <div class="rounded-[24px] border border-white/10 bg-white/[0.04] p-4">
-              <div class="flex flex-wrap items-start justify-between gap-3">
-                <div class="min-w-0">
-                  <p class="text-[11px] uppercase tracking-[0.24em] text-slate-400">结果摘要</p>
-                  <p class="mt-2 text-base font-semibold text-white">{{ task.outputs.length }} 条成片已生成，可按需展开查看预览与下载。</p>
-                  <p class="mt-1 text-sm text-slate-400">默认折叠，避免视频预览区把规划方案和日志信息挤得过窄。</p>
-                </div>
-                <span class="surface-chip">{{ task.outputs[0]?.title || "等待首条结果" }}</span>
-              </div>
-            </div>
-
-            <div class="grid gap-3 lg:grid-cols-3">
-              <article
-                v-for="output in task.outputs.slice(0, 3)"
-                :key="output.id"
-                class="min-w-0 rounded-[22px] border border-white/10 bg-slate-950/40 p-4"
-              >
-                <p class="text-[11px] uppercase tracking-[0.24em] text-slate-400">Clip {{ output.clipIndex }}</p>
-                <p class="mt-2 line-clamp-2 text-sm font-semibold text-white">{{ output.title }}</p>
-                <p class="mt-2 line-clamp-3 text-sm leading-6 text-slate-300">{{ output.reason }}</p>
-                <div class="mt-3 flex flex-wrap gap-2 text-[11px] text-slate-400">
-                  <span class="rounded-full border border-white/8 bg-white/[0.03] px-3 py-1">{{ output.startSeconds.toFixed(1) }}s → {{ output.endSeconds.toFixed(1) }}s</span>
-                  <span class="rounded-full border border-white/8 bg-white/[0.03] px-3 py-1">{{ output.durationSeconds.toFixed(1) }}s</span>
-                </div>
-              </article>
-            </div>
-          </div>
-
-          <div v-else class="mt-4 grid gap-4">
-            <article v-for="output in task.outputs" :key="output.id" class="min-w-0 rounded-[24px] border border-white/10 bg-slate-950/45 p-4">
-              <div class="flex flex-col gap-4 xl:flex-row">
-                <video :src="resolveStorageUrl(output.previewUrl)" controls class="aspect-[9/16] w-full max-w-[240px] shrink-0 rounded-2xl border border-white/10 bg-black object-cover"></video>
-                <div class="min-w-0 flex-1">
-                  <div class="flex items-start justify-between gap-4">
-                    <div class="min-w-0">
-                      <h3 class="line-clamp-2 break-words text-lg font-semibold text-white">{{ output.title }}</h3>
-                      <p class="mt-2 line-clamp-3 break-words text-sm leading-6 text-slate-300">{{ output.reason }}</p>
-                    </div>
-                    <a
-                      :href="resolveStorageUrl(output.downloadUrl)"
-                      class="btn-primary shrink-0"
-                      download
-                    >
-                      下载
-                    </a>
-                  </div>
-                  <div class="mt-4 grid gap-3 text-sm text-slate-300 sm:grid-cols-2 xl:grid-cols-4">
-                    <div>序号：{{ output.clipIndex }}</div>
-                    <div>起点：{{ output.startSeconds.toFixed(1) }}s</div>
-                    <div>终点：{{ output.endSeconds.toFixed(1) }}s</div>
-                    <div>时长：{{ output.durationSeconds.toFixed(1) }}s</div>
-                  </div>
-                </div>
-              </div>
-            </article>
-          </div>
-        </div>
-
-        <div class="mt-6 rounded-[28px] border border-white/10 bg-slate-950/45 p-5 shadow-[0_16px_50px_rgba(0,0,0,0.16)]">
-          <div class="flex flex-wrap items-end justify-between gap-3">
-            <div>
-              <p class="text-xs uppercase tracking-[0.24em] text-slate-400">Live Trace</p>
-              <h3 class="mt-2 text-lg font-semibold text-white">全链路进度追踪</h3>
-              <p class="mt-1 text-sm text-slate-400">默认只展示摘要，展开后再查看实时事件流，避免长日志压住主要内容。</p>
-            </div>
-            <div class="flex flex-wrap gap-2">
-              <button
-                class="btn-secondary"
-                type="button"
-                @click="loadTrace"
-              >
-                刷新日志
-              </button>
-              <button
-                class="btn-ghost"
-                type="button"
-                @click="traceExpanded = !traceExpanded"
-              >
-                {{ traceExpanded ? "收起实时日志" : "展开实时日志" }}
-              </button>
-            </div>
-          </div>
-
-          <div v-if="traceErrorMessage" class="mt-4 rounded-2xl border border-rose-500/20 bg-rose-500/10 p-4 text-sm text-rose-100">
-            {{ traceErrorMessage }}
-          </div>
-          <div v-else-if="traceLoading && traceEvents.length === 0" class="mt-4 text-sm text-slate-400">正在加载任务日志...</div>
-          <div v-else-if="traceEvents.length === 0" class="mt-4 rounded-2xl border border-dashed border-white/10 bg-white/[0.03] p-4 text-sm text-slate-400">
-            当前任务还没有可展示的 trace 事件。
-          </div>
-          <div v-else-if="!traceExpanded" class="mt-4 grid gap-4">
-            <div :class="focusCardClass(currentFocus.tone)" class="rounded-[24px] border p-4">
-              <div class="flex flex-wrap items-center gap-2">
-                <span :class="toneBadgeClass(currentFocus.tone)" class="rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.24em]">
-                  当前重点
-                </span>
-                <span class="text-xs text-slate-500">{{ currentFocus.timestamp ? formatTime(currentFocus.timestamp) : "实时追踪中" }}</span>
-                <span v-if="traceLoading" class="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-300">
-                  同步中
-                </span>
-              </div>
-              <p class="mt-3 text-lg font-semibold text-white">{{ currentFocus.title }}</p>
-              <p class="mt-1 break-words text-sm leading-6 text-slate-300">{{ currentFocus.detail }}</p>
-            </div>
-
-            <div class="grid gap-3 lg:grid-cols-3">
-              <article v-for="entry in collapsedTracePreview" :key="entry.key" :class="focusCardClass(entry.tone)" class="min-w-0 rounded-2xl border p-4">
-                <div class="flex flex-wrap items-center gap-2">
-                  <span :class="toneBadgeClass(entry.tone)" class="rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.24em]">
-                    {{ entry.stageLabel }}
-                  </span>
-                  <span class="text-xs text-slate-500">{{ formatTime(entry.timestamp) }}</span>
-                </div>
-                <p class="mt-3 break-words text-sm font-semibold text-white">{{ entry.title }}</p>
-                <p v-if="entry.detail" class="mt-1 break-words text-sm leading-6 text-slate-300">{{ entry.detail }}</p>
-              </article>
-            </div>
-          </div>
-          <div v-else class="mt-4 grid gap-4">
-            <div :class="focusCardClass(currentFocus.tone)" class="rounded-[24px] border p-4">
-              <div class="flex flex-wrap items-center gap-2">
-                <span :class="toneBadgeClass(currentFocus.tone)" class="rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.24em]">
-                  当前重点
-                </span>
-                <span class="text-xs text-slate-500">{{ currentFocus.timestamp ? formatTime(currentFocus.timestamp) : "实时追踪中" }}</span>
-                <span v-if="traceLoading" class="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-300">
-                  同步中
-                </span>
-              </div>
-              <p class="mt-3 text-lg font-semibold text-white">{{ currentFocus.title }}</p>
-              <p class="mt-1 break-words text-sm leading-6 text-slate-300">{{ currentFocus.detail }}</p>
-            </div>
-
-            <div class="grid gap-3 lg:grid-cols-2">
-              <article
-                v-for="item in stageProgressItems"
-                :key="item.key"
-                :class="focusCardClass(item.tone)"
-                class="rounded-[24px] border p-4"
-              >
-                <div class="flex flex-wrap items-start justify-between gap-3">
-                  <div class="min-w-0">
-                    <div class="flex flex-wrap items-center gap-2">
-                      <span :class="toneBadgeClass(item.tone)" class="rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.24em]">
-                        {{ item.label }}
-                      </span>
-                      <span class="text-xs text-slate-500">{{ stageStatusLabel(item.status) }}</span>
-                    </div>
-                    <p class="mt-2 text-sm text-slate-400">{{ item.description }}</p>
-                  </div>
-                  <span class="text-sm font-semibold text-white">{{ item.progress }}%</span>
-                </div>
-                <p class="mt-4 break-words text-sm leading-6 text-white">{{ item.hint }}</p>
-                <div class="mt-4 h-2 overflow-hidden rounded-full bg-white/10">
-                  <div class="h-full rounded-full transition-all duration-300" :class="progressBarClass(item.tone)" :style="{ width: `${item.progress}%` }"></div>
-                </div>
-              </article>
-            </div>
-
-            <div class="grid gap-3">
-              <article
-                v-for="entry in readableTraceEvents"
-                :key="entry.key"
-                :class="focusCardClass(entry.tone)"
-                class="min-w-0 overflow-hidden rounded-2xl border p-4"
-              >
-                <div class="flex flex-wrap items-center gap-2">
-                  <span :class="toneBadgeClass(entry.tone)" class="rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.24em]">
-                    {{ entry.stageLabel }}
-                  </span>
-                  <span v-if="entry.important" class="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-200">
-                    重点
-                  </span>
-                  <span class="text-xs text-slate-500">{{ formatTime(entry.timestamp) }}</span>
-                </div>
-                <p class="mt-3 break-words text-sm font-semibold text-white">{{ entry.title }}</p>
-                <p v-if="entry.detail" class="mt-1 break-words text-sm leading-6 text-slate-300">{{ entry.detail }}</p>
-                <div v-if="entry.tags.length" class="mt-3 flex flex-wrap gap-2">
-                  <span v-for="tag in entry.tags.slice(0, 3)" :key="tag" class="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-xs text-slate-200">
-                    {{ tag }}
-                  </span>
-                  <span v-if="entry.tags.length > 3" class="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-xs text-slate-200">
-                    +{{ entry.tags.length - 3 }}
-                  </span>
-                </div>
-                <p class="mt-3 break-all font-mono text-[11px] text-slate-500">{{ entry.event }}</p>
-              </article>
-            </div>
-          </div>
-        </div>
-      </template>
     </div>
-
   </section>
 </template>
+
 
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
@@ -612,8 +162,7 @@ import { useRoute, useRouter } from "vue-router";
 import { getRuntimeConfig } from "@/api/runtime-config";
 import { deleteTask, fetchTask, fetchTaskTrace, retryTask } from "@/api/tasks";
 import type { TaskDetail, TaskPlanClip, TaskPlanSegment, TaskStatus, TaskTraceEvent } from "@/types";
-import PageHeader from "@/components/PageHeader.vue";
-import StatusBadge from "@/components/StatusBadge.vue";
+import HintBell from "@/components/HintBell.vue";
 import TimelineStage from "@/components/TimelineStage.vue";
 import { usePolling } from "@/composables/usePolling";
 import { formatTaskStatus, getTaskLifecycleGroup, isTerminalTaskStatus } from "@/utils/task";
@@ -2355,3 +1904,327 @@ watch(
   { immediate: true }
 );
 </script>
+
+<style scoped>
+.task-detail-shell {
+  display: grid;
+  gap: 1.5rem;
+}
+
+.task-alert,
+.glass-panel {
+  border-radius: 2rem;
+  border: 1px solid rgba(255, 255, 255, 0.78);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.86), rgba(255, 255, 255, 0.6)),
+    radial-gradient(circle at top right, rgba(173, 210, 255, 0.24), transparent 30%);
+  box-shadow:
+    0 22px 54px rgba(121, 144, 177, 0.14),
+    inset 0 1px 0 rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(14px) saturate(130%);
+  -webkit-backdrop-filter: blur(14px) saturate(130%);
+}
+
+.task-alert {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem 1.2rem;
+  color: #a34760;
+  background:
+    linear-gradient(180deg, rgba(255, 244, 246, 0.96), rgba(255, 234, 238, 0.8));
+}
+
+.glass-panel {
+  display: grid;
+  gap: 1.5rem;
+  padding: 1.4rem;
+}
+
+.glass-placeholder {
+  min-height: 10rem;
+  place-items: center;
+  color: #576b82;
+  text-align: center;
+}
+
+.glass-hero {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.hero-copy {
+  min-width: 0;
+  flex: 1 1 24rem;
+}
+
+.hero-title-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.eyebrow {
+  margin: 0;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: #62788f;
+}
+
+.hero-copy h1,
+.plan-head h2 {
+  margin: 0.5rem 0 0;
+  font-size: clamp(1.9rem, 3vw, 2.6rem);
+  line-height: 1;
+  letter-spacing: -0.04em;
+  color: #12233d;
+}
+
+.hero-subtext,
+.plan-head p,
+.glass-config p,
+.plan-hero p {
+  margin: 0.75rem 0 0;
+  color: #566b82;
+  line-height: 1.7;
+}
+
+.hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.button {
+  display: inline-flex;
+  min-height: 2.75rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  border: 1px solid transparent;
+  padding: 0.65rem 1rem;
+  font-size: 0.9rem;
+  font-weight: 700;
+  transition: transform 180ms ease, box-shadow 180ms ease;
+}
+
+.button:hover {
+  transform: translateY(-1px);
+}
+
+.button.primary {
+  background: linear-gradient(135deg, rgba(133, 165, 255, 0.98), rgba(95, 132, 255, 1));
+  color: #f8fbff;
+  box-shadow: 0 16px 34px rgba(95, 132, 255, 0.22);
+}
+
+.button.warning {
+  background: linear-gradient(180deg, rgba(255, 245, 220, 0.94), rgba(255, 235, 196, 0.98));
+  color: #8b5a16;
+  border-color: rgba(255, 214, 133, 0.72);
+}
+
+.button.danger {
+  background: linear-gradient(180deg, rgba(255, 238, 241, 0.96), rgba(255, 225, 231, 0.98));
+  color: #b34a66;
+  border-color: rgba(235, 151, 171, 0.74);
+}
+
+.glass-stats {
+  display: grid;
+  gap: 0.9rem;
+  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+}
+
+.glass-stats article,
+.glass-config,
+.glass-plan,
+.plan-tab,
+.plan-hero {
+  border-radius: 1.5rem;
+  border: 1px solid rgba(255, 255, 255, 0.76);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.82), rgba(255, 255, 255, 0.56));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.92),
+    0 14px 30px rgba(121, 144, 177, 0.08);
+}
+
+.glass-stats article {
+  padding: 1rem 1.05rem;
+}
+
+.glass-stats span,
+.glass-config dt,
+.label,
+.plan-tab p {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: #74879c;
+}
+
+.glass-stats strong {
+  display: block;
+  margin-top: 0.6rem;
+  font-size: 1.7rem;
+  line-height: 1;
+  letter-spacing: -0.04em;
+  color: #12233d;
+}
+
+.glass-stats small {
+  display: block;
+  margin-top: 0.4rem;
+  color: #5c7188;
+}
+
+.glass-timeline {
+  display: grid;
+  gap: 0.9rem;
+}
+
+.glass-config {
+  display: grid;
+  gap: 1rem;
+  padding: 1.1rem;
+}
+
+.glass-config dl {
+  display: grid;
+  gap: 0.9rem;
+  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+  margin: 0;
+}
+
+.glass-config dd {
+  margin: 0.45rem 0 0;
+  color: #12233d;
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+.config-row {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+}
+
+.creative {
+  white-space: pre-wrap;
+}
+
+.glass-plan {
+  display: grid;
+  gap: 1rem;
+  padding: 1.1rem;
+}
+
+.plan-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.plan-metrics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+}
+
+.plan-metrics span,
+.plan-tags span {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 9999px;
+  border: 1px solid rgba(255, 255, 255, 0.76);
+  background: rgba(255, 255, 255, 0.74);
+  padding: 0.45rem 0.8rem;
+  color: #30475f;
+}
+
+.plan-tabs {
+  display: grid;
+  gap: 0.8rem;
+  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+}
+
+.plan-tab {
+  display: grid;
+  gap: 0.35rem;
+  padding: 0.95rem 1rem;
+  text-align: left;
+  transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease;
+}
+
+.plan-tab strong,
+.plan-title h3 {
+  color: #12233d;
+}
+
+.plan-tab span {
+  color: #61768d;
+  font-size: 0.85rem;
+}
+
+.plan-tab.active,
+.plan-tab:hover {
+  transform: translateY(-1px);
+  border-color: rgba(149, 179, 255, 0.62);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.96),
+    0 18px 36px rgba(121, 144, 177, 0.12);
+}
+
+.plan-hero {
+  display: grid;
+  gap: 0.8rem;
+  padding: 1.1rem;
+}
+
+.plan-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.8rem;
+}
+
+.plan-title span {
+  color: #62788f;
+  font-weight: 700;
+}
+
+.plan-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+}
+
+@media (max-width: 768px) {
+  .task-alert {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .glass-panel {
+    padding: 1rem;
+  }
+
+  .hero-actions {
+    width: 100%;
+  }
+
+  .hero-actions .button {
+    flex: 1 1 100%;
+  }
+}
+</style>

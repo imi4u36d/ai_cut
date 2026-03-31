@@ -26,7 +26,8 @@ const router = createRouter({
       path: "/admin",
       component: AdminShell,
       children: [
-        { path: "", component: AdminDashboardView },
+        { path: "", redirect: "/admin/dashboard" },
+        { path: "dashboard", component: AdminDashboardView },
         { path: "tasks", component: AdminTasksView },
         { path: "tasks/:id", component: AdminTaskDetailView, props: true },
         { path: "system", component: AdminSystemView }

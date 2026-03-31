@@ -1,16 +1,16 @@
 <template>
   <article
-    class="group relative min-w-0 overflow-hidden rounded-[28px] border border-white/10 bg-[linear-gradient(180deg,rgba(15,15,35,0.9),rgba(8,11,24,0.76))] p-5 shadow-[0_20px_60px_rgba(0,0,0,0.32)] transition duration-200 hover:-translate-y-0.5 hover:border-rose-300/30 hover:shadow-[0_24px_80px_rgba(225,29,72,0.12)]"
+    class="group relative min-w-0 overflow-hidden rounded-[30px] border border-white/75 bg-[linear-gradient(180deg,rgba(255,255,255,0.9),rgba(255,255,255,0.72))] p-5 shadow-[0_18px_40px_rgba(121,144,177,0.12)] transition duration-200 hover:-translate-y-0.5 hover:border-sky-200 hover:shadow-[0_24px_48px_rgba(121,144,177,0.16)]"
     :class="statusFrameClass"
   >
-    <div class="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/20 to-transparent"></div>
+    <div class="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white to-transparent"></div>
     <div class="pointer-events-none absolute left-0 top-0 h-full w-1 rounded-r-full" :class="statusRailClass"></div>
-    <div class="pointer-events-none absolute -right-12 -top-12 h-32 w-32 rounded-full bg-rose-500/10 blur-3xl transition duration-300 group-hover:bg-amber-500/12"></div>
+    <div class="pointer-events-none absolute -right-12 -top-12 h-32 w-32 rounded-full bg-sky-200/45 blur-3xl transition duration-300 group-hover:bg-indigo-200/50"></div>
     <div class="flex items-start justify-between gap-4">
       <div class="min-w-0">
-        <p class="text-[11px] font-semibold uppercase tracking-[0.32em] text-slate-400">{{ task.platform }} / {{ task.aspectRatio ?? "9:16" }}</p>
-        <h3 class="mt-2 line-clamp-2 text-[17px] font-semibold leading-6 text-white">{{ task.title }}</h3>
-        <p class="mt-2 truncate text-sm leading-6 text-slate-300" :title="task.sourceFileName || '源文件信息待同步'">
+        <p class="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">{{ task.platform }} / {{ task.aspectRatio ?? "9:16" }}</p>
+        <h3 class="mt-2 line-clamp-2 text-[18px] font-semibold leading-7 text-slate-900">{{ task.title }}</h3>
+        <p class="mt-2 truncate text-sm leading-6 text-slate-600" :title="task.sourceFileName || '源文件信息待同步'">
           {{ task.sourceFileName || "源文件信息待同步" }}
         </p>
       </div>
@@ -20,37 +20,37 @@
     </div>
 
     <div class="mt-4 flex flex-wrap gap-2">
-      <span v-if="task.mixcutEnabled" class="rounded-full border border-rose-400/20 bg-rose-500/10 px-3 py-1 text-[11px] font-medium text-rose-100">多素材混剪</span>
-      <span v-if="task.hasTimedTranscript" class="rounded-full border border-sky-400/20 bg-sky-500/10 px-3 py-1 text-[11px] font-medium text-sky-100">时间轴字幕</span>
-      <span v-else-if="task.hasTranscript" class="rounded-full border border-fuchsia-400/20 bg-fuchsia-500/10 px-3 py-1 text-[11px] font-medium text-fuchsia-100">文本语义</span>
-      <span v-if="task.status === 'FAILED'" class="rounded-full border border-rose-400/20 bg-rose-500/10 px-3 py-1 text-[11px] font-medium text-rose-100">需要处理</span>
-      <span v-if="task.status === 'COMPLETED'" class="rounded-full border border-emerald-400/20 bg-emerald-500/10 px-3 py-1 text-[11px] font-medium text-emerald-100">可复盘</span>
+      <span v-if="task.mixcutEnabled" class="surface-chip">多素材混剪</span>
+      <span v-if="task.hasTimedTranscript" class="surface-chip">时间轴字幕</span>
+      <span v-else-if="task.hasTranscript" class="surface-chip">文本语义</span>
+      <span v-if="task.status === 'FAILED'" class="surface-chip">需要处理</span>
+      <span v-if="task.status === 'COMPLETED'" class="surface-chip">可复盘</span>
     </div>
 
-    <div class="mt-4 grid grid-cols-2 gap-3 text-sm text-slate-300">
-      <div class="rounded-2xl border border-white/8 bg-white/[0.04] p-3">
-        <p class="text-xs uppercase tracking-[0.24em] text-slate-400">进度</p>
-        <p class="mt-2 text-base font-semibold text-white">{{ task.progress }}%</p>
+    <div class="mt-4 grid grid-cols-2 gap-3 text-sm text-slate-600">
+      <div class="surface-tile p-3">
+        <p class="text-xs uppercase tracking-[0.24em] text-slate-500">进度</p>
+        <p class="mt-2 text-base font-semibold text-slate-900">{{ task.progress }}%</p>
       </div>
-      <div class="rounded-2xl border border-white/8 bg-white/[0.04] p-3">
-        <p class="text-xs uppercase tracking-[0.24em] text-slate-400">输出</p>
-        <p class="mt-2 text-base font-semibold text-white">{{ completedOutputCount }} / {{ task.outputCount }}</p>
+      <div class="surface-tile p-3">
+        <p class="text-xs uppercase tracking-[0.24em] text-slate-500">输出</p>
+        <p class="mt-2 text-base font-semibold text-slate-900">{{ completedOutputCount }} / {{ task.outputCount }}</p>
       </div>
-      <div class="rounded-2xl border border-white/8 bg-white/[0.04] p-3">
-        <p class="text-xs uppercase tracking-[0.24em] text-slate-400">时长</p>
-        <p class="mt-2 text-base font-semibold text-white">{{ durationLabel }}</p>
+      <div class="surface-tile p-3">
+        <p class="text-xs uppercase tracking-[0.24em] text-slate-500">时长</p>
+        <p class="mt-2 text-base font-semibold text-slate-900">{{ durationLabel }}</p>
       </div>
-      <div class="rounded-2xl border border-white/8 bg-white/[0.04] p-3">
-        <p class="text-xs uppercase tracking-[0.24em] text-slate-400">重试</p>
-        <p class="mt-2 text-base font-semibold text-white">{{ retryCount }}</p>
+      <div class="surface-tile p-3">
+        <p class="text-xs uppercase tracking-[0.24em] text-slate-500">重试</p>
+        <p class="mt-2 text-base font-semibold text-slate-900">{{ retryCount }}</p>
       </div>
     </div>
 
-    <div class="mt-4 h-2 overflow-hidden rounded-full bg-white/10">
-      <div class="h-full rounded-full bg-gradient-to-r from-rose-500 via-orange-400 to-amber-300 transition-all duration-300" :style="{ width: `${task.progress}%` }"></div>
+    <div class="mt-4 h-2 overflow-hidden rounded-full bg-slate-200/75">
+      <div class="h-full rounded-full bg-gradient-to-r from-sky-500 via-indigo-400 to-cyan-300 transition-all duration-300" :style="{ width: `${task.progress}%` }"></div>
     </div>
 
-    <div class="mt-4 flex flex-wrap items-center justify-between gap-3 text-xs text-slate-400">
+    <div class="mt-4 flex flex-wrap items-center justify-between gap-3 text-xs text-slate-500">
       <span>更新时间 {{ updatedAtLabel }}</span>
       <span>{{ lifecycleLabel }}</span>
     </div>
@@ -131,23 +131,23 @@ const lifecycleLabel = computed(() => {
 const statusRailClass = computed(() => {
   switch (lifecycleGroup.value) {
     case "completed":
-      return "bg-gradient-to-b from-emerald-400/80 via-emerald-300/50 to-cyan-300/40";
+      return "bg-gradient-to-b from-emerald-400 to-emerald-300";
     case "failed":
-      return "bg-gradient-to-b from-rose-400/80 via-red-300/50 to-amber-300/40";
+      return "bg-gradient-to-b from-rose-400 to-orange-300";
     case "running":
-      return "bg-gradient-to-b from-sky-400/80 via-cyan-300/50 to-fuchsia-300/40";
+      return "bg-gradient-to-b from-sky-400 to-indigo-300";
     default:
-      return "bg-gradient-to-b from-slate-400/60 via-slate-300/35 to-slate-200/20";
+      return "bg-gradient-to-b from-slate-300 to-slate-200";
   }
 });
 const statusFrameClass = computed(() => {
   switch (lifecycleGroup.value) {
     case "completed":
-      return "hover:shadow-[0_24px_80px_rgba(16,185,129,0.12)]";
+      return "hover:shadow-[0_24px_48px_rgba(60,159,139,0.12)]";
     case "failed":
-      return "hover:shadow-[0_24px_80px_rgba(244,63,94,0.12)]";
+      return "hover:shadow-[0_24px_48px_rgba(217,95,119,0.12)]";
     case "running":
-      return "hover:shadow-[0_24px_80px_rgba(56,189,248,0.12)]";
+      return "hover:shadow-[0_24px_48px_rgba(107,146,255,0.12)]";
     default:
       return "";
   }

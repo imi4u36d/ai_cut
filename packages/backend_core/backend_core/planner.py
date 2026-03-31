@@ -14,7 +14,7 @@ import urllib.request
 from .config import Settings
 from .media import detect_scene_changes, sample_audio_peaks, sample_video_frames
 from .schemas import ClipPlan, MediaProbe, TaskSpec
-from .utils import clamp, extract_json_object, truncate_text
+from .utils import clamp, describe_json_error_context, parse_json_object, truncate_text
 
 
 @dataclass(frozen=True)
@@ -106,6 +106,10 @@ class VisionAnalysisResult:
 class Planner(Protocol):
     def plan(self, context: PlannerContext) -> list[ClipPlan]:
         raise NotImplementedError
+
+
+class VisionSourceParseError(RuntimeError):
+    pass
 
 
 class HeuristicPlanner:
@@ -828,8 +832,37 @@ class VisionEventAnalyzer:
                 output = body["output"]
                 if isinstance(output, dict):
                     content = output.get("text", "") or output.get("content", "")
-        json_text = extract_json_object(content or raw)
-        parsed = json.loads(json_text)
+        try:
+            parsed, json_repairs = parse_json_object(content or raw)
+        except (json.JSONDecodeError, ValueError) as exc:
+            error_payload: dict[str, object] = {
+                "model": model_name,
+                "source_asset_id": str(source_entry["asset_id"]),
+                "source_file_name": str(source_entry["file_name"]),
+                "error": str(exc),
+                "content_excerpt": truncate_transcript(content or raw, 1200),
+            }
+            if isinstance(exc, json.JSONDecodeError):
+                error_payload.update(
+                    {
+                        "line": exc.lineno,
+                        "column": exc.colno,
+                        "char": exc.pos,
+                        "error_context": truncate_transcript(
+                            describe_json_error_context(exc.doc, exc.pos, 180),
+                            500,
+                        ),
+                    }
+                )
+            if context.trace is not None:
+                context.trace(
+                    "vision",
+                    "vision.parse_error",
+                    f"视觉模型 {model_name} 返回的 JSON 无法解析。",
+                    error_payload,
+                    "WARN",
+                )
+            raise VisionSourceParseError(str(exc)) from exc
         shot_items = parsed.get("shots", [])
         events = parsed.get("events", [])
         if context.trace is not None:
@@ -855,6 +888,7 @@ class VisionEventAnalyzer:
                         for event in (events[:6] if isinstance(events, list) else [])
                         if str(event.get("eventType", "")).strip()
                     ],
+                    "json_repairs": json_repairs,
                     "content_excerpt": truncate_transcript(content or raw, 1000),
                 },
                 "INFO",
@@ -943,11 +977,56 @@ class VisionEventAnalyzer:
                     )
                 collected_sources = []
                 all_frame_timestamps = []
+                skipped_sources: list[str] = []
                 for source_entry in source_entries:
-                    source_analysis = self._call_model(model_name, context, signals, source_entry)
+                    source_label = str(source_entry["file_name"])
+                    source_analysis: VisionSourceAnalysis | None = None
+                    for attempt in range(2):
+                        try:
+                            source_analysis = self._call_model(model_name, context, signals, source_entry)
+                            break
+                        except VisionSourceParseError as exc:
+                            if attempt == 0:
+                                if context.trace is not None:
+                                    context.trace(
+                                        "vision",
+                                        "vision.source_retry_scheduled",
+                                        f"素材 {source_label} 的视觉 JSON 解析失败，准备重试一次。",
+                                        {
+                                            "model": model_name,
+                                            "source_asset_id": str(source_entry["asset_id"]),
+                                            "source_file_name": source_label,
+                                            "attempt": attempt + 1,
+                                            "max_attempts": 2,
+                                            "error": str(exc),
+                                        },
+                                        "WARN",
+                                    )
+                                continue
+                            skipped_sources.append(source_label)
+                            if context.trace is not None:
+                                context.trace(
+                                    "vision",
+                                    "vision.source_skipped",
+                                    f"素材 {source_label} 连续两次返回非法 JSON，已跳过该素材。",
+                                    {
+                                        "model": model_name,
+                                        "source_asset_id": str(source_entry["asset_id"]),
+                                        "source_file_name": source_label,
+                                        "attempts": 2,
+                                        "error": str(exc),
+                                    },
+                                    "WARN",
+                                )
+                    if source_analysis is None:
+                        continue
                     collected_sources.append(source_analysis)
                     all_frame_timestamps.extend(
                         [shot.timelineStartSeconds for shot in source_analysis.shots]
+                    )
+                if not collected_sources:
+                    raise RuntimeError(
+                        f"Vision model {model_name} produced no parsable source analysis"
                     )
                 analysis = VisionAnalysisResult(
                     modelName=model_name,
@@ -991,9 +1070,24 @@ class VisionEventAnalyzer:
                                 "analysis_path": output_path.as_posix(),
                                 "source_count": len(analysis.sources),
                                 "shot_count": len(analysis.shots),
+                                "skipped_source_count": len(skipped_sources),
+                                "skipped_sources": skipped_sources,
                             },
                             "INFO",
                         )
+                if skipped_sources and context.trace is not None:
+                    context.trace(
+                        "vision",
+                        "vision.analysis_partial",
+                        "部分素材视觉分析失败，已跳过错误素材并继续规划。",
+                        {
+                            "model": model_name,
+                            "parsed_source_count": len(collected_sources),
+                            "skipped_source_count": len(skipped_sources),
+                            "skipped_sources": skipped_sources,
+                        },
+                        "WARN",
+                    )
                 return analysis
             except Exception as exc:
                 if context.trace is not None:
@@ -1290,8 +1384,35 @@ class FusionPlanner:
                 output = body["output"]
                 if isinstance(output, dict):
                     content = output.get("text", "") or output.get("content", "")
-        json_text = extract_json_object(content or raw)
-        parsed = json.loads(json_text)
+        try:
+            parsed, json_repairs = parse_json_object(content or raw)
+        except (json.JSONDecodeError, ValueError) as exc:
+            error_payload: dict[str, object] = {
+                "model": model_name,
+                "error": str(exc),
+                "content_excerpt": truncate_transcript(content or raw, 1400),
+            }
+            if isinstance(exc, json.JSONDecodeError):
+                error_payload.update(
+                    {
+                        "line": exc.lineno,
+                        "column": exc.colno,
+                        "char": exc.pos,
+                        "error_context": truncate_transcript(
+                            describe_json_error_context(exc.doc, exc.pos, 180),
+                            500,
+                        ),
+                    }
+                )
+            if context.trace is not None:
+                context.trace(
+                    "fusion",
+                    "fusion.parse_error",
+                    f"融合规划模型 {model_name} 返回的 JSON 无法解析。",
+                    error_payload,
+                    "WARN",
+                )
+            raise
         clips = parsed.get("clips", [])
         if context.trace is not None:
             context.trace(
@@ -1308,6 +1429,7 @@ class FusionPlanner:
                     "visual_event_count": len(vision_analysis.events) if vision_analysis else 0,
                     "used_visual_events": bool(vision_analysis and vision_analysis.events),
                     "visual_model": vision_analysis.modelName if vision_analysis else "",
+                    "json_repairs": json_repairs,
                     "clip_titles": [
                         str(clip.get("title", f"素材 {index + 1}"))[:80]
                         for index, clip in enumerate(clips[:5] if isinstance(clips, list) else [])

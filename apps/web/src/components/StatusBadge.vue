@@ -1,5 +1,5 @@
 <template>
-  <span :class="badgeClass" class="inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-semibold tracking-wide">
+  <span :class="badgeClass" class="inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-semibold tracking-[0.18em]">
     <span class="h-1.5 w-1.5 rounded-full bg-current opacity-90"></span>
     <span>{{ label }}</span>
   </span>
@@ -19,17 +19,17 @@ const label = computed(() => formatTaskStatus(props.status));
 const badgeClass = computed(() => {
   switch (props.status) {
     case "COMPLETED":
-      return "border border-emerald-400/20 bg-emerald-500/15 text-emerald-100 shadow-[0_0_0_1px_rgba(16,185,129,0.08)]";
+      return "border border-emerald-200 bg-emerald-50/95 text-emerald-700 shadow-[0_8px_18px_rgba(60,159,139,0.08)]";
     case "FAILED":
-      return "border border-rose-400/20 bg-rose-500/15 text-rose-100 shadow-[0_0_0_1px_rgba(244,63,94,0.08)]";
+      return "border border-rose-200 bg-rose-50/95 text-rose-700 shadow-[0_8px_18px_rgba(217,95,119,0.08)]";
     case "RENDERING":
-      return "border border-amber-400/20 bg-amber-500/15 text-amber-100 shadow-[0_0_0_1px_rgba(245,158,11,0.08)]";
+      return "border border-amber-200 bg-amber-50/95 text-amber-700 shadow-[0_8px_18px_rgba(237,177,78,0.08)]";
     case "PLANNING":
-      return "border border-sky-400/20 bg-sky-500/15 text-sky-100 shadow-[0_0_0_1px_rgba(56,189,248,0.08)]";
+      return "border border-sky-200 bg-sky-50/95 text-sky-700 shadow-[0_8px_18px_rgba(107,146,255,0.08)]";
     case "ANALYZING":
-      return "border border-cyan-400/20 bg-cyan-500/15 text-cyan-100 shadow-[0_0_0_1px_rgba(34,211,238,0.08)]";
+      return "border border-cyan-200 bg-cyan-50/95 text-cyan-700 shadow-[0_8px_18px_rgba(88,190,214,0.08)]";
     default:
-      return "border border-slate-400/20 bg-slate-500/15 text-slate-100 shadow-[0_0_0_1px_rgba(148,163,184,0.08)]";
+      return "border border-slate-200 bg-white/85 text-slate-600 shadow-[0_8px_18px_rgba(122,144,177,0.06)]";
   }
 });
 </script>

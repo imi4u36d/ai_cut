@@ -1,21 +1,21 @@
 <template>
-  <article class="relative grid min-w-0 gap-4 overflow-hidden rounded-[24px] border border-white/10 bg-[linear-gradient(180deg,rgba(15,15,35,0.9),rgba(8,11,24,0.76))] px-4 py-4 shadow-[0_14px_40px_rgba(0,0,0,0.2)] lg:grid-cols-[minmax(0,2.15fr)_minmax(0,1.05fr)_minmax(220px,240px)]">
-    <div class="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/20 to-transparent"></div>
+  <article class="relative grid min-w-0 gap-4 overflow-hidden rounded-[28px] border border-white/75 bg-[linear-gradient(180deg,rgba(255,255,255,0.9),rgba(255,255,255,0.72))] px-4 py-4 shadow-[0_14px_34px_rgba(121,144,177,0.1)] lg:grid-cols-[minmax(0,2.15fr)_minmax(0,1.05fr)_minmax(220px,240px)]">
+    <div class="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white to-transparent"></div>
     <div class="pointer-events-none absolute left-0 top-0 h-full w-1 rounded-r-full" :class="statusRailClass"></div>
     <div class="min-w-0 pl-2 sm:pl-3">
       <div class="flex flex-wrap items-center gap-2">
         <StatusBadge :status="task.status" />
         <span class="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-500">{{ task.platform }} / {{ task.aspectRatio ?? "9:16" }}</span>
-        <span v-if="task.mixcutEnabled" class="rounded-full border border-rose-400/20 bg-rose-500/10 px-2.5 py-1 text-[11px] text-rose-100">多素材混剪</span>
-        <span v-if="task.hasTimedTranscript" class="rounded-full border border-sky-400/20 bg-sky-500/10 px-2.5 py-1 text-[11px] text-sky-100">时间轴字幕</span>
-        <span v-else-if="task.hasTranscript" class="rounded-full border border-fuchsia-400/20 bg-fuchsia-500/10 px-2.5 py-1 text-[11px] text-fuchsia-100">文本语义</span>
+        <span v-if="task.mixcutEnabled" class="surface-chip">多素材混剪</span>
+        <span v-if="task.hasTimedTranscript" class="surface-chip">时间轴字幕</span>
+        <span v-else-if="task.hasTranscript" class="surface-chip">文本语义</span>
       </div>
-      <h3 class="mt-3 line-clamp-2 text-[15px] font-semibold leading-6 text-white">{{ task.title }}</h3>
-      <p class="mt-1 truncate text-sm text-slate-300" :title="task.sourceFileName || '源文件信息待同步'">{{ task.sourceFileName || "源文件信息待同步" }}</p>
-      <div class="mt-3 h-1.5 overflow-hidden rounded-full bg-white/10">
-        <div class="h-full rounded-full bg-gradient-to-r from-rose-500 via-orange-400 to-amber-300 transition-all duration-300" :style="{ width: `${task.progress}%` }"></div>
+      <h3 class="mt-3 line-clamp-2 text-[16px] font-semibold leading-6 text-slate-900">{{ task.title }}</h3>
+      <p class="mt-1 truncate text-sm text-slate-600" :title="task.sourceFileName || '源文件信息待同步'">{{ task.sourceFileName || "源文件信息待同步" }}</p>
+      <div class="mt-3 h-1.5 overflow-hidden rounded-full bg-slate-200/75">
+        <div class="h-full rounded-full bg-gradient-to-r from-sky-500 via-indigo-400 to-cyan-300 transition-all duration-300" :style="{ width: `${task.progress}%` }"></div>
       </div>
-      <div class="mt-3 flex flex-wrap gap-3 text-xs text-slate-400">
+      <div class="mt-3 flex flex-wrap gap-3 text-xs text-slate-500">
         <span>进度 {{ task.progress }}%</span>
         <span>输出 {{ completedOutputCount }} / {{ task.outputCount }}</span>
         <span>时长 {{ durationLabel }}</span>
@@ -23,14 +23,14 @@
       </div>
     </div>
 
-    <div class="grid gap-2 text-sm text-slate-300 sm:grid-cols-2 lg:grid-cols-1">
-      <div class="rounded-2xl border border-white/8 bg-white/[0.04] p-3">
+    <div class="grid gap-2 text-sm text-slate-600 sm:grid-cols-2 lg:grid-cols-1">
+      <div class="surface-tile p-3">
         <p class="text-[11px] uppercase tracking-[0.24em] text-slate-500">更新时间</p>
-        <p class="mt-2 text-sm font-medium text-white">{{ updatedAtLabel }}</p>
+        <p class="mt-2 text-sm font-medium text-slate-900">{{ updatedAtLabel }}</p>
       </div>
-      <div class="rounded-2xl border border-white/8 bg-white/[0.04] p-3">
+      <div class="surface-tile p-3">
         <p class="text-[11px] uppercase tracking-[0.24em] text-slate-500">状态说明</p>
-        <p class="mt-2 text-sm font-medium text-white">{{ lifecycleLabel }}</p>
+        <p class="mt-2 text-sm font-medium text-slate-900">{{ lifecycleLabel }}</p>
       </div>
     </div>
 
@@ -110,13 +110,13 @@ const lifecycleLabel = computed(() => {
 const statusRailClass = computed(() => {
   switch (lifecycleGroup.value) {
     case "completed":
-      return "bg-gradient-to-b from-emerald-400/80 via-emerald-300/50 to-cyan-300/40";
+      return "bg-gradient-to-b from-emerald-400 to-emerald-300";
     case "failed":
-      return "bg-gradient-to-b from-rose-400/80 via-red-300/50 to-amber-300/40";
+      return "bg-gradient-to-b from-rose-400 to-orange-300";
     case "running":
-      return "bg-gradient-to-b from-sky-400/80 via-cyan-300/50 to-fuchsia-300/40";
+      return "bg-gradient-to-b from-sky-400 to-indigo-300";
     default:
-      return "bg-gradient-to-b from-slate-400/60 via-slate-300/35 to-slate-200/20";
+      return "bg-gradient-to-b from-slate-300 to-slate-200";
   }
 });
 </script>

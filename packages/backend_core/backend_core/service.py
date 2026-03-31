@@ -48,7 +48,7 @@ from .schemas import (
 )
 from .storage import MediaStorage
 from .task_trace import TaskTraceWriter, read_task_trace
-from .utils import clamp, extract_json_object, isoformat_utc, new_id, truncate_text, utcnow
+from .utils import clamp, isoformat_utc, new_id, parse_json_object, truncate_text, utcnow
 
 
 def _iso(value: datetime | None) -> str:
@@ -338,8 +338,8 @@ class TaskService:
                 output = parsed["output"]
                 if isinstance(output, dict):
                     content = output.get("text", "") or output.get("content", "")
-        json_text = extract_json_object(content or raw)
-        prompt = str(json.loads(json_text).get("prompt", "")).strip()
+        parsed_prompt, _ = parse_json_object(content or raw)
+        prompt = str(parsed_prompt.get("prompt", "")).strip()
         return truncate_text(prompt, 180) or ""
 
     def _build_fallback_creative_prompt(self, payload: GenerateCreativePromptRequest) -> str:
@@ -894,113 +894,117 @@ class TaskService:
             {},
         )
 
-        with self.session() as session:
-            task = session.get(Task, task_id)
-            if task is None:
-                return
-            asset = session.get(SourceAsset, task.source_asset_id)
-            if asset is None:
-                task.status = "FAILED"
-                task.error_message = "source asset missing"
-                task.finished_at = utcnow()
-                session.commit()
-                self._trace(
-                    task_id,
-                    "pipeline",
-                    "task.source_missing",
-                    "任务源素材不存在，流程终止。",
-                    {"source_asset_id": task.source_asset_id},
-                    "ERROR",
+        try:
+            with self.session() as session:
+                task = session.get(Task, task_id)
+                if task is None:
+                    return
+                asset = session.get(SourceAsset, task.source_asset_id)
+                if asset is None:
+                    task.status = "FAILED"
+                    task.error_message = "source asset missing"
+                    task.finished_at = utcnow()
+                    session.commit()
+                    self._trace(
+                        task_id,
+                        "pipeline",
+                        "task.source_missing",
+                        "任务源素材不存在，流程终止。",
+                        {"source_asset_id": task.source_asset_id},
+                        "ERROR",
+                    )
+                    return
+                context_payload = self._load_task_context(task_id)
+                context_source_ids = self._context_source_asset_ids(context_payload)
+                if not context_source_ids:
+                    context_source_ids = [task.source_asset_id]
+                source_asset_ids = list(dict.fromkeys(context_source_ids))
+                source_assets: list[SourceAsset] = []
+                for source_asset_id in source_asset_ids:
+                    source_asset = session.get(SourceAsset, source_asset_id)
+                    if source_asset is None:
+                        continue
+                    source_assets.append(source_asset)
+                if not source_assets:
+                    source_assets = [asset]
+                    source_asset_ids = [asset.id]
+                source_file_names = self._context_source_file_names(context_payload)
+                editing_mode = self._context_editing_mode(context_payload)
+                if editing_mode != "mixcut" and len(source_assets) > 1:
+                    source_assets = [source_assets[0]]
+                    source_asset_ids = [source_assets[0].id]
+                    source_file_names = [source_file_names[0]] if source_file_names else [source_assets[0].original_file_name]
+                source_file_names = source_file_names or [source_assets[0].original_file_name]
+                mixcut_enabled = editing_mode == "mixcut"
+                mixcut_content_type = self._context_mixcut_content_type(context_payload) if mixcut_enabled else None
+                mixcut_style_preset = self._context_mixcut_style_preset(context_payload) if mixcut_enabled else None
+                mixcut_profile = self._resolve_mixcut_visual_profile(
+                    editing_mode=editing_mode,
+                    mixcut_content_type=mixcut_content_type,
+                    mixcut_style_preset=mixcut_style_preset,
+                    source_asset_count=len(source_asset_ids),
                 )
-                return
-            context_payload = self._load_task_context(task_id)
-            context_source_ids = self._context_source_asset_ids(context_payload)
-            if not context_source_ids:
-                context_source_ids = [task.source_asset_id]
-            source_asset_ids = list(dict.fromkeys(context_source_ids))
-            source_assets: list[SourceAsset] = []
-            for source_asset_id in source_asset_ids:
-                source_asset = session.get(SourceAsset, source_asset_id)
-                if source_asset is None:
-                    continue
-                source_assets.append(source_asset)
-            if not source_assets:
-                source_assets = [asset]
-                source_asset_ids = [asset.id]
-            source_file_names = self._context_source_file_names(context_payload)
-            editing_mode = self._context_editing_mode(context_payload)
-            if editing_mode != "mixcut" and len(source_assets) > 1:
-                source_assets = [source_assets[0]]
-                source_asset_ids = [source_assets[0].id]
-                source_file_names = [source_file_names[0]] if source_file_names else [source_assets[0].original_file_name]
-            source_file_names = source_file_names or [source_assets[0].original_file_name]
-            mixcut_enabled = editing_mode == "mixcut"
-            mixcut_content_type = self._context_mixcut_content_type(context_payload) if mixcut_enabled else None
-            mixcut_style_preset = self._context_mixcut_style_preset(context_payload) if mixcut_enabled else None
-            mixcut_profile = self._resolve_mixcut_visual_profile(
-                editing_mode=editing_mode,
-                mixcut_content_type=mixcut_content_type,
-                mixcut_style_preset=mixcut_style_preset,
-                source_asset_count=len(source_asset_ids),
-            )
-            mixcut_transition_style = mixcut_profile["transition_style"]
-            mixcut_layout_style = mixcut_profile["layout_style"]
-            mixcut_effect_style = mixcut_profile["effect_style"]
-            mixcut_template = mixcut_profile["mixcut_template"]
-            if not source_file_names:
-                source_file_names = [source_assets[0].original_file_name]
-            source_timeline = self._load_source_timeline(source_assets, source_file_names)
-            source_path = self.storage.root / source_assets[0].storage_path
-            mixcut_source_path = None
-            if len(source_assets) > 1:
-                mixcut_source_path = self.storage.task_work_dir(task_id) / "mixcut_source.mp4"
-                try:
-                    self._trace(
-                        task_id,
-                        "analysis",
-                        "multisource.source_build_started",
-                        "检测到多素材输入，开始构建组合源。",
-                        {
-                            "source_asset_ids": source_asset_ids,
-                            "source_file_names": source_file_names,
-                            "mixcut_enabled": mixcut_enabled,
-                            "mixcut_content_type": mixcut_content_type or "",
-                            "mixcut_style_preset": mixcut_style_preset or "",
-                        },
-                    )
-                    built_path = compose_source_timeline(
-                        [Path(str(entry["source_path"])) for entry in source_timeline],
-                        mixcut_source_path,
-                        task.aspect_ratio,
-                    )
-                    source_path = built_path
-                    self._trace(
-                        task_id,
-                        "analysis",
-                        "multisource.source_build_completed",
-                        "多素材组合源已生成。",
-                        {
-                            "source_count": len(source_assets),
-                            "output_path": built_path.as_posix(),
-                            "timeline_total_seconds": round(
-                                sum(float(entry["duration_seconds"]) for entry in source_timeline),
-                                3,
-                            ),
-                        },
-                    )
-                except Exception as exc:
-                    self._trace(
-                        task_id,
-                        "analysis",
-                        "multisource.source_build_failed",
-                        "多素材组合源构建失败，回退到首个素材继续处理。",
-                        {
-                            "source_asset_ids": source_asset_ids,
-                            "error": str(exc),
-                        },
-                        "WARN",
-                    )
-                    source_path = self.storage.root / source_assets[0].storage_path
+                mixcut_transition_style = mixcut_profile["transition_style"]
+                mixcut_layout_style = mixcut_profile["layout_style"]
+                mixcut_effect_style = mixcut_profile["effect_style"]
+                mixcut_template = mixcut_profile["mixcut_template"]
+                if not source_file_names:
+                    source_file_names = [source_assets[0].original_file_name]
+                source_timeline = self._load_source_timeline(source_assets, source_file_names)
+                source_path = self.storage.root / source_assets[0].storage_path
+                mixcut_source_path = None
+                if len(source_assets) > 1:
+                    mixcut_source_path = self.storage.task_work_dir(task_id) / "mixcut_source.mp4"
+                    try:
+                        self._trace(
+                            task_id,
+                            "analysis",
+                            "multisource.source_build_started",
+                            "检测到多素材输入，开始构建组合源。",
+                            {
+                                "source_asset_ids": source_asset_ids,
+                                "source_file_names": source_file_names,
+                                "mixcut_enabled": mixcut_enabled,
+                                "mixcut_content_type": mixcut_content_type or "",
+                                "mixcut_style_preset": mixcut_style_preset or "",
+                            },
+                        )
+                        built_path = compose_source_timeline(
+                            [Path(str(entry["source_path"])) for entry in source_timeline],
+                            mixcut_source_path,
+                            task.aspect_ratio,
+                        )
+                        source_path = built_path
+                        self._trace(
+                            task_id,
+                            "analysis",
+                            "multisource.source_build_completed",
+                            "多素材组合源已生成。",
+                            {
+                                "source_count": len(source_assets),
+                                "output_path": built_path.as_posix(),
+                                "timeline_total_seconds": round(
+                                    sum(float(entry["duration_seconds"]) for entry in source_timeline),
+                                    3,
+                                ),
+                            },
+                        )
+                    except Exception as exc:
+                        self._trace(
+                            task_id,
+                            "analysis",
+                            "multisource.source_build_failed",
+                            "多素材组合源构建失败，回退到首个素材继续处理。",
+                            {
+                                "source_asset_ids": source_asset_ids,
+                                "error": str(exc),
+                            },
+                            "WARN",
+                        )
+                        source_path = self.storage.root / source_assets[0].storage_path
+        except Exception as exc:
+            self._fail_task(task_id, exc, message="任务处理失败，未能完成素材预处理。")
+            return
 
         try:
             with self.session() as session:
@@ -1270,24 +1274,7 @@ class TaskService:
                     },
                 )
         except Exception as exc:
-            with self.session() as session:
-                task = session.get(Task, task_id)
-                if task is not None:
-                    task.status = "FAILED"
-                    task.progress = min(99, task.progress or 0)
-                    task.error_message = truncate_text(str(exc), 1000)
-                    task.finished_at = utcnow()
-                    session.commit()
-            self._trace(
-                task_id,
-                "pipeline",
-                "task.failed",
-                "任务处理失败。",
-                {
-                    "error": str(exc),
-                },
-                "ERROR",
-            )
+            self._fail_task(task_id, exc)
 
     def _claim_task(self, task_id: str) -> bool:
         with self.session() as session:
@@ -2327,6 +2314,26 @@ class TaskService:
     ) -> None:
         writer = TaskTraceWriter(task_id=task_id, trace_path=self.storage.task_trace_path(task_id))
         writer.log(stage=stage, event=event, message=message, payload=payload, level=level)
+
+    def _fail_task(self, task_id: str, exc: Exception, *, message: str = "任务处理失败。") -> None:
+        with self.session() as session:
+            task = session.get(Task, task_id)
+            if task is not None:
+                task.status = "FAILED"
+                task.progress = min(99, task.progress or 0)
+                task.error_message = truncate_text(str(exc), 1000)
+                task.finished_at = utcnow()
+                session.commit()
+        self._trace(
+            task_id,
+            "pipeline",
+            "task.failed",
+            message,
+            {
+                "error": str(exc),
+            },
+            "ERROR",
+        )
 
     def _save_task_context(
         self,

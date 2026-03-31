@@ -1,12 +1,13 @@
 <template>
-  <section class="space-y-4">
-    <div class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-      <div class="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h2 class="text-lg font-semibold text-slate-900">任务管理</h2>
-          <p class="mt-1 text-sm text-slate-600">标准数据表管理：筛选、批量操作、状态巡检、详情跳转。</p>
+  <section class="admin-page">
+    <div class="admin-panel px-5 py-5">
+      <div class="flex flex-wrap items-start justify-between gap-4">
+        <div class="admin-heading-block">
+          <p class="admin-eyebrow">Task Ops</p>
+          <h2 class="admin-title">任务管理</h2>
+          <p class="admin-subtitle">标准数据表管理：筛选、批量操作、状态巡检、详情跳转。</p>
         </div>
-        <div class="flex flex-wrap gap-2">
+        <div class="admin-action-row">
           <RouterLink to="/tasks/new" :class="primaryButtonClass">新建任务</RouterLink>
           <button :class="secondaryButtonClass" type="button" @click="refreshAll">刷新</button>
         </div>
@@ -17,28 +18,28 @@
       <article
         v-for="card in summaryCards"
         :key="card.key"
-        class="rounded-lg border border-slate-200 bg-white p-4 shadow-sm"
+        class="admin-metric-card"
       >
-        <p class="text-xs uppercase tracking-wide text-slate-500">{{ card.label }}</p>
-        <p class="mt-2 text-2xl font-semibold text-slate-900">{{ card.value }}</p>
-        <p class="mt-1 text-xs text-slate-500">{{ card.hint }}</p>
+        <p class="admin-metric-label">{{ card.label }}</p>
+        <p class="admin-metric-value">{{ card.value }}</p>
+        <p class="admin-metric-hint">{{ card.hint }}</p>
       </article>
     </div>
 
-    <section class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+    <section class="admin-panel p-5">
       <div class="grid gap-3 xl:grid-cols-[minmax(0,1.2fr)_repeat(3,minmax(0,0.72fr))]">
         <label class="grid gap-1 text-xs text-slate-600">
           搜索
           <input
             v-model="searchText"
-            class="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
+            class="admin-field"
             placeholder="搜索标题、文件名、平台、比例"
             type="search"
           />
         </label>
         <label class="grid gap-1 text-xs text-slate-600">
           状态
-          <select v-model="statusFilter" class="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900">
+          <select v-model="statusFilter" class="admin-field">
             <option value="all">全部状态</option>
             <option value="PENDING">排队中</option>
             <option value="ANALYZING">分析中</option>
@@ -50,14 +51,14 @@
         </label>
         <label class="grid gap-1 text-xs text-slate-600">
           平台
-          <select v-model="platformFilter" class="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900">
+          <select v-model="platformFilter" class="admin-field">
             <option value="all">全部平台</option>
             <option v-for="platform in platformOptions" :key="platform" :value="platform">{{ platform }}</option>
           </select>
         </label>
         <label class="grid gap-1 text-xs text-slate-600">
           排序
-          <select v-model="sortMode" class="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900">
+          <select v-model="sortMode" class="admin-field">
             <option value="updated_desc">最近更新</option>
             <option value="created_desc">最新创建</option>
             <option value="progress_desc">进度优先</option>
@@ -79,44 +80,43 @@
         <button :class="ghostButtonClass" type="button" @click="clearSelection">
           清空选择
         </button>
-        <span class="rounded-md border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs text-slate-700">已选 {{ selectedIds.length }} 条</span>
-        <span class="rounded-md border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs text-slate-700">可见 {{ sortedTasks.length }} / {{ tasks.length }}</span>
+        <span class="admin-chip">已选 {{ selectedIds.length }} 条</span>
+        <span class="admin-chip">可见 {{ sortedTasks.length }} / {{ tasks.length }}</span>
       </div>
     </section>
 
-    <div v-if="errorMessage" class="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+    <div v-if="errorMessage" class="admin-alert-error">
       {{ errorMessage }}
     </div>
     <div
       v-else-if="actionMessage"
-      :class="actionMessageTone === 'warn' ? 'border-amber-200 bg-amber-50 text-amber-700' : 'border-emerald-200 bg-emerald-50 text-emerald-700'"
-      class="rounded-lg border px-4 py-3 text-sm"
+      :class="actionMessageTone === 'warn' ? 'admin-alert-warn' : 'admin-alert-success'"
     >
       {{ actionMessage }}
     </div>
 
-    <section class="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-      <div class="flex flex-wrap items-end justify-between gap-3 border-b border-slate-200 px-4 py-3">
+    <section class="admin-panel overflow-hidden">
+      <div class="admin-panel-header">
         <div>
           <h3 class="text-base font-semibold text-slate-900">任务数据表</h3>
           <p class="mt-1 text-sm text-slate-600">支持批量运维与单任务快速处置。</p>
         </div>
-        <span class="rounded-md border border-slate-200 bg-slate-50 px-3 py-1 text-xs text-slate-700">{{ summaryFooterLabel }}</span>
+        <span class="admin-chip">{{ summaryFooterLabel }}</span>
       </div>
 
       <div v-if="loading" class="px-4 py-8 text-sm text-slate-500">正在读取任务...</div>
-      <div v-else-if="sortedTasks.length === 0" class="px-4 py-8 text-sm text-slate-500">当前没有符合筛选条件的任务。</div>
-      <div v-else class="overflow-x-auto">
-        <table class="min-w-[1400px] w-full text-sm">
-          <thead class="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+      <div v-else-if="sortedTasks.length === 0" class="admin-empty m-5">当前没有符合筛选条件的任务。</div>
+      <div v-else class="admin-table-wrap m-5">
+        <table class="admin-table min-w-[1400px]">
+          <thead>
             <tr>
-              <th class="px-3 py-2 text-left font-medium"><input :checked="allVisibleSelected" type="checkbox" @change="toggleSelectVisible" /></th>
-              <th class="px-3 py-2 text-left font-medium">任务</th>
-              <th class="px-3 py-2 text-left font-medium">状态</th>
-              <th class="px-3 py-2 text-left font-medium">语义输入</th>
-              <th class="px-3 py-2 text-left font-medium">进度</th>
-              <th class="px-3 py-2 text-left font-medium">更新时间</th>
-              <th class="px-3 py-2 text-right font-medium">操作</th>
+              <th><input :checked="allVisibleSelected" type="checkbox" @change="toggleSelectVisible" /></th>
+              <th>任务</th>
+              <th>状态</th>
+              <th>语义输入</th>
+              <th>进度</th>
+              <th>更新时间</th>
+              <th class="text-right">操作</th>
             </tr>
           </thead>
           <tbody>
@@ -124,12 +124,11 @@
               v-for="task in sortedTasks"
               :key="task.id"
               :class="rowToneClass(task.status)"
-              class="border-t border-slate-200"
             >
-              <td class="px-3 py-2 align-top">
+              <td>
                 <input :checked="selectedIds.includes(task.id)" type="checkbox" @change="toggleSelected(task.id)" />
               </td>
-              <td class="px-3 py-2 align-top">
+              <td>
                 <p class="font-medium text-slate-900">{{ task.title }}</p>
                 <p class="mt-0.5 text-xs text-slate-500">{{ task.sourceFileName }}</p>
                 <div class="mt-1 flex flex-wrap gap-1 text-xs text-slate-600">
@@ -142,29 +141,29 @@
                   <span>输出 {{ task.completedOutputCount ?? 0 }}/{{ task.outputCount }}</span>
                 </div>
               </td>
-              <td class="px-3 py-2 align-top">
+              <td>
                 <span :class="statusPillClass(task.status)" class="inline-flex rounded px-2 py-0.5 text-xs font-medium">
                   {{ statusLabel(task.status) }}
                 </span>
                 <p class="mt-1 text-xs text-slate-500">重试 {{ task.retryCount ?? 0 }} 次</p>
               </td>
-              <td class="px-3 py-2 align-top">
+              <td>
                 <p class="text-sm text-slate-700">{{ semanticHint(task) }}</p>
               </td>
-              <td class="px-3 py-2 align-top">
+              <td>
                 <p class="font-medium text-slate-900">{{ task.progress }}%</p>
                 <div class="mt-1 h-1.5 overflow-hidden rounded-full bg-slate-200">
                   <div class="h-full rounded-full" :class="progressBarClass(task.status)" :style="{ width: `${task.progress}%` }"></div>
                 </div>
                 <p class="mt-1 text-xs text-slate-500">{{ progressLabel(task) }}</p>
               </td>
-              <td class="px-3 py-2 align-top">
+              <td>
                 <p class="text-sm text-slate-800">{{ formatShortDate(task.updatedAt) }}</p>
                 <p class="mt-0.5 text-xs text-slate-500">创建 {{ formatShortDate(task.createdAt) }}</p>
               </td>
-              <td class="px-3 py-2 text-right align-top">
+              <td class="text-right">
                 <div class="flex flex-wrap justify-end gap-1.5">
-                  <RouterLink :to="`/admin/tasks/${task.id}`" class="inline-flex rounded border border-slate-300 px-2.5 py-1 text-xs text-slate-700 hover:bg-slate-50">详情</RouterLink>
+                  <RouterLink :to="`/admin/tasks/${task.id}`" class="admin-btn-secondary admin-btn-sm">详情</RouterLink>
                   <button :class="ghostButtonClassSm" :disabled="actionLoading" type="button" @click="cloneTask(task.id)">复制</button>
                   <button
                     v-if="task.status === 'FAILED'"
@@ -214,22 +213,14 @@ const sortMode = ref<"updated_desc" | "created_desc" | "progress_desc" | "status
 const selectedIds = ref<string[]>([]);
 let refreshDebounceTimer: ReturnType<typeof setTimeout> | null = null;
 
-const primaryButtonClass =
-  "inline-flex items-center rounded-md border border-slate-900 bg-slate-900 px-3 py-1.5 text-sm font-medium text-white transition hover:bg-slate-800";
-const secondaryButtonClass =
-  "inline-flex items-center rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50";
-const ghostButtonClass =
-  "inline-flex items-center rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-600 transition hover:bg-slate-50";
-const warningButtonClass =
-  "inline-flex items-center rounded-md border border-amber-300 bg-amber-50 px-3 py-1.5 text-sm font-medium text-amber-700 transition hover:bg-amber-100 disabled:opacity-50";
-const dangerButtonClass =
-  "inline-flex items-center rounded-md border border-rose-300 bg-rose-50 px-3 py-1.5 text-sm font-medium text-rose-700 transition hover:bg-rose-100 disabled:opacity-50";
-const ghostButtonClassSm =
-  "inline-flex items-center rounded border border-slate-300 px-2.5 py-1 text-xs text-slate-600 transition hover:bg-slate-50 disabled:opacity-50";
-const warningButtonClassSm =
-  "inline-flex items-center rounded border border-amber-300 bg-amber-50 px-2.5 py-1 text-xs text-amber-700 transition hover:bg-amber-100 disabled:opacity-50";
-const dangerButtonClassSm =
-  "inline-flex items-center rounded border border-rose-300 bg-rose-50 px-2.5 py-1 text-xs text-rose-700 transition hover:bg-rose-100 disabled:opacity-50";
+const primaryButtonClass = "admin-btn-primary";
+const secondaryButtonClass = "admin-btn-secondary";
+const ghostButtonClass = "admin-btn-ghost";
+const warningButtonClass = "admin-btn-warning";
+const dangerButtonClass = "admin-btn-danger";
+const ghostButtonClassSm = "admin-btn-ghost admin-btn-sm";
+const warningButtonClassSm = "admin-btn-warning admin-btn-sm";
+const dangerButtonClassSm = "admin-btn-danger admin-btn-sm";
 
 const platformOptions = computed(() => Array.from(new Set(tasks.value.map((task) => task.platform).filter(Boolean))).sort());
 

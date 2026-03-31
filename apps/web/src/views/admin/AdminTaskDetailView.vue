@@ -1,12 +1,13 @@
 <template>
-  <section class="space-y-4">
-    <div class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-      <div class="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h2 class="text-lg font-semibold text-slate-900">任务详情</h2>
-          <p class="mt-1 text-sm text-slate-600">面向运维的任务诊断视图：状态、参数、方案、日志。</p>
+  <section class="admin-page">
+    <div class="admin-panel px-5 py-5">
+      <div class="flex flex-wrap items-start justify-between gap-4">
+        <div class="admin-heading-block">
+          <p class="admin-eyebrow">Task Detail</p>
+          <h2 class="admin-title">任务详情</h2>
+          <p class="admin-subtitle">面向运维的任务诊断视图：状态、参数、方案、日志。</p>
         </div>
-        <div class="flex flex-wrap gap-2">
+        <div class="admin-action-row">
           <button :class="secondaryButtonClass" :disabled="actionLoading" type="button" @click="cloneTaskToWorkbench">复制到前台</button>
           <button v-if="task?.status === 'FAILED'" :class="warningButtonClass" :disabled="actionLoading" type="button" @click="retryTaskAction">失败重试</button>
           <button :class="dangerButtonClass" :disabled="actionLoading || runningTask" type="button" @click="deleteTaskAction">删除</button>
@@ -14,83 +15,83 @@
       </div>
     </div>
 
-    <div v-if="errorMessage" class="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+    <div v-if="errorMessage" class="admin-alert-error">
       {{ errorMessage }}
     </div>
 
-    <div v-if="loading" class="rounded-lg border border-slate-200 bg-white px-4 py-8 text-sm text-slate-500">
+    <div v-if="loading" class="admin-panel px-4 py-8 text-sm text-slate-500">
       正在读取任务详情...
     </div>
 
     <template v-else-if="task">
       <div class="grid gap-4 xl:grid-cols-[1fr_1fr]">
-        <section class="rounded-xl border border-slate-200 bg-white shadow-sm">
-          <div class="border-b border-slate-200 px-4 py-3">
+        <section class="admin-panel overflow-hidden">
+          <div class="admin-panel-header">
             <h3 class="text-base font-semibold text-slate-900">基础信息</h3>
           </div>
-          <div class="grid gap-3 p-4 sm:grid-cols-2">
-            <article class="rounded-lg border border-slate-200 bg-slate-50 p-3">
+          <div class="grid gap-3 p-5 sm:grid-cols-2">
+            <article class="admin-panel-soft p-4">
               <p class="text-xs uppercase tracking-wide text-slate-500">任务标题</p>
               <p class="mt-1 text-sm font-medium text-slate-900">{{ task.title }}</p>
             </article>
-            <article class="rounded-lg border border-slate-200 bg-slate-50 p-3">
+            <article class="admin-panel-soft p-4">
               <p class="text-xs uppercase tracking-wide text-slate-500">状态</p>
               <p class="mt-1 text-sm font-medium text-slate-900">{{ task.status }} · {{ task.progress }}%</p>
             </article>
-            <article class="rounded-lg border border-slate-200 bg-slate-50 p-3">
+            <article class="admin-panel-soft p-4">
               <p class="text-xs uppercase tracking-wide text-slate-500">平台 / 比例</p>
               <p class="mt-1 text-sm font-medium text-slate-900">{{ task.platform }} · {{ task.aspectRatio }}</p>
             </article>
-            <article class="rounded-lg border border-slate-200 bg-slate-50 p-3">
+            <article class="admin-panel-soft p-4">
               <p class="text-xs uppercase tracking-wide text-slate-500">输出</p>
               <p class="mt-1 text-sm font-medium text-slate-900">{{ task.completedOutputCount ?? 0 }} / {{ task.outputCount }}</p>
             </article>
-            <article class="rounded-lg border border-slate-200 bg-slate-50 p-3">
+            <article class="admin-panel-soft p-4">
               <p class="text-xs uppercase tracking-wide text-slate-500">时长区间</p>
               <p class="mt-1 text-sm font-medium text-slate-900">{{ task.minDurationSeconds }} - {{ task.maxDurationSeconds }} 秒</p>
             </article>
-            <article class="rounded-lg border border-slate-200 bg-slate-50 p-3">
+            <article class="admin-panel-soft p-4">
               <p class="text-xs uppercase tracking-wide text-slate-500">源文件</p>
               <p class="mt-1 break-all text-sm font-medium text-slate-900">{{ task.sourceFileName }}</p>
             </article>
           </div>
 
-          <div class="border-t border-slate-200 px-4 py-3">
+          <div class="border-t border-slate-200/80 px-5 py-4">
             <h4 class="text-sm font-semibold text-slate-900">规划摘要</h4>
             <p class="mt-1 text-sm text-slate-700">{{ planningSummary.title }}</p>
             <p class="mt-1 text-xs text-slate-500">{{ planningSummary.detail }}</p>
           </div>
 
-          <div v-if="task.errorMessage" class="border-t border-slate-200 px-4 py-3">
-            <div class="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
+          <div v-if="task.errorMessage" class="border-t border-slate-200/80 px-5 py-4">
+            <div class="admin-alert-error">
               {{ task.errorMessage }}
             </div>
           </div>
 
-          <div v-if="task.plan?.length" class="border-t border-slate-200 p-4">
+          <div v-if="task.plan?.length" class="border-t border-slate-200/80 p-5">
             <div class="mb-2 flex items-center justify-between">
               <h4 class="text-sm font-semibold text-slate-900">规划方案</h4>
-              <span class="text-xs text-slate-500">{{ task.plan.length }} 条</span>
+              <span class="admin-chip">{{ task.plan.length }} 条</span>
             </div>
-            <div class="overflow-x-auto rounded-lg border border-slate-200">
-              <table class="min-w-full text-sm">
-                <thead class="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+            <div class="admin-table-wrap">
+              <table class="admin-table">
+                <thead>
                   <tr>
-                    <th class="px-3 py-2 text-left font-medium">序号</th>
-                    <th class="px-3 py-2 text-left font-medium">标题</th>
-                    <th class="px-3 py-2 text-left font-medium">时长</th>
-                    <th class="px-3 py-2 text-left font-medium">时间窗</th>
+                    <th>序号</th>
+                    <th>标题</th>
+                    <th>时长</th>
+                    <th>时间窗</th>
                   </tr>
                 </thead>
                 <tbody>
-                  <tr v-for="clip in task.plan" :key="clip.clipIndex" class="border-t border-slate-200">
-                    <td class="px-3 py-2 text-slate-700">#{{ clip.clipIndex }}</td>
-                    <td class="px-3 py-2">
+                  <tr v-for="clip in task.plan" :key="clip.clipIndex">
+                    <td>#{{ clip.clipIndex }}</td>
+                    <td>
                       <p class="font-medium text-slate-900">{{ clip.title }}</p>
                       <p class="mt-0.5 text-xs text-slate-500">{{ clip.reason }}</p>
                     </td>
-                    <td class="px-3 py-2 text-slate-700">{{ clip.durationSeconds.toFixed(1) }}s</td>
-                    <td class="px-3 py-2 text-slate-700">{{ clip.startSeconds.toFixed(1) }}s - {{ clip.endSeconds.toFixed(1) }}s</td>
+                    <td>{{ clip.durationSeconds.toFixed(1) }}s</td>
+                    <td>{{ clip.startSeconds.toFixed(1) }}s - {{ clip.endSeconds.toFixed(1) }}s</td>
                   </tr>
                 </tbody>
               </table>
@@ -98,8 +99,8 @@
           </div>
         </section>
 
-        <section class="rounded-xl border border-slate-200 bg-white shadow-sm">
-          <div class="flex flex-wrap items-end justify-between gap-3 border-b border-slate-200 px-4 py-3">
+        <section class="admin-panel overflow-hidden">
+          <div class="admin-panel-header">
             <div>
               <h3 class="text-base font-semibold text-slate-900">任务日志</h3>
               <p class="mt-1 text-sm text-slate-600">默认显示最新摘要，可展开完整事件流。</p>
@@ -110,41 +111,40 @@
             </div>
           </div>
 
-          <div class="space-y-3 p-4">
-            <article class="rounded-lg border border-slate-200 bg-slate-50 p-3">
+          <div class="space-y-4 p-5">
+            <article class="admin-panel-soft p-4">
               <p class="text-xs uppercase tracking-wide text-slate-500">当前重点</p>
               <p class="mt-1 text-sm font-medium text-slate-900">{{ traceFocus?.message || "暂无日志" }}</p>
               <p class="mt-1 text-xs text-slate-500">{{ traceFocus?.timestamp ? formatTime(traceFocus.timestamp) : "" }}</p>
             </article>
 
-            <div v-if="traceEvents.length === 0" class="rounded-lg border border-dashed border-slate-300 px-3 py-6 text-center text-sm text-slate-500">
+            <div v-if="traceEvents.length === 0" class="admin-empty">
               当前没有日志。
             </div>
 
-            <div v-else class="overflow-x-auto rounded-lg border border-slate-200">
-              <table class="min-w-full text-sm">
-                <thead class="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+            <div v-else class="admin-table-wrap">
+              <table class="admin-table">
+                <thead>
                   <tr>
-                    <th class="px-3 py-2 text-left font-medium">时间</th>
-                    <th class="px-3 py-2 text-left font-medium">级别</th>
-                    <th class="px-3 py-2 text-left font-medium">阶段</th>
-                    <th class="px-3 py-2 text-left font-medium">消息</th>
-                    <th class="px-3 py-2 text-left font-medium">事件</th>
+                    <th>时间</th>
+                    <th>级别</th>
+                    <th>阶段</th>
+                    <th>消息</th>
+                    <th>事件</th>
                   </tr>
                 </thead>
                 <tbody>
                   <tr
                     v-for="entry in traceExpanded ? orderedTraceEvents : tracePreview"
                     :key="`${entry.timestamp}-${entry.event}`"
-                    class="border-t border-slate-200"
                   >
-                    <td class="px-3 py-2 text-xs text-slate-500">{{ formatTime(entry.timestamp) }}</td>
-                    <td class="px-3 py-2">
+                    <td class="text-xs text-slate-500">{{ formatTime(entry.timestamp) }}</td>
+                    <td>
                       <span :class="logLevelClass(entry.level)" class="rounded px-2 py-0.5 text-xs font-medium">{{ entry.level }}</span>
                     </td>
-                    <td class="px-3 py-2 text-slate-700">{{ entry.stage }}</td>
-                    <td class="px-3 py-2 text-slate-700">{{ entry.message }}</td>
-                    <td class="px-3 py-2 break-all text-xs text-slate-500">{{ entry.event }}</td>
+                    <td>{{ entry.stage }}</td>
+                    <td>{{ entry.message }}</td>
+                    <td class="break-all text-xs text-slate-500">{{ entry.event }}</td>
                   </tr>
                 </tbody>
               </table>
@@ -171,14 +171,10 @@ const actionLoading = ref(false);
 const errorMessage = ref("");
 const traceExpanded = ref(false);
 
-const secondaryButtonClass =
-  "inline-flex items-center rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:opacity-50";
-const ghostButtonClass =
-  "inline-flex items-center rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-600 transition hover:bg-slate-50 disabled:opacity-50";
-const warningButtonClass =
-  "inline-flex items-center rounded-md border border-amber-300 bg-amber-50 px-3 py-1.5 text-sm font-medium text-amber-700 transition hover:bg-amber-100 disabled:opacity-50";
-const dangerButtonClass =
-  "inline-flex items-center rounded-md border border-rose-300 bg-rose-50 px-3 py-1.5 text-sm font-medium text-rose-700 transition hover:bg-rose-100 disabled:opacity-50";
+const secondaryButtonClass = "admin-btn-secondary";
+const ghostButtonClass = "admin-btn-ghost";
+const warningButtonClass = "admin-btn-warning";
+const dangerButtonClass = "admin-btn-danger";
 
 const taskId = computed(() => String(route.params.id || ""));
 const runningTask = computed(() => Boolean(task.value && (task.value.status === "ANALYZING" || task.value.status === "PLANNING" || task.value.status === "RENDERING")));

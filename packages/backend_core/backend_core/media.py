@@ -6,6 +6,7 @@ from pathlib import Path
 import json
 import math
 import re
+import shutil
 import subprocess
 import tempfile
 from typing import Iterable
@@ -90,11 +91,22 @@ def _quantile(values: list[float], ratio: float) -> float:
 
 
 def _run_command(command: list[str]) -> str:
-    completed = subprocess.run(command, capture_output=True, text=True)
+    try:
+        completed = subprocess.run(command, capture_output=True, text=True)
+    except FileNotFoundError as exc:
+        tool_name = command[0] if command else "media tool"
+        raise MediaToolError(f"{tool_name} is not installed or not available in PATH") from exc
     if completed.returncode != 0:
         stderr = completed.stderr.strip() or completed.stdout.strip() or "media command failed"
         raise MediaToolError(stderr)
     return completed.stdout
+
+
+def _move_output_file(source: Path, destination: Path) -> None:
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    if destination.exists():
+        destination.unlink()
+    shutil.move(str(source), str(destination))
 
 
 def probe_media(path: str | Path) -> MediaProbe:
@@ -571,7 +583,7 @@ def _render_still_image(
 def _concat_segments(output_path: Path, segments: Iterable[Path]) -> None:
     segment_list = list(segments)
     if len(segment_list) == 1:
-        segment_list[0].replace(output_path)
+        _move_output_file(segment_list[0], output_path)
         return
 
     with tempfile.NamedTemporaryFile("w", suffix=".txt", delete=False) as handle:
@@ -609,7 +621,7 @@ def _render_crossfade_segments(
         raise MediaToolError("no renderable segments provided")
     if len(segment_paths) == 1:
         single = segment_paths[0]
-        single.replace(output_path)
+        _move_output_file(single, output_path)
         return round(max(0.12, probe_media(output_path).durationSeconds), 3)
 
     def _render_crossfade_pair(left_path: Path, right_path: Path, pair_output: Path) -> float:
@@ -669,7 +681,7 @@ def _render_crossfade_segments(
             pair_output = temp_root / f"xfade_{index:02d}.mp4"
             current_duration = _render_crossfade_pair(current_path, next_path, pair_output)
             current_path = pair_output
-        current_path.replace(output_path)
+        _move_output_file(current_path, output_path)
         return round(max(0.5, current_duration), 3)
 
 
@@ -678,7 +690,7 @@ def _concat_segments_with_crossfade(output_path: Path, segments: Iterable[Path],
     if not segment_list:
         raise MediaToolError("no segments provided for crossfade")
     if len(segment_list) == 1:
-        segment_list[0].replace(output_path)
+        _move_output_file(segment_list[0], output_path)
         return
 
     durations: list[float] = [max(0.5, probe_media(path).durationSeconds) for path in segment_list]

@@ -1,39 +1,39 @@
 <template>
-  <div class="min-h-screen bg-slate-100 text-slate-900">
-    <div class="mx-auto flex min-h-screen max-w-[1600px] flex-col px-4 py-4 sm:px-6 lg:px-8">
-      <header class="rounded-xl border border-slate-200 bg-white shadow-sm">
-        <div class="flex flex-wrap items-start justify-between gap-4 border-b border-slate-200 px-5 py-4">
-          <div class="min-w-0">
-            <p class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Admin Console</p>
-            <h1 class="mt-1 text-xl font-semibold text-slate-900">AI Cut 管理系统</h1>
-            <p class="mt-1 text-sm text-slate-600">
+  <div class="relative z-10 min-h-screen bg-[radial-gradient(circle_at_top_left,rgba(59,130,246,0.08),transparent_28%),radial-gradient(circle_at_top_right,rgba(245,158,11,0.08),transparent_24%),linear-gradient(180deg,#f8fafc_0%,#eef2ff_48%,#f8fafc_100%)] text-slate-900">
+    <div class="mx-auto flex min-h-screen max-w-[1600px] flex-col px-4 py-4 sm:px-6 lg:px-8 lg:py-6">
+      <header class="admin-panel overflow-hidden">
+        <div class="admin-panel-header border-b border-slate-200/80">
+          <div class="admin-heading-block min-w-0">
+            <p class="admin-eyebrow">Admin Console</p>
+            <h1 class="admin-title">AI Cut 管理系统</h1>
+            <p class="admin-subtitle max-w-3xl">
               面向运营与运维的数据管理界面，聚焦任务管理、异常处理和系统配置状态。
             </p>
           </div>
-          <div class="flex flex-wrap gap-2">
-            <span class="rounded-md border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs text-slate-700">{{ executionModeLabel }}</span>
-            <span class="rounded-md border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs text-slate-700">{{ modelTitle }}</span>
-            <span :class="health?.ok ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-amber-200 bg-amber-50 text-amber-700'" class="rounded-md border px-2.5 py-1 text-xs">
+          <div class="admin-action-row">
+            <span class="admin-chip">{{ executionModeLabel }}</span>
+            <span class="admin-chip">{{ modelTitle }}</span>
+            <span :class="health?.ok ? 'admin-chip admin-chip-success' : 'admin-chip admin-chip-warn'">
               {{ healthBadgeLabel }}
             </span>
           </div>
         </div>
 
-        <div class="flex flex-wrap items-center justify-between gap-3 px-5 py-3">
+        <div class="flex flex-wrap items-start justify-between gap-3 px-5 py-4">
           <nav class="flex flex-wrap gap-2">
-            <RouterLink to="/admin" :class="[navButtonClass, isAdminNavActive('/admin') ? navButtonActiveClass : '']">总览</RouterLink>
+            <RouterLink to="/admin/dashboard" :class="[navButtonClass, isAdminNavActive('/admin/dashboard') ? navButtonActiveClass : '']">总览</RouterLink>
             <RouterLink to="/admin/tasks" :class="[navButtonClass, isAdminNavActive('/admin/tasks') ? navButtonActiveClass : '']">任务管理</RouterLink>
             <RouterLink to="/admin/system" :class="[navButtonClass, isAdminNavActive('/admin/system') ? navButtonActiveClass : '']">系统配置</RouterLink>
           </nav>
 
-          <div class="flex flex-wrap gap-2">
+          <div class="admin-action-row">
             <RouterLink to="/tasks" :class="secondaryButtonClass">返回前台</RouterLink>
             <RouterLink to="/tasks/new" :class="primaryButtonClass">新建任务</RouterLink>
           </div>
         </div>
       </header>
 
-      <main class="flex-1 py-4">
+      <main class="flex-1 py-5">
         <RouterView />
       </main>
     </div>
@@ -49,17 +49,14 @@ import type { HealthResponse } from "@/types";
 const health = ref<HealthResponse | null>(null);
 const route = useRoute();
 
-const navButtonClass =
-  "inline-flex items-center rounded-md border border-slate-200 px-3 py-1.5 text-sm text-slate-600 transition hover:bg-slate-50 hover:text-slate-900";
-const navButtonActiveClass = "border-slate-900 bg-slate-900 text-white hover:bg-slate-800 hover:text-white";
-const secondaryButtonClass =
-  "inline-flex items-center rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50";
-const primaryButtonClass =
-  "inline-flex items-center rounded-md border border-slate-900 bg-slate-900 px-3 py-1.5 text-sm font-medium text-white transition hover:bg-slate-800";
+const navButtonClass = "admin-nav-button";
+const navButtonActiveClass = "admin-nav-button-active";
+const secondaryButtonClass = "admin-btn-secondary";
+const primaryButtonClass = "admin-btn-primary";
 
 function isAdminNavActive(path: string) {
-  if (path === "/admin") {
-    return route.path === "/admin";
+  if (path === "/admin/dashboard") {
+    return route.path === "/admin" || route.path === "/admin/dashboard";
   }
   return route.path === path || route.path.startsWith(`${path}/`);
 }
