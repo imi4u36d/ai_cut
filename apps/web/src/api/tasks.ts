@@ -1,26 +1,25 @@
 import { deleteJson, getJson, postForm, postJson } from "./client";
 import type {
-  CreateTaskRequest,
+  CreateGenerationTaskRequest,
   GenerateCreativePromptRequest,
   GenerateCreativePromptResponse,
-  TaskCloneDraft,
   TaskDeleteResult,
   TaskDetail,
   TaskFilters,
   TaskListItem,
-  TaskPreset,
+  SeeddanceTaskQueryResult,
   TaskTraceEvent,
-  UploadResponse
+  UploadResponse,
 } from "@/types";
 
-export function uploadVideo(file: File) {
+export function uploadText(file: File) {
   const form = new FormData();
   form.append("file", file);
-  return postForm<UploadResponse>("/uploads/videos", form);
+  return postForm<UploadResponse>("/uploads/texts", form);
 }
 
-export function createTask(payload: CreateTaskRequest) {
-  return postJson<TaskDetail>("/tasks", payload);
+export function createGenerationTask(payload: CreateGenerationTaskRequest) {
+  return postJson<TaskDetail>("/tasks/generation", payload);
 }
 
 export function generateCreativePrompt(payload: GenerateCreativePromptRequest) {
@@ -35,9 +34,6 @@ export function fetchTasks(filters?: TaskFilters) {
   if (filters?.status && filters.status !== "all") {
     params.set("status", filters.status);
   }
-  if (filters?.platform && filters.platform !== "all") {
-    params.set("platform", filters.platform);
-  }
   const query = params.toString();
   return getJson<TaskListItem[]>(query ? `/tasks?${query}` : "/tasks");
 }
@@ -50,18 +46,26 @@ export function fetchTaskTrace(taskId: string, limit = 500) {
   return getJson<TaskTraceEvent[]>(`/tasks/${taskId}/trace?limit=${limit}`);
 }
 
+export function fetchSeeddanceTaskResult(remoteTaskId: string) {
+  return getJson<SeeddanceTaskQueryResult>(`/tasks/seeddance/${encodeURIComponent(remoteTaskId)}`);
+}
+
 export function retryTask(taskId: string) {
   return postJson<TaskDetail>(`/tasks/${taskId}/retry`, {});
 }
 
-export function cloneTask(taskId: string) {
-  return postJson<TaskCloneDraft>(`/tasks/${taskId}/clone`, {});
+export function pauseTask(taskId: string) {
+  return postJson<TaskDetail>(`/tasks/${taskId}/pause`, {});
+}
+
+export function continueTask(taskId: string) {
+  return postJson<TaskDetail>(`/tasks/${taskId}/continue`, {});
+}
+
+export function terminateTask(taskId: string) {
+  return postJson<TaskDetail>(`/tasks/${taskId}/terminate`, {});
 }
 
 export function deleteTask(taskId: string) {
   return deleteJson<TaskDeleteResult>(`/tasks/${taskId}`);
-}
-
-export function fetchPresets() {
-  return getJson<TaskPreset[]>("/presets");
 }

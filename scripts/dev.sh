@@ -37,6 +37,45 @@ require_command() {
   fi
 }
 
+collect_listen_pids() {
+  local port="$1"
+  if command -v lsof >/dev/null 2>&1; then
+    lsof -tiTCP:"${port}" -sTCP:LISTEN 2>/dev/null || true
+    return
+  fi
+  if command -v ss >/dev/null 2>&1; then
+    ss -lptn "sport = :${port}" 2>/dev/null | awk -F'pid=' 'NR>1 && NF>1 {split($2,a,","); print a[1]}' || true
+    return
+  fi
+}
+
+stop_service_if_running() {
+  local service_name="$1"
+  local port="$2"
+  local pids=""
+  pids="$(collect_listen_pids "$port" | tr '\n' ' ')"
+
+  if [[ -z "${pids// }" ]]; then
+    return
+  fi
+
+  echo "检测到 ${service_name} 端口 ${port} 已被占用，尝试关闭旧进程: ${pids}"
+  for pid in $pids; do
+    if [[ "$pid" != "$$" ]] && kill -0 "$pid" 2>/dev/null; then
+      kill "$pid" 2>/dev/null || true
+    fi
+  done
+
+  sleep 1
+
+  for pid in $pids; do
+    if [[ "$pid" != "$$" ]] && kill -0 "$pid" 2>/dev/null; then
+      echo "进程 ${pid} 未退出，发送 SIGKILL"
+      kill -9 "$pid" 2>/dev/null || true
+    fi
+  done
+}
+
 if [[ ! -d "$API_DIR" || ! -d "$WEB_DIR" ]]; then
   echo "请在项目根目录下运行此脚本。"
   exit 1
@@ -46,7 +85,7 @@ require_command npm
 
 if [[ ! -x "$VENV_PYTHON" ]]; then
   echo "未找到 Python 虚拟环境: $VENV_PYTHON"
-  echo "请先创建并安装依赖，例如: python3 -m venv .venv && .venv/bin/pip install -e packages/backend_core -e apps/api -e apps/worker"
+  echo "请先创建并安装依赖，例如: python3 -m venv .venv && .venv/bin/pip install -e packages/shared -e packages/db -e packages/storage -e packages/media -e packages/ai -e packages/pipeline -e packages/backend_core -e apps/api -e apps/worker"
   exit 1
 fi
 
@@ -55,12 +94,21 @@ if [[ ! -d "$WEB_DIR/node_modules" ]]; then
   exit 1
 fi
 
+stop_service_if_running "后端" "$API_PORT"
+stop_service_if_running "前端" "$WEB_PORT"
+
 trap cleanup EXIT INT TERM
 
 echo "启动后端: http://127.0.0.1:${API_PORT}"
 (
   cd "$API_DIR"
-  exec "$VENV_PYTHON" -m uvicorn app.main:app --reload --host "$API_HOST" --port "$API_PORT"
+  exec "$VENV_PYTHON" -m uvicorn app.main:app \
+    --reload \
+    --reload-dir "$ROOT_DIR/apps/api" \
+    --reload-dir "$ROOT_DIR/packages" \
+    --reload-dir "$ROOT_DIR/config" \
+    --host "$API_HOST" \
+    --port "$API_PORT"
 ) &
 API_PID=$!
 

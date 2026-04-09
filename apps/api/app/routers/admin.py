@@ -28,15 +28,12 @@ def list_admin_tasks(
     request: Request,
     q: str | None = Query(default=None),
     status: TaskStatus | None = Query(default=None),
-    platform: str | None = Query(default=None),
 ) -> list[TaskListItem]:
     normalized_q = q.strip() if q else None
-    normalized_platform = platform.strip() if platform else None
     normalized_status = status.value if status is not None else None
     return request.app.state.runtime.service.list_tasks(
         q=normalized_q,
         status=normalized_status,
-        platform=normalized_platform,
     )
 
 
@@ -82,6 +79,16 @@ def list_admin_traces(
 def retry_admin_task(request: Request, task_id: str) -> TaskDetail:
     try:
         return request.app.state.runtime.service.retry_task(task_id)
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+@router.post("/tasks/{task_id}/terminate", response_model=TaskDetail)
+def terminate_admin_task(request: Request, task_id: str) -> TaskDetail:
+    try:
+        return request.app.state.runtime.service.terminate_task(task_id)
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except ValueError as exc:
