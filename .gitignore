@@ -1,5 +1,7 @@
 node_modules/
 dist/
+.claude
+.codex
 .DS_Store
 .idea
 .env
