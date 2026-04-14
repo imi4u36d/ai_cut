@@ -135,7 +135,7 @@ class TaskStoryboardPlannerParsingTest {
         task.title = "demo";
 
         String storyboardMarkdown = """
-            | 镜号 | 剧情节点/场景 | 景别/镜头运动 | 视觉描述 (Visual Prompt) | 对话/字幕 | 音效/BGM | 建议时长 |
+            | 镜号 | 剧情节点/场景 | 景别/镜头运动 | 视觉描述 (Visual Prompt) | 对话/独白 | 音效/BGM | 建议时长 |
             | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
             | 001 | 开端·森林清晨 | 远景/缓慢推镜 | 晨曦照进森林，光点在草地上跳跃，女主站在薄雾里回头，空气清亮，日系手绘感。 | 女主：“这...这是哪里？” | 轻风与鸟鸣，尾音延续到下一镜 | 6秒 |
             """;
@@ -147,5 +147,24 @@ class TaskStoryboardPlannerParsingTest {
         assertTrue(!shotPlans.get(0).imagePrompt().contains("开端·森林清晨"));
         assertTrue(shotPlans.get(0).videoPrompt().contains("可听见的人声对白：女主：“这...这是哪里？”"));
         assertTrue(shotPlans.get(0).videoPrompt().contains("音频设计：轻风与鸟鸣，尾音延续到下一镜"));
+    }
+
+    @Test
+    void unlabeledDialogueColumnFallsBackToMonologueInstruction() {
+        TaskStoryboardPlanner planner = new TaskStoryboardPlanner(new ModelRuntimePropertiesResolver(new MockEnvironment()));
+        TaskRecord task = new TaskRecord();
+        task.creativePrompt = "demo";
+        task.title = "demo";
+
+        String storyboardMarkdown = """
+            | 镜号 | 剧情节点/场景 | 景别/镜头运动 | 视觉描述 (Visual Prompt) | 对话/独白 | 音效/BGM | 建议时长 |
+            | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+            | 001 | 夜路 | 中景/静止 | 女主一个人站在路灯下，指尖发抖，呼吸不稳。 | 我不能回头。 | 夜风声轻推，尾音贴着呼吸声进入下一镜 | 4秒 |
+            """;
+
+        List<TaskStoryboardPlanner.StoryboardShotPlan> shotPlans = planner.buildStoryboardShotPlans(task, storyboardMarkdown);
+
+        assertEquals(1, shotPlans.size());
+        assertTrue(shotPlans.get(0).videoPrompt().contains("可听见的人声独白：独白：我不能回头。"));
     }
 }

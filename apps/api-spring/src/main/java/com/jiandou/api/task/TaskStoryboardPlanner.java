@@ -642,10 +642,13 @@ public class TaskStoryboardPlanner {
         if (normalized.isBlank()) {
             return "";
         }
+        if (normalized.startsWith("独白：") || normalized.startsWith("独白:")) {
+            return "可听见的人声独白：" + normalized;
+        }
         if (normalized.contains("“") || normalized.contains("\"") || normalized.contains("：") || normalized.contains(":")) {
             return "可听见的人声对白：" + normalized;
         }
-        return "字幕信息：" + normalized;
+        return "可听见的人声独白：独白：" + normalized;
     }
 
     private String firstNonBlank(String... values) {
@@ -759,7 +762,7 @@ public class TaskStoryboardPlanner {
                 resolve(headers, "emotion", "情绪"),
                 resolve(headers, "lighting", "光线"),
                 resolve(headers, "atmosphere", "氛围"),
-                resolve(headers, "dialogue", "对话", "对白", "台词", "字幕"),
+                resolve(headers, "dialogue", "独白", "对话", "对白", "台词", "字幕"),
                 resolve(headers, "audio", "音效", "bgm", "sfx", "旁白", "画外音", "声音与对白"),
                 resolve(headers, "duration", "时长", "秒")
             );

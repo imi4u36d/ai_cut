@@ -93,9 +93,10 @@ class GenerationRunFactoryScriptPromptTest {
 
         assertTrue(capturedSystemPrompt[0].contains("### 🤖 AI 短剧脚本专家指令 (System Prompt)"));
         assertTrue(capturedSystemPrompt[0].contains("对话还原优先"));
-        assertTrue(capturedSystemPrompt[0].contains("不写旁白配音"));
+        assertTrue(capturedSystemPrompt[0].contains("不写旁白、画外音或解说配音"));
         assertTrue(capturedSystemPrompt[0].contains("音效/BGM 建议"));
-        assertTrue(capturedSystemPrompt[0].contains("| 镜号 | 剧情节点/场景 | 景别 | 视觉描述 (Visual Prompt) | 对话/字幕 | 音效/BGM | 建议时长 |"));
+        assertTrue(capturedSystemPrompt[0].contains("每一句都必须写成“角色名：台词”或“独白：台词”"));
+        assertTrue(capturedSystemPrompt[0].contains("| 镜号 | 剧情节点/场景 | 景别 | 视觉描述 (Visual Prompt) | 对话/独白 | 音效/BGM | 建议时长 |"));
         assertTrue(capturedUserPrompt[0].contains("请输出可直接进入分镜解析流程的 markdown"));
     }
 
@@ -155,7 +156,7 @@ class GenerationRunFactoryScriptPromptTest {
         Map<String, Object> result = (Map<String, Object>) run.get("result");
         String scriptMarkdown = String.valueOf(result.get("scriptMarkdown"));
 
-        assertTrue(scriptMarkdown.contains("| 镜号 | 剧情节点/场景 | 景别/镜头运动 | 视觉描述 (Visual Prompt) | 对话/字幕 | 音效/BGM | 建议时长 |"));
+        assertTrue(scriptMarkdown.contains("| 镜号 | 剧情节点/场景 | 景别/镜头运动 | 视觉描述 (Visual Prompt) | 对话/独白 | 音效/BGM | 建议时长 |"));
         assertTrue(scriptMarkdown.contains("| 001 | 开场建立人物与环境 |"));
     }
 }
