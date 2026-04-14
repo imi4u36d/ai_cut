@@ -135,9 +135,9 @@ class TaskStoryboardPlannerParsingTest {
         task.title = "demo";
 
         String storyboardMarkdown = """
-            | 镜号 | 剧情节点/场景 | 景别/镜头运动 | 视觉描述 (Visual Prompt) | 对话/独白 | 音效/BGM | 建议时长 |
-            | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-            | 001 | 开端·森林清晨 | 远景/缓慢推镜 | 晨曦照进森林，光点在草地上跳跃，女主站在薄雾里回头，空气清亮，日系手绘感。 | 女主：“这...这是哪里？” | 轻风与鸟鸣，尾音延续到下一镜 | 6秒 |
+            | 镜号 | 剧情节点/场景 | 景别/镜头运动 | 视觉描述 (Visual Prompt) | 情绪/情感分析 | 对话/独白 | 音效/BGM | 建议时长 |
+            | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+            | 001 | 开端·森林清晨 | 远景/缓慢推镜 | 晨曦照进森林，光点在草地上跳跃，女主站在薄雾里回头，空气清亮，日系手绘感。 | 惊惶里带着试探，情绪强度中等。 | 女主：“这...这是哪里？” | 轻风与鸟鸣，尾音延续到下一镜 | 6秒 |
             """;
 
         List<TaskStoryboardPlanner.StoryboardShotPlan> shotPlans = planner.buildStoryboardShotPlans(task, storyboardMarkdown);
@@ -145,7 +145,9 @@ class TaskStoryboardPlannerParsingTest {
         assertEquals(1, shotPlans.size());
         assertTrue(shotPlans.get(0).imagePrompt().contains("晨曦照进森林"));
         assertTrue(!shotPlans.get(0).imagePrompt().contains("开端·森林清晨"));
+        assertTrue(shotPlans.get(0).videoPrompt().contains("惊惶里带着试探"));
         assertTrue(shotPlans.get(0).videoPrompt().contains("可听见的人声对白：女主：“这...这是哪里？”"));
+        assertTrue(shotPlans.get(0).videoPrompt().contains("前0.5秒与后0.5秒保持无人声"));
         assertTrue(shotPlans.get(0).videoPrompt().contains("音频设计：轻风与鸟鸣，尾音延续到下一镜"));
     }
 
@@ -166,5 +168,26 @@ class TaskStoryboardPlannerParsingTest {
 
         assertEquals(1, shotPlans.size());
         assertTrue(shotPlans.get(0).videoPrompt().contains("可听见的人声独白：独白：我不能回头。"));
+        assertTrue(shotPlans.get(0).videoPrompt().contains("前0.5秒与后0.5秒保持无人声"));
+    }
+
+    @Test
+    void sentimentAnalysisColumnAliasFeedsEmotionIntoPrompt() {
+        TaskStoryboardPlanner planner = new TaskStoryboardPlanner(new ModelRuntimePropertiesResolver(new MockEnvironment()));
+        TaskRecord task = new TaskRecord();
+        task.creativePrompt = "demo";
+        task.title = "demo";
+
+        String storyboardMarkdown = """
+            | 镜号 | 剧情节点/场景 | 景别/镜头运动 | 视觉描述 (Visual Prompt) | 情感分析 | 对话/独白 | 音效/BGM | 建议时长 |
+            | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+            | 001 | 天台对峙 | 中景/缓慢推镜 | 女主站在天台边缘，霓虹反光落在湿润地面，呼吸急促。 | 强压愤怒下的试探，情绪强度高，潜台词是“你最好给我一个解释”。 | 女主：你终于肯出现了。 | 风声压低，尾音拖入下一镜 | 6秒 |
+            """;
+
+        List<TaskStoryboardPlanner.StoryboardShotPlan> shotPlans = planner.buildStoryboardShotPlans(task, storyboardMarkdown);
+
+        assertEquals(1, shotPlans.size());
+        assertTrue(shotPlans.get(0).videoPrompt().contains("强压愤怒下的试探"));
+        assertTrue(shotPlans.get(0).videoPrompt().contains("可听见的人声对白：女主：你终于肯出现了。"));
     }
 }

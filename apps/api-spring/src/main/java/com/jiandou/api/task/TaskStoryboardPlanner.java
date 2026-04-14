@@ -643,12 +643,12 @@ public class TaskStoryboardPlanner {
             return "";
         }
         if (normalized.startsWith("独白：") || normalized.startsWith("独白:")) {
-            return "可听见的人声独白：" + normalized;
+            return "可听见的人声独白：" + normalized + "；独白放在镜头中段，前0.5秒与后0.5秒保持无人声，仅保留动作或环境声缓冲。";
         }
         if (normalized.contains("“") || normalized.contains("\"") || normalized.contains("：") || normalized.contains(":")) {
-            return "可听见的人声对白：" + normalized;
+            return "可听见的人声对白：" + normalized + "；对白放在镜头中段，前0.5秒与后0.5秒保持无人声，仅保留动作或环境声缓冲。";
         }
-        return "可听见的人声独白：独白：" + normalized;
+        return "可听见的人声独白：独白：" + normalized + "；独白放在镜头中段，前0.5秒与后0.5秒保持无人声，仅保留动作或环境声缓冲。";
     }
 
     private String firstNonBlank(String... values) {
@@ -759,7 +759,7 @@ public class TaskStoryboardPlanner {
                 resolve(headers, "统一提示词", "统一画面提示词", "镜头提示词", "seedance提示词", "seedance", "动态与运镜", "动态", "衔接逻辑", "continuity", "motion"),
                 resolve(headers, "characterappearance", "appearance", "人物外观", "角色外观"),
                 resolve(headers, "action", "动作"),
-                resolve(headers, "emotion", "情绪"),
+                resolve(headers, "sentiment", "emotion", "情绪", "情感分析", "感情分析", "情感", "感情"),
                 resolve(headers, "lighting", "光线"),
                 resolve(headers, "atmosphere", "氛围"),
                 resolve(headers, "dialogue", "独白", "对话", "对白", "台词", "字幕"),

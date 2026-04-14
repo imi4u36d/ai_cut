@@ -212,6 +212,9 @@ class GenerationRunFactoryVideoAsyncTest {
         Map<String, Object> metadata = (Map<String, Object>) result.get("metadata");
         assertEquals("task_123", metadata.get("taskId"));
         assertEquals("", result.get("outputUrl"));
+        assertTrue(String.valueOf(result.get("negativePrompt")).contains("前0.5秒和后0.5秒"));
+        assertTrue(String.valueOf(result.get("negativePrompt")).contains("物理规律"));
+        assertTrue(String.valueOf(result.get("shapedPrompt")).contains("违背基本物理规律"));
 
         Map<String, Object> refreshed = factory.refreshVideoRun(run);
         assertEquals("succeeded", refreshed.get("status"));

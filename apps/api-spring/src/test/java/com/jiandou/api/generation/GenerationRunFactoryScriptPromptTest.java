@@ -93,10 +93,15 @@ class GenerationRunFactoryScriptPromptTest {
 
         assertTrue(capturedSystemPrompt[0].contains("### 🤖 AI 短剧脚本专家指令 (System Prompt)"));
         assertTrue(capturedSystemPrompt[0].contains("对话还原优先"));
+        assertTrue(capturedSystemPrompt[0].contains("对话情感分析"));
+        assertTrue(capturedSystemPrompt[0].contains("对白时序缓冲"));
+        assertTrue(capturedSystemPrompt[0].contains("物理合理性"));
         assertTrue(capturedSystemPrompt[0].contains("不写旁白、画外音或解说配音"));
         assertTrue(capturedSystemPrompt[0].contains("音效/BGM 建议"));
+        assertTrue(capturedSystemPrompt[0].contains("前 0.5 秒和后 0.5 秒"));
         assertTrue(capturedSystemPrompt[0].contains("每一句都必须写成“角色名：台词”或“独白：台词”"));
-        assertTrue(capturedSystemPrompt[0].contains("| 镜号 | 剧情节点/场景 | 景别 | 视觉描述 (Visual Prompt) | 对话/独白 | 音效/BGM | 建议时长 |"));
+        assertTrue(capturedSystemPrompt[0].contains("情绪/情感分析"));
+        assertTrue(capturedSystemPrompt[0].contains("| 镜号 | 剧情节点/场景 | 景别 | 视觉描述 (Visual Prompt) | 情绪/情感分析 | 对话/独白 | 音效/BGM | 建议时长 |"));
         assertTrue(capturedUserPrompt[0].contains("请输出可直接进入分镜解析流程的 markdown"));
     }
 
@@ -156,7 +161,8 @@ class GenerationRunFactoryScriptPromptTest {
         Map<String, Object> result = (Map<String, Object>) run.get("result");
         String scriptMarkdown = String.valueOf(result.get("scriptMarkdown"));
 
-        assertTrue(scriptMarkdown.contains("| 镜号 | 剧情节点/场景 | 景别/镜头运动 | 视觉描述 (Visual Prompt) | 对话/独白 | 音效/BGM | 建议时长 |"));
+        assertTrue(scriptMarkdown.contains("| 镜号 | 剧情节点/场景 | 景别/镜头运动 | 视觉描述 (Visual Prompt) | 情绪/情感分析 | 对话/独白 | 音效/BGM | 建议时长 |"));
         assertTrue(scriptMarkdown.contains("| 001 | 开场建立人物与环境 |"));
+        assertTrue(scriptMarkdown.contains("前0.5秒先铺环境底噪"));
     }
 }
