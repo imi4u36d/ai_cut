@@ -396,11 +396,16 @@ public class JoinOutputService {
     }
 
     private String fileExt(String fileName) {
-        int index = fileName.lastIndexOf('.');
-        if (index < 0 || index == fileName.length() - 1) {
+        String normalized = stringValue(fileName).replaceAll("[?#].*$", "");
+        int index = normalized.lastIndexOf('.');
+        if (index < 0 || index == normalized.length() - 1) {
             return "";
         }
-        return fileName.substring(index + 1).toLowerCase();
+        String candidate = normalized.substring(index + 1).toLowerCase();
+        if (!candidate.matches("[a-z0-9]{1,10}")) {
+            return "";
+        }
+        return candidate;
     }
 
     private String stringValue(Object value) {

@@ -165,7 +165,20 @@ class GenerationRunFactoryVideoAsyncTest {
 
             @Override
             public RemoteTaskQueryResult queryDashscopeTask(MediaProviderProfile profile, String taskId) {
-                return new RemoteTaskQueryResult(taskId, "SUCCEEDED", remoteLocal.publicUrl(), "", Map.of());
+                return new RemoteTaskQueryResult(
+                    taskId,
+                    "SUCCEEDED",
+                    remoteLocal.publicUrl(),
+                    "",
+                    Map.of(
+                        "output", Map.of(
+                            "contents", java.util.List.of(Map.of(
+                                "role", "last_frame",
+                                "image_url", Map.of("url", "https://example.com/generated-last-frame.png")
+                            ))
+                        )
+                    )
+                );
             }
         };
         GenerationRunSupport support = new GenerationRunSupport(localMediaArtifactService, modelResolver, textModelClient);
@@ -212,6 +225,10 @@ class GenerationRunFactoryVideoAsyncTest {
         @SuppressWarnings("unchecked")
         Map<String, Object> refreshedMetadata = (Map<String, Object>) refreshedResult.get("metadata");
         assertEquals(remoteLocal.publicUrl(), refreshedMetadata.get("remoteSourceUrl"));
+        assertEquals("https://example.com/generated-last-frame.png", refreshedMetadata.get("providerLastFrameUrl"));
+        assertEquals("https://example.com/generated-last-frame.png", refreshedMetadata.get("lastFrameUrl"));
+        assertEquals("https://example.com/generated-last-frame.png", refreshedMetadata.get("last_frame_url"));
+        assertNotNull(refreshedMetadata.get("providerPayload"));
         assertNotNull(refreshedResult.get("callChain"));
     }
 }

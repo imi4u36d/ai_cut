@@ -130,7 +130,6 @@ final class TaskExecutionRuntimeSupport {
             "input", input,
             "model", Map.of(
                 "textAnalysisModel", textAnalysisModel(task),
-                "visionModel", visionModel(task),
                 "providerModel", imageModel(task)
             ),
             "options", Map.of("stylePreset", stylePreset(task)),
@@ -149,15 +148,19 @@ final class TaskExecutionRuntimeSupport {
         int durationSeconds,
         int minDurationSeconds,
         int maxDurationSeconds,
-        String firstFrameUrl
+        String firstFrameUrl,
+        String lastFrameUrl
     ) {
         Map<String, Object> input = new LinkedHashMap<>();
-        input.put("prompt", buildVideoClipExecutionPrompt(prompt, clipIndex, durationSeconds, minDurationSeconds, maxDurationSeconds));
+        input.put("prompt", buildVideoClipExecutionPrompt(prompt));
         input.put("videoSize", videoSize);
         input.put("durationSeconds", durationSeconds);
         input.put("minDurationSeconds", minDurationSeconds);
         input.put("maxDurationSeconds", maxDurationSeconds);
         input.put("firstFrameUrl", firstFrameUrl);
+        if (lastFrameUrl != null && !lastFrameUrl.isBlank()) {
+            input.put("lastFrameUrl", lastFrameUrl);
+        }
         input.put("generateAudio", true);
         input.put("returnLastFrame", true);
         Integer taskSeed = taskSeed(task);
@@ -187,51 +190,8 @@ final class TaskExecutionRuntimeSupport {
             || "RENDERING".equals(status);
     }
 
-    private String buildVideoClipExecutionPrompt(
-        String prompt,
-        int clipIndex,
-        int targetDurationSeconds,
-        int minDurationSeconds,
-        int maxDurationSeconds
-    ) {
-        return truncateText(
-            """
-            当前生成第 %d 镜视频片段。
-            目标时长：%d 秒。
-            可接受时长范围：%d-%d 秒。
-
-            内容密度要求：
-            %s
-
-            强约束：
-            1. 严格执行下方镜头信息，不得偷换场景、人物、动作、服装、道具、情绪和对白归属。
-            2. 画面必须尽量具体，明确人物外观、服装、发型、姿态、表情、动作起止、镜头运动、空间层次、环境细节、光影方向与质感。
-            3. 禁止长时间空镜、静止镜、无意义停顿、只有背景没有主体动作、只有情绪没有可见动作。
-            4. 时长越长，内容必须越充实；若时长超过 8 秒，画面中至少要有两段以上连续动作或情绪变化；若时长超过 12 秒，必须形成起势、推进、落点三段节奏。
-            5. 动作和情绪必须连续推进，不能像 PPT 一样只给一个定格状态。
-
-            镜头信息：
-            %s
-            """.formatted(
-                clipIndex,
-                targetDurationSeconds,
-                minDurationSeconds,
-                maxDurationSeconds,
-                durationContentDensityGuide(targetDurationSeconds),
-                prompt
-            ),
-            2200
-        );
-    }
-
-    private String durationContentDensityGuide(int durationSeconds) {
-        if (durationSeconds <= 6) {
-            return "短时镜头也必须完整呈现一个明确动作事件，至少包含起势和结果，不允许用空镜填时长。";
-        }
-        if (durationSeconds <= 10) {
-            return "中等时长镜头必须包含 2-3 个连续动作节拍或一次明显的情绪递进，主体行为不能单薄。";
-        }
-        return "长时镜头必须包含起势、推进、落点三段可见变化，动作、调度、表情或构图至少有两次明确变化。";
+    private String buildVideoClipExecutionPrompt(String prompt) {
+        return truncateText(prompt, 2200);
     }
 
     private String textAnalysisModel(TaskRecord task) {

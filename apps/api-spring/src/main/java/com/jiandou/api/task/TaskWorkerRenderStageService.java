@@ -86,74 +86,122 @@ final class TaskWorkerRenderStageService {
             ));
         }
 
-        for (int index = Math.max(0, request.renderStartIndex() - 1); index < request.clipPrompts().size(); index++) {
+        for (int index = Math.max(0, request.renderStartIndex() - 1); index < request.shotPlans().size(); index++) {
             runtimeSupport.assertTaskStillActive(task);
             int clipIndex = index + 1;
-            String clipPrompt = request.clipPrompts().get(index);
+            TaskStoryboardPlanner.StoryboardShotPlan shotPlan = request.shotPlans().get(index);
+            String clipPrompt = shotPlan.videoPrompt();
+            String firstFramePrompt = firstNonBlank(
+                shotPlan.imagePrompt(),
+                shotPlan.firstFramePrompt(),
+                shotPlan.lastFramePrompt(),
+                clipPrompt
+            );
             int[] clipDuration = request.clipDurationPlan().get(index);
             int clipDurationSeconds = clipDuration[0];
             int clipMinDuration = clipDuration[1];
             int clipMaxDuration = clipDuration[2];
-
-            Map<String, Object> imageRequest = runtimeSupport.buildImageRunRequest(
-                task,
-                clipIndex,
-                clipPrompt,
-                request.width(),
-                request.height(),
-                previousClipLastFrameUrl,
-                clipDurationSeconds,
-                "first"
-            );
-            Map<String, Object> imageRun = generationApplicationService.createRun(imageRequest);
-            runtimeSupport.assertTaskStillActive(task);
-            Map<String, Object> imageResult = resultMap(imageRun);
-            Map<String, Object> imageMetadata = mapValue(imageResult.get("metadata"));
-            String keyframeSourceUrl = stringValue(imageMetadata.get("remoteSourceUrl"));
-            if (keyframeSourceUrl.isBlank()) {
-                keyframeSourceUrl = stringValue(imageResult.get("outputUrl"));
+            Map<String, Object> imageRun = Map.of();
+            Map<String, Object> imageResult = Map.of();
+            Map<String, Object> imageMaterial;
+            String firstFrameUrl;
+            boolean reusePreviousLastFrame = clipIndex > 1 && !previousClipLastFrameUrl.isBlank();
+            if (reusePreviousLastFrame) {
+                // 连续镜头模式下，第 2 镜及以后直接复用上一镜尾帧作为首帧输入，不再额外发起关键帧生成。
+                imageMaterial = artifactAssembler.createReferenceFrameMaterial(task, clipIndex, previousClipLastFrameUrl, "first");
+                executionCoordinator.recordMaterial(task, imageMaterial);
+                putExecutionContext(task, "imageRunId", null);
+                putExecutionContext(task, "keyframeOutputUrl", stringValue(imageMaterial.get("fileUrl")));
+                putExecutionContext(task, "keyframeRemoteSourceUrl", previousClipLastFrameUrl);
+                taskRepository.save(task);
+                firstFrameUrl = firstNonBlank(
+                    stringValue(imageMaterial.get("remoteUrl")),
+                    previousClipLastFrameUrl,
+                    stringValue(imageMaterial.get("fileUrl"))
+                );
+                executionCoordinator.recordTrace(task, "planning", "planning.keyframe_reused_from_last_frame", "复用上一镜尾帧作为当前镜头首帧。", "INFO", Map.of(
+                    "clipIndex", clipIndex,
+                    "firstFrameUrl", firstFrameUrl,
+                    "sourceLastFrameUrl", previousClipLastFrameUrl
+                ));
+                statusStageService.recordStageRun(
+                    task,
+                    runContext,
+                    100 + clipIndex,
+                    "planning",
+                    clipIndex,
+                    Map.of(
+                        "aspectRatio", task.aspectRatio,
+                        "clipPrompt", truncateText(clipPrompt, 160),
+                        "targetDurationSeconds", clipDurationSeconds
+                    ),
+                    Map.of(
+                        "summary", "已复用上一镜尾帧作为首帧",
+                        "imageRunId", "",
+                        "imageUrl", stringValue(imageMaterial.get("fileUrl")),
+                        "remoteImageUrl", firstFrameUrl
+                    )
+                );
+            } else {
+                Map<String, Object> imageRequest = runtimeSupport.buildImageRunRequest(
+                    task,
+                    clipIndex,
+                    firstFramePrompt,
+                    request.width(),
+                    request.height(),
+                    previousClipLastFrameUrl,
+                    clipDurationSeconds,
+                    "first"
+                );
+                imageRun = generationApplicationService.createRun(imageRequest);
+                runtimeSupport.assertTaskStillActive(task);
+                imageResult = resultMap(imageRun);
+                Map<String, Object> imageMetadata = mapValue(imageResult.get("metadata"));
+                String keyframeSourceUrl = stringValue(imageMetadata.get("remoteSourceUrl"));
+                if (keyframeSourceUrl.isBlank()) {
+                    keyframeSourceUrl = stringValue(imageResult.get("outputUrl"));
+                }
+                putExecutionContext(task, "imageRunId", stringValue(imageRun.get("id")));
+                putExecutionContext(task, "keyframeOutputUrl", stringValue(imageResult.get("outputUrl")));
+                putExecutionContext(task, "keyframeRemoteSourceUrl", keyframeSourceUrl);
+                taskRepository.save(task);
+                Map<String, Object> imageModelCall = statusStageService.createModelCall(task, "planning", "generation.image", imageRequest, imageRun, imageResult, clipIndex, "image");
+                executionCoordinator.recordModelCall(task, imageModelCall);
+                statusStageService.recordRunCallChain(task, "planning", imageRun, imageResult);
+                imageMaterial = artifactAssembler.createImageMaterial(task, imageRun, imageResult, clipIndex, "first");
+                executionCoordinator.recordMaterial(task, imageMaterial);
+                putExecutionContext(task, "keyframeOutputUrl", stringValue(imageMaterial.get("fileUrl")));
+                imageRunIds.add(stringValue(imageRun.get("id")));
+                taskRepository.save(task);
+                firstFrameUrl = firstNonBlank(
+                    keyframeSourceUrl,
+                    stringValue(imageMaterial.get("remoteUrl")),
+                    stringValue(imageMaterial.get("fileUrl")),
+                    previousClipLastFrameUrl
+                );
+                statusStageService.recordStageRun(
+                    task,
+                    runContext,
+                    100 + clipIndex,
+                    "planning",
+                    clipIndex,
+                    Map.of(
+                        "aspectRatio", task.aspectRatio,
+                        "clipPrompt", truncateText(clipPrompt, 160),
+                        "targetDurationSeconds", clipDurationSeconds
+                    ),
+                    Map.of(
+                        "summary", "首帧关键画面已生成",
+                        "imageRunId", stringValue(imageRun.get("id")),
+                        "imageUrl", stringValue(imageMaterial.get("fileUrl")),
+                        "remoteImageUrl", firstFrameUrl
+                    )
+                );
             }
-            putExecutionContext(task, "imageRunId", stringValue(imageRun.get("id")));
-            putExecutionContext(task, "keyframeOutputUrl", stringValue(imageResult.get("outputUrl")));
-            putExecutionContext(task, "keyframeRemoteSourceUrl", keyframeSourceUrl);
-            taskRepository.save(task);
-            Map<String, Object> imageModelCall = statusStageService.createModelCall(task, "planning", "generation.image", imageRequest, imageRun, imageResult, clipIndex, "image");
-            executionCoordinator.recordModelCall(task, imageModelCall);
-            statusStageService.recordRunCallChain(task, "planning", imageRun, imageResult);
-            Map<String, Object> imageMaterial = artifactAssembler.createImageMaterial(task, imageRun, imageResult, clipIndex, "first");
-            executionCoordinator.recordMaterial(task, imageMaterial);
-            putExecutionContext(task, "keyframeOutputUrl", stringValue(imageMaterial.get("fileUrl")));
-            imageRunIds.add(stringValue(imageRun.get("id")));
-            taskRepository.save(task);
-            String firstFrameUrl = firstNonBlank(
-                keyframeSourceUrl,
-                stringValue(imageMaterial.get("remoteUrl")),
-                stringValue(imageMaterial.get("fileUrl")),
-                previousClipLastFrameUrl
-            );
-            statusStageService.recordStageRun(
-                task,
-                runContext,
-                100 + clipIndex,
-                "planning",
-                clipIndex,
-                Map.of(
-                    "aspectRatio", task.aspectRatio,
-                    "clipPrompt", truncateText(clipPrompt, 160),
-                    "targetDurationSeconds", clipDurationSeconds
-                ),
-                Map.of(
-                    "summary", "首帧关键画面已生成",
-                    "imageRunId", stringValue(imageRun.get("id")),
-                    "imageUrl", stringValue(imageMaterial.get("fileUrl")),
-                    "remoteImageUrl", firstFrameUrl
-                )
-            );
-
             if (clipIndex == 1) {
                 statusStageService.updateStatus(task, runContext, "RENDERING", 55, "render", "task.rendering", "任务开始按分镜生成视频输出。");
             } else {
-                task.progress = Math.min(94, 55 + (int) Math.round(35.0 * index / Math.max(1, request.clipPrompts().size())));
+                task.progress = Math.min(94, 55 + (int) Math.round(35.0 * index / Math.max(1, request.shotPlans().size())));
                 taskRepository.save(task);
             }
             Map<String, Object> videoRequest = runtimeSupport.buildVideoRunRequest(
@@ -164,14 +212,18 @@ final class TaskWorkerRenderStageService {
                 clipDurationSeconds,
                 clipMinDuration,
                 clipMaxDuration,
-                firstFrameUrl
+                firstFrameUrl,
+                ""
             );
             Map<String, Object> videoRun = generationApplicationService.createRun(videoRequest);
             videoRun = awaitCompletedVideoRun(videoRun);
             runtimeSupport.assertTaskStillActive(task);
             Map<String, Object> videoResult = resultMap(videoRun);
             Map<String, Object> videoMetadata = mapValue(videoResult.get("metadata"));
-            String resolvedLastFrameUrl = artifactAssembler.extractLastFrameUrl(videoResult);
+            String resolvedLastFrameUrl = firstNonBlank(
+                artifactAssembler.extractLastFrameUrl(videoResult),
+                stringValue(videoMetadata.get("requestedLastFrameUrl"))
+            );
             artifactAssembler.normalizeOptionalTaskArtifact(
                 task,
                 resolvedLastFrameUrl,
@@ -188,7 +240,7 @@ final class TaskWorkerRenderStageService {
             Map<String, Object> videoModelCall = statusStageService.createModelCall(task, "render", "generation.video", videoRequest, videoRun, videoResult, clipIndex, "video");
             executionCoordinator.recordModelCall(task, videoModelCall);
             statusStageService.recordRunCallChain(task, "render", videoRun, videoResult);
-            Map<String, Object> videoMaterial = artifactAssembler.createVideoMaterial(task, videoRun, videoResult, clipIndex, request.durationSeconds());
+            Map<String, Object> videoMaterial = artifactAssembler.createVideoMaterial(task, videoRun, videoResult, clipIndex, clipDurationSeconds);
             executionCoordinator.recordMaterial(task, videoMaterial);
             putExecutionContext(task, "videoOutputUrl", stringValue(videoMaterial.get("fileUrl")));
             latestVideoOutputUrl = stringValue(videoMaterial.get("fileUrl"));
@@ -203,7 +255,9 @@ final class TaskWorkerRenderStageService {
                 videoModelCall,
                 resolvedLastFrameUrl,
                 clipIndex,
-                request.durationSeconds()
+                clipDurationSeconds,
+                clipMinDuration,
+                clipMaxDuration
             );
             executionCoordinator.recordResult(task, videoOutput);
             statusStageService.recordStageRun(
@@ -226,13 +280,13 @@ final class TaskWorkerRenderStageService {
             );
             executionCoordinator.recordTrace(task, "render", "render.clip_completed", "当前分镜片段已生成完成。", "INFO", Map.of(
                 "clipIndex", clipIndex,
-                "clipCount", request.clipPrompts().size(),
+                "clipCount", request.shotPlans().size(),
                 "outputUrl", stringValue(videoMaterial.get("fileUrl")),
                 "firstFrameUrl", firstFrameUrl,
                 "lastFrameUrl", resolvedLastFrameUrl
             ));
             videoRunIds.add(stringValue(videoRun.get("id")));
-            previousClipLastFrameUrl = firstNonBlank(resolvedLastFrameUrl, previousClipLastFrameUrl);
+            previousClipLastFrameUrl = stringValue(resolvedLastFrameUrl);
             joinStageService.scheduleJoin(task);
         }
 
@@ -243,14 +297,14 @@ final class TaskWorkerRenderStageService {
         joinStageService.scheduleJoin(task);
         putExecutionContext(task, "clipImageRunIds", mergeStringListContext(task.executionContext.get("clipImageRunIds"), imageRunIds));
         putExecutionContext(task, "clipVideoRunIds", mergeStringListContext(task.executionContext.get("clipVideoRunIds"), videoRunIds));
-        task.completedOutputCount = request.clipPrompts().size();
+        task.completedOutputCount = request.shotPlans().size();
         putExecutionContext(task, "resumeExistingOutputCount", null);
         putExecutionContext(task, "resumeExistingClipIndices", null);
         putExecutionContext(task, "resumeRenderFromClipIndex", null);
         putExecutionContext(task, "attemptResumeFromStage", null);
         putExecutionContext(task, "attemptResumeFromClipIndex", null);
         taskRepository.save(task);
-        return new RenderStageResult(imageRunIds, videoRunIds, latestVideoOutputUrl, request.clipPrompts().size());
+        return new RenderStageResult(imageRunIds, videoRunIds, latestVideoOutputUrl, request.shotPlans().size());
     }
 
     Map<String, Object> awaitCompletedVideoRun(Map<String, Object> initialRun) {
@@ -347,7 +401,9 @@ final class TaskWorkerRenderStageService {
     }
 
     private String fileNameFromUrl(String url) {
-        String normalized = stringValue(url);
+        String normalized = stringValue(url)
+            .replaceAll("[?#].*$", "")
+            .replaceAll("/+$", "");
         int index = normalized.lastIndexOf('/');
         return index >= 0 ? normalized.substring(index + 1) : normalized;
     }
@@ -358,11 +414,16 @@ final class TaskWorkerRenderStageService {
     }
 
     private String fileExt(String fileName) {
-        int index = fileName.lastIndexOf('.');
-        if (index < 0 || index == fileName.length() - 1) {
+        String normalized = stringValue(fileName).replaceAll("[?#].*$", "");
+        int index = normalized.lastIndexOf('.');
+        if (index < 0 || index == normalized.length() - 1) {
             return "";
         }
-        return fileName.substring(index + 1).toLowerCase();
+        String candidate = normalized.substring(index + 1).toLowerCase();
+        if (!candidate.matches("[a-z0-9]{1,10}")) {
+            return "";
+        }
+        return candidate;
     }
 
     private String firstNonBlank(String... values) {
@@ -450,7 +511,7 @@ final class TaskWorkerRenderStageService {
         String requestedResumeStage,
         int requestedResumeClipIndex,
         List<Integer> existingVideoClipIndices,
-        List<String> clipPrompts,
+        List<TaskStoryboardPlanner.StoryboardShotPlan> shotPlans,
         List<int[]> clipDurationPlan,
         int width,
         int height,

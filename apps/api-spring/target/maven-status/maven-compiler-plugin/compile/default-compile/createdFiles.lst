@@ -78,6 +78,7 @@ com/jiandou/api/task/TaskWorkerPipelineHandler.class
 com/jiandou/api/task/TaskRequestSnapshotFactory.class
 com/jiandou/api/task/TaskStoryboardPlanner.class
 com/jiandou/api/task/TaskStoryboardPlanner$StoryboardTableSchema.class
+com/jiandou/api/task/TaskStoryboardPlanner$StoryboardShotPlan.class
 com/jiandou/api/task/infrastructure/mybatis/TaskModelCallEntity.class
 com/jiandou/api/task/TaskViewMapper$TaskArtifactDirectories.class
 com/jiandou/api/media/LocalMediaArtifactService$ImageArtifact.class
@@ -109,6 +110,7 @@ com/jiandou/api/generation/RemoteImageGenerationResult.class
 com/jiandou/api/generation/ModelRuntimePropertiesResolver$ConfigSection.class
 com/jiandou/api/task/infrastructure/mybatis/MaterialAssetEntity.class
 com/jiandou/api/common/web/GlobalApiExceptionHandler.class
+com/jiandou/api/config/DatabaseSchemaInitializer$ColumnInfo.class
 com/jiandou/api/task/application/port/TaskPersistencePort.class
 com/jiandou/api/task/infrastructure/mybatis/MaterialAssetMapper.class
 com/jiandou/api/task/TaskWorkerExecutionContext.class

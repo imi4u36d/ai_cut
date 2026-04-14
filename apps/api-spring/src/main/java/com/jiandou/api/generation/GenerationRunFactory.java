@@ -172,54 +172,15 @@ public class GenerationRunFactory {
         Integer requestedSeed = support.nestedNullableInt(request, "input", "seed");
         String stylePreset = support.nestedValue(request, "options", "stylePreset", modelResolver.value("catalog.defaults", "style_preset", "cinematic"));
         String textModel = support.requiredModel(support.nestedValue(request, "model", "textAnalysisModel", ""), "textAnalysisModel", "文本模型");
-        String requestedVisionModel = support.requiredModel(support.nestedValue(request, "model", "visionModel", ""), "visionModel", "视觉模型");
         String requestedImageModel = support.requiredModel(support.nestedValue(request, "model", "providerModel", ""), "providerModel", "关键帧模型");
         ModelRuntimeProfile textProfile = modelResolver.resolveTextProfile(textModel);
-        ModelRuntimeProfile visionProfile = modelResolver.resolveTextProfile(requestedVisionModel);
         MediaProviderProfile imageProfile = modelResolver.resolveImageProfile(requestedImageModel);
-        Integer appliedVisionSeed = modelResolver.supportsSeed(requestedVisionModel) ? requestedSeed : null;
         Integer appliedImageSeed = modelResolver.supportsSeed(requestedImageModel) ? requestedSeed : null;
         List<Map<String, Object>> callChain = new ArrayList<>();
-        TextModelResponse visionResponse = null;
-        String visionAnalysisNotes = "";
-        if (!referenceImageUrl.isBlank()) {
-            visionResponse = textModelClient.generateVisionText(
-                visionProfile,
-                buildVisionAnalysisSystemPrompt("image"),
-                buildVisionAnalysisUserPrompt("image", prompt, stylePreset),
-                List.of(referenceImageUrl),
-                0.2,
-                480,
-                appliedVisionSeed
-            );
-            visionAnalysisNotes = support.stripMarkdownFence(visionResponse.text());
-            callChain.add(support.callLog("vision", "image.reference_analyzed", "success", "视觉模型已完成参考帧分析。", Map.of(
-                "latencyMs", visionResponse.latencyMs(),
-                "endpointHost", visionResponse.endpointHost(),
-                "modelName", visionProfile.modelName()
-            )));
-        }
-        GenerationRunSupport.TextGenerationAttempt keyframeAttempt = prompt.isBlank() ? null : support.generateTextWithFallback(
-            textProfile,
-            "image.keyframe_prompt",
-            buildKeyframePromptSystemPrompt(),
-            buildKeyframePromptUserPrompt(prompt, stylePreset, width, height, frameRole, visionAnalysisNotes),
-            support.boundedTemperature(textProfile.temperature(), 0.1, 0.25),
-            Math.min(Math.max(textProfile.maxTokens() / 2, 320), 1400),
-            callChain
-        );
-        TextModelResponse keyframeResponse = keyframeAttempt == null ? null : keyframeAttempt.response();
-        String keyframePrompt = keyframeResponse == null ? prompt : support.stripMarkdownFence(keyframeResponse.text());
-        if (keyframeResponse != null) {
-            callChain.add(support.callLog("prompt", "image.keyframe_prompt_generated", "success", "关键帧提示词已通过文本模型生成。", Map.of(
-                "latencyMs", keyframeResponse.latencyMs(),
-                "endpointHost", keyframeResponse.endpointHost(),
-                "modelName", keyframeAttempt.profile().modelName(),
-                "frameRole", frameRole
-            )));
-        }
-        String negativePrompt = buildNegativePrompt("image");
-        String shapedPrompt = support.appendNegativePrompt(keyframePrompt, negativePrompt);
+        GenerationRunSupport.TextGenerationAttempt keyframeAttempt = null;
+        String keyframePrompt = prompt;
+        String negativePrompt = "";
+        String shapedPrompt = keyframePrompt;
         RemoteImageGenerationResult remoteImage = remoteMediaGenerationClient.generateSeedreamImage(
             imageProfile,
             requestedImageModel,
@@ -267,13 +228,9 @@ public class GenerationRunFactory {
         metadata.put("promptRewriteProvider", keyframeAttempt == null ? textProfile.provider() : keyframeAttempt.profile().provider());
         metadata.put("promptRewriteModel", keyframeAttempt == null ? textProfile.modelName() : keyframeAttempt.profile().modelName());
         metadata.put("promptRewriteSkipped", true);
-        metadata.put("visionAnalysisProvider", visionProfile.provider());
-        metadata.put("visionAnalysisModel", visionProfile.modelName());
-        metadata.put("visionAnalysisEndpointHost", visionResponse == null ? visionProfile.endpointHost() : visionResponse.endpointHost());
-        metadata.put("visionAnalysisNotes", visionAnalysisNotes);
+        metadata.put("visionAnalysisSkipped", true);
         metadata.put("referenceImageUrl", referenceImageUrl);
         metadata.put("requestedSeed", requestedSeed);
-        metadata.put("visionAnalysisSeed", appliedVisionSeed);
         metadata.put("imageGenerationSeed", appliedImageSeed);
         metadata.put("watermark", false);
         metadata.put("configSource", imageProfile.source());
@@ -284,12 +241,12 @@ public class GenerationRunFactory {
         result.put("modelInfo", support.buildMediaModelInfo(
             textProfile,
             keyframeAttempt == null ? textProfile : keyframeAttempt.profile(),
-            visionProfile,
+            null,
             imageProfile,
             requestedImageModel,
             "image",
-            keyframeResponse,
-            visionResponse,
+            null,
+            null,
             remoteImage.providerModel(),
             remoteImage.endpointHost(),
             "",
@@ -428,7 +385,9 @@ public class GenerationRunFactory {
         metadata.put("taskId", submission.taskId());
         metadata.put("firstFrameUrl", submission.firstFrameUrl());
         metadata.put("requestedLastFrameUrl", submission.requestedLastFrameUrl());
+        metadata.put("providerLastFrameUrl", "");
         metadata.put("lastFrameUrl", "");
+        metadata.put("last_frame_url", "");
         metadata.put("returnLastFrame", submission.returnLastFrame());
         metadata.put("generateAudio", submission.generateAudio());
         metadata.put("requestedDurationSeconds", requestedDurationSeconds);
@@ -526,7 +485,15 @@ public class GenerationRunFactory {
             metadata.put("outputUrl", artifact.publicUrl());
             metadata.put("fileUrl", artifact.publicUrl());
             metadata.put("remoteSourceUrl", videoUrl);
-            metadata.put("lastFrameUrl", extractLastFrameUrl(query.payload()));
+            String providerLastFrameUrl = extractLastFrameUrl(query.payload());
+            String resolvedLastFrameUrl = support.firstNonBlank(
+                providerLastFrameUrl,
+                support.stringValue(metadata.get("requestedLastFrameUrl"))
+            );
+            metadata.put("providerPayload", query.payload());
+            metadata.put("providerLastFrameUrl", providerLastFrameUrl);
+            metadata.put("lastFrameUrl", resolvedLastFrameUrl);
+            metadata.put("last_frame_url", resolvedLastFrameUrl);
             metadata.put("nextPollAt", null);
             callChain.add(support.callLog("generation", "video.completed", "success", "远端视频已完成并落盘。", Map.of(
                 "taskId", taskId,
@@ -611,12 +578,55 @@ public class GenerationRunFactory {
             return configuredPrompt;
         }
         return """
-            你是一位影视分镜脚本助手。请将输入中文内容转为可用于图生视频生产的分镜脚本表格。
-            要求：
-            1. 使用中文输出，保留剧情语义，不虚构超出原文的关键设定。
-            2. 每个镜头同时给出 Seedream 关键帧提示词与 Seedance 动态提示词。
-            3. 明确人物、景别、动作、镜头运动、光线与情绪落点。
-            4. 不输出 JSON，不输出代码块，直接输出 markdown。
+            ### 🤖 AI 短剧脚本专家指令 (System Prompt)
+
+            **Role:** 你是一位资深的 AI 短剧导演和编剧，擅长将小说、散文或故事大纲转化为具备**高度视觉一致性**、**精准分镜语言**和**节奏感**的视频生产脚本。
+
+            **Task:**
+            根据用户输入的文本，输出一份结构化的剧本。剧本必须包含：角色档案、场景设定、分镜详细描述（含 Prompt 指令）以及音效字幕。
+
+            **Constraints:**
+            1. **视觉风格一致性：** 始终保持统一风格；若用户未指定，请根据题材、情绪和场景自行决策最合适的视觉方向，并在全片保持一致。
+            2. **角色锚点：** 为每个角色建立固定的外貌描述词，确保在每个分镜中一致。
+            3. **分镜语言：** 使用专业术语（全景、特写、俯拍、推拉摇移）。
+            4. **输出格式：** 使用 Markdown 表格。
+            5. **长文本覆盖：** 输入为长篇小说或长故事时，必须覆盖主线剧情的开端、发展、转折、高潮、结局，不得只输出前几段内容。
+            6. **无关内容剔除：** 对正文中出现的《题外话》、疑似作者留言、读者互动、更新说明、章节广告等非剧情内容，先剔除后再进行角色提取与分镜生成。
+            7. **对话还原优先：** 必须尽量还原原文中的人物对白，优先保留原句原意；仅在篇幅受限时做最小必要压缩，不得改写成摘要口吻。
+            8. **完整分镜推进：** 必须按原文叙事顺序逐段推进分镜，不得跨段跳写或用一句话概括整章；关键冲突、反转、高潮段落应拆成多镜头。
+            9. **镜头细节密度：** 每个分镜都要写清角色、动作、情绪变化、环境和镜头调度；有对话则优先写对话原句，无对话时仅写动作字幕，不写旁白配音。
+            10. **长度受限策略：** 若输出长度受限，优先保留剧情推进信息与关键对白，再压缩修饰性描写，不得省略关键台词和转折信息。
+            11. **前后衔接连续：** 相邻分镜在剧情、动作和声音上必须连贯；禁止“上一镜声音戛然而止、下一镜新声音立刻硬切出现”的不连续情况，需给出自然过渡（如尾音延续、环境音桥接、渐入渐出、J-cut/L-cut）。
+
+            #### **工作流程：**
+
+            **第一步：角色与环境档案 (Profile)**
+            - 提取文中所有核心角色，定义其：姓名、年龄、具体长相（发型、瞳色、服装）、性格特征。
+            - 定义核心场景的视觉基调（如：午后阳光下的教室、阴冷的古堡室内）。
+
+            **第二步：脚本生成 (Script)**
+            生成包含以下列的表格：
+            - **镜号**
+            - **剧情节点/场景**
+            - **景别/镜头运动** (如：特写/推镜头)
+            - **视觉描述 (AI 绘图 Prompt)**：必须包含角色名、具体动作、环境细节、光影氛围。
+            - **对话/字幕**（仅保留人物对白，不写旁白、画外音或解说配音）
+            - **音效/BGM 建议**（需写明与前后镜头的声音衔接方式）
+            - **建议时长**（必须写成具体几s）
+            - 镜号需连续递增，并严格按剧情推进顺序排列；若文本很长，先保证剧情与对白覆盖完整，再保证镜头细节密度与转场连贯性。
+
+            #### **输出示例格式：**
+
+            **【角色档案】**
+            * **角色 A：** [姓名]，[外貌细节描述]，[核心标签]。
+
+            **【分镜脚本】**
+            | 镜号 | 剧情节点/场景 | 景别 | 视觉描述 (Visual Prompt) | 对话/字幕 | 音效/BGM | 建议时长 |
+            | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+            | 001 | 开端·森林清晨 | 远景 | 晨曦照进森林，光点在草地上跳跃，日系手绘感，清新明亮。 | （环境字幕）清晨，林间起风。 | 轻风与鸟鸣，低频铺垫，尾音延续到下一镜 | 6秒 |
+            | 002 | 苏醒·角色初登场 | 特写 | [角色名] 睁开眼，淡褐色双眸，长发散乱，露出惊讶的神色。 | “这...这是哪里？” | 承接上一镜风声后叠入呼吸声，BGM轻微上扬，避免硬切 | 4秒 |
+
+            请根据用户给出的正文直接产出最终脚本，不要输出额外解释。
             """;
     }
 
@@ -625,7 +635,7 @@ public class GenerationRunFactory {
             ? "请根据题材自动选择并保持统一风格。"
             : "额外视觉风格要求：" + visualStyle + "。";
         return """
-            # Input Data
+            # 任务输入
             %s
 
             【小说内容】：
@@ -633,7 +643,7 @@ public class GenerationRunFactory {
 
             ---
 
-            请开始分析并生成脚本：
+            请输出可直接进入分镜解析流程的 markdown，不要输出解释性文字。
             """.formatted(styleLine, sourceText);
     }
 
@@ -645,53 +655,21 @@ public class GenerationRunFactory {
         return String.join("\n",
             "# 分镜脚本",
             "",
-            "- 视觉风格: " + visualStyle,
-            "- 生成方式: Spring 本地兜底",
+            "## 【角色档案】",
+            "* **角色 A：** 主体，依据正文补足外貌细节与核心标签。",
+            "",
+            "## 【场景设定】",
+            "- 风格：" + visualStyle,
+            "- 生成方式：Spring 本地兜底。",
             "",
             "## 原文摘要",
             preview,
             "",
-            "## 镜头建议",
-            "1. 开场镜头：建立人物关系和冲突背景。",
-            "2. 推进镜头：承接主要动作、情绪和叙事转折。",
-            "3. 收束镜头：完成情绪落点并保持声音连续。"
+            "## 【分镜脚本】",
+            "| 镜号 | 剧情节点/场景 | 景别/镜头运动 | 视觉描述 (Visual Prompt) | 对话/字幕 | 音效/BGM | 建议时长 |",
+            "| --- | --- | --- | --- | --- | --- | --- |",
+            "| 001 | 开场建立人物与环境 | 中景/平稳推进 | 主角置身核心场景，人物外观稳定，动作与环境关系清楚，光影风格统一。 | “……” | 环境底噪轻铺，尾音自然延续到下一镜。 | 6s |"
         );
-    }
-
-    private String buildKeyframePromptSystemPrompt() {
-        String configuredPrompt = promptTemplateResolver.systemPrompt("core", "keyframe_prompt_generator");
-        if (!configuredPrompt.isBlank()) {
-            return configuredPrompt;
-        }
-        return """
-            你是影视关键帧提示词设计师。请把输入分镜改写成适合关键帧生成的一段中文提示词。
-            输出要求：具体、可执行、强调人物一致性与物理合理性，只输出一段提示词。
-            """;
-    }
-
-    private String buildKeyframePromptUserPrompt(
-        String prompt,
-        String stylePreset,
-        int width,
-        int height,
-        String frameRole,
-        String visionAnalysisNotes
-    ) {
-        String roleLine = "last".equals(frameRole)
-            ? "当前要生成尾帧关键帧。"
-            : "当前要生成首帧关键帧。";
-        String analysisLine = visionAnalysisNotes == null || visionAnalysisNotes.isBlank()
-            ? ""
-            : "\n参考图连续性分析：" + visionAnalysisNotes.trim();
-        return """
-            请基于下面整段分镜信息，生成一段更适合关键帧出图的中文提示词。
-            风格预设：%s。
-            输出尺寸：%dx%d。
-            关键帧类型：%s。%s%s
-
-            整段分镜信息：
-            %s
-            """.formatted(stylePreset, width, height, "last".equals(frameRole) ? "尾帧" : "首帧", roleLine, analysisLine, prompt);
     }
 
     private String buildVisionAnalysisSystemPrompt(String mediaKind) {
@@ -723,21 +701,78 @@ public class GenerationRunFactory {
     }
 
     private String extractLastFrameUrl(Map<String, Object> payload) {
-        if (payload == null) {
-            return "";
+        String direct = findNestedString(payload, "last_frame_url", "lastFrameUrl");
+        if (!direct.isBlank()) {
+            return direct;
         }
-        String value = support.firstNonBlank(
-            support.stringValue(payload.get("last_frame_url")),
-            support.stringValue(payload.get("lastFrameUrl"))
-        );
-        if (!value.isBlank()) {
-            return value;
+        return findNestedRoleUrl(payload, "last_frame");
+    }
+
+    @SuppressWarnings("unchecked")
+    private String findNestedString(Object value, String... keys) {
+        if (value instanceof Map<?, ?> rawMap) {
+            Map<String, Object> map = (Map<String, Object>) rawMap;
+            for (String key : keys) {
+                Object candidate = map.get(key);
+                if (candidate instanceof String text && !text.isBlank()) {
+                    return text.trim();
+                }
+                if (candidate instanceof Map<?, ?> nestedMap) {
+                    String nested = findNestedString(nestedMap, "url", "href", "uri");
+                    if (!nested.isBlank()) {
+                        return nested;
+                    }
+                }
+            }
+            for (Object nested : map.values()) {
+                String resolved = findNestedString(nested, keys);
+                if (!resolved.isBlank()) {
+                    return resolved;
+                }
+            }
         }
-        Map<String, Object> output = support.mapValue(payload.get("output"));
-        return support.firstNonBlank(
-            support.stringValue(output.get("last_frame_url")),
-            support.stringValue(output.get("lastFrameUrl"))
-        );
+        if (value instanceof List<?> list) {
+            for (Object item : list) {
+                String resolved = findNestedString(item, keys);
+                if (!resolved.isBlank()) {
+                    return resolved;
+                }
+            }
+        }
+        return "";
+    }
+
+    @SuppressWarnings("unchecked")
+    private String findNestedRoleUrl(Object value, String role) {
+        if (value instanceof Map<?, ?> rawMap) {
+            Map<String, Object> map = (Map<String, Object>) rawMap;
+            String currentRole = support.stringValue(map.get("role")).toLowerCase(Locale.ROOT);
+            if (role.equals(currentRole)) {
+                Object imageUrl = map.get("image_url");
+                if (imageUrl == null) {
+                    imageUrl = map.get("imageUrl");
+                }
+                String resolved = findNestedString(imageUrl, "url", "href", "uri");
+                if (!resolved.isBlank()) {
+                    return resolved;
+                }
+            }
+            for (Object nested : map.values()) {
+                String resolved = findNestedRoleUrl(nested, role);
+                if (!resolved.isBlank()) {
+                    return resolved;
+                }
+            }
+        }
+        if (value instanceof List<?> list) {
+            for (Object item : list) {
+                String resolved = findNestedRoleUrl(item, role);
+                if (!resolved.isBlank()) {
+                    return resolved;
+                }
+            }
+        }
+        return "";
     }
 
     @SuppressWarnings("unchecked")

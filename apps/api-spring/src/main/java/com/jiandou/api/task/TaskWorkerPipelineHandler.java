@@ -137,18 +137,21 @@ public class TaskWorkerPipelineHandler {
                 taskRepository.save(task);
             }
 
-            List<String> clipPrompts = storyboardPlanner.buildSequentialClipPrompts(task, storyboardMarkdown);
-            int storyboardClipCount = clipPrompts.size();
+            List<TaskStoryboardPlanner.StoryboardShotPlan> shotPlans = storyboardPlanner.buildStoryboardShotPlans(task, storyboardMarkdown);
+            int storyboardClipCount = shotPlans.size();
             int requestedOutputCount = storyboardPlanner.resolveRequestedOutputCount(task, storyboardClipCount);
-            if (requestedOutputCount < clipPrompts.size()) {
-                clipPrompts = new ArrayList<>(clipPrompts.subList(0, requestedOutputCount));
+            if (requestedOutputCount < shotPlans.size()) {
+                shotPlans = new ArrayList<>(shotPlans.subList(0, requestedOutputCount));
             }
+            List<String> clipPrompts = shotPlans.stream().map(TaskStoryboardPlanner.StoryboardShotPlan::videoPrompt).toList();
             List<int[]> storyboardDurationRanges = storyboardPlanner.extractStoryboardShotDurationRanges(storyboardMarkdown);
             List<int[]> clipDurationPlan = storyboardPlanner.buildClipDurationPlan(task, durationSeconds, clipPrompts.size(), storyboardMarkdown);
+            clipDurationPlan = storyboardPlanner.normalizeClipDurationPlan(task.requestSnapshot == null ? "" : task.requestSnapshot.videoModel(), clipDurationPlan);
             putExecutionContext(task, "storyboardClipCount", storyboardClipCount);
             putExecutionContext(task, "requestedOutputCount", storyboardPlanner.requestSnapshotOutputCount(task));
             putExecutionContext(task, "plannedClipCount", clipPrompts.size());
             putExecutionContext(task, "clipPrompts", clipPrompts);
+            putExecutionContext(task, "clipDurationPlan", storyboardPlanner.buildClipDurationPlanContext(clipDurationPlan, storyboardDurationRanges));
             taskRepository.save(task);
             executionCoordinator.recordTrace(task, "planning", "planning.shots_resolved", "已完成分镜数量解析，按镜头顺序生成。", "INFO", Map.of(
                 "clipCount", clipPrompts.size(),
@@ -170,7 +173,7 @@ public class TaskWorkerPipelineHandler {
                     requestedResumeStage,
                     requestedResumeClipIndex,
                     existingVideoClipIndices,
-                    clipPrompts,
+                    shotPlans,
                     clipDurationPlan,
                     dimensions[0],
                     dimensions[1],

@@ -527,9 +527,11 @@ public class GenerationRunSupport {
             modelInfo.put("promptRewriteProvider", rewriteProfile.provider());
             modelInfo.put("promptRewriteEndpointHost", textResponse == null ? rewriteProfile.endpointHost() : textResponse.endpointHost());
         }
-        modelInfo.put("visionAnalysisModel", visionProfile.modelName());
-        modelInfo.put("visionAnalysisProvider", visionProfile.provider());
-        modelInfo.put("visionAnalysisEndpointHost", visionResponse == null ? visionProfile.endpointHost() : visionResponse.endpointHost());
+        if (visionProfile != null) {
+            modelInfo.put("visionAnalysisModel", visionProfile.modelName());
+            modelInfo.put("visionAnalysisProvider", visionProfile.provider());
+            modelInfo.put("visionAnalysisEndpointHost", visionResponse == null ? visionProfile.endpointHost() : visionResponse.endpointHost());
+        }
         modelInfo.put("mediaKind", mediaKind);
         modelInfo.put("endpointHost", endpointHost);
         modelInfo.put("taskEndpointHost", taskEndpointHost);

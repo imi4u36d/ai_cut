@@ -89,6 +89,52 @@ final class TaskExecutionArtifactAssembler {
         );
     }
 
+    Map<String, Object> createReferenceFrameMaterial(TaskRecord task, int clipIndex, String sourceUrl, String frameRole) {
+        String normalizedFrameRole = normalizeFrameRole(frameRole);
+        String targetFileName = TaskArtifactNaming.clipFrameFileName(
+            clipIndex,
+            normalizedFrameRole,
+            fileExtOrDefault(fileNameFromUrl(sourceUrl), "png")
+        );
+        String fileUrl = stringValue(sourceUrl);
+        try {
+            LocalMediaArtifactService.StoredArtifact artifact = normalizeTaskArtifact(task, sourceUrl, targetFileName, "keyframe");
+            fileUrl = artifact.publicUrl();
+        } catch (Exception ex) {
+            log.debug(
+                "reuse frame artifact materialize failed: taskId={}, clipIndex={}, sourceUrl={}",
+                task == null ? "" : task.id,
+                clipIndex,
+                sourceUrl,
+                ex
+            );
+        }
+        return createMaterial(
+            task,
+            Map.of(),
+            "image",
+            task.title + ("last".equals(normalizedFrameRole) ? " 尾帧关键画面" : " 首帧关键画面"),
+            fileUrl,
+            fileUrl,
+            imageMimeType(targetFileName),
+            0.0,
+            0,
+            0,
+            false,
+            clipIndex,
+            "keyframe-" + normalizedFrameRole,
+            Map.of(),
+            Map.of(
+                "taskArtifact", fileUrl.startsWith("/storage/"),
+                "clipIndex", clipIndex,
+                "frameRole", normalizedFrameRole,
+                "remoteSourceUrl", stringValue(sourceUrl),
+                "reusedFromPreviousClip", true
+            ),
+            stringValue(sourceUrl)
+        );
+    }
+
     Map<String, Object> createVideoMaterial(
         TaskRecord task,
         Map<String, Object> run,
@@ -145,7 +191,9 @@ final class TaskExecutionArtifactAssembler {
         Map<String, Object> videoModelCall,
         String resolvedLastFrameUrl,
         int clipIndex,
-        int fallbackDurationSeconds
+        int fallbackDurationSeconds,
+        int minDurationSeconds,
+        int maxDurationSeconds
     ) {
         Map<String, Object> videoMetadata = mapValue(videoResult.get("metadata"));
         Map<String, Object> row = new LinkedHashMap<>();
@@ -166,17 +214,22 @@ final class TaskExecutionArtifactAssembler {
         row.put("height", intValue(videoResult.get("height"), 0));
         row.put("sizeBytes", fileSize(localMediaArtifactService.resolveAbsolutePath(stringValue(videoMaterial.get("fileUrl")))));
         row.put("remoteUrl", stringValue(videoMetadata.get("remoteSourceUrl")));
-        row.put("extra", Map.of(
-            "runId", stringValue(videoRun.get("id")),
-            "posterUrl", stringValue(imageMaterial.get("fileUrl")),
-            "thumbnailUrl", stringValue(videoResult.get("thumbnailUrl")),
-            "hasAudio", boolValue(videoResult.get("hasAudio")),
-            "clipIndex", clipIndex,
-            "remoteTaskId", stringValue(videoMetadata.get("taskId")),
-            "firstFrameUrl", firstNonBlank(stringValue(videoMetadata.get("firstFrameUrl")), stringValue(imageMaterial.get("remoteUrl"))),
-            "lastFrameUrl", resolvedLastFrameUrl,
-            "requestedLastFrameUrl", stringValue(videoMetadata.get("requestedLastFrameUrl"))
-        ));
+        Map<String, Object> extra = new LinkedHashMap<>();
+        extra.put("runId", stringValue(videoRun.get("id")));
+        extra.put("posterUrl", stringValue(imageMaterial.get("fileUrl")));
+        extra.put("thumbnailUrl", stringValue(videoResult.get("thumbnailUrl")));
+        extra.put("hasAudio", boolValue(videoResult.get("hasAudio")));
+        extra.put("clipIndex", clipIndex);
+        extra.put("targetDurationSeconds", fallbackDurationSeconds);
+        extra.put("minDurationSeconds", minDurationSeconds);
+        extra.put("maxDurationSeconds", maxDurationSeconds);
+        extra.put("requestedDurationSeconds", fallbackDurationSeconds);
+        extra.put("appliedDurationSeconds", doubleValue(videoResult.get("durationSeconds"), (double) fallbackDurationSeconds));
+        extra.put("remoteTaskId", stringValue(videoMetadata.get("taskId")));
+        extra.put("firstFrameUrl", firstNonBlank(stringValue(videoMetadata.get("firstFrameUrl")), stringValue(imageMaterial.get("remoteUrl"))));
+        extra.put("lastFrameUrl", resolvedLastFrameUrl);
+        extra.put("requestedLastFrameUrl", stringValue(videoMetadata.get("requestedLastFrameUrl")));
+        row.put("extra", extra);
         row.put("createdAt", nowIso());
         return row;
     }
@@ -298,6 +351,15 @@ final class TaskExecutionArtifactAssembler {
         return resolved.isBlank() ? fallback : resolved;
     }
 
+    private String imageMimeType(String fileName) {
+        String ext = fileExt(fileName);
+        return switch (ext) {
+            case "jpg", "jpeg" -> "image/jpeg";
+            case "webp" -> "image/webp";
+            default -> "image/png";
+        };
+    }
+
     @SuppressWarnings("unchecked")
     private String findNestedString(Object value, String... keys) {
         if (value instanceof Map<?, ?> rawMap) {
@@ -408,17 +470,24 @@ final class TaskExecutionArtifactAssembler {
     }
 
     private String fileNameFromUrl(String url) {
-        String normalized = stringValue(url);
+        String normalized = stringValue(url)
+            .replaceAll("[?#].*$", "")
+            .replaceAll("/+$", "");
         int index = normalized.lastIndexOf('/');
         return index >= 0 ? normalized.substring(index + 1) : normalized;
     }
 
     private String fileExt(String fileName) {
-        int index = fileName.lastIndexOf('.');
-        if (index < 0 || index == fileName.length() - 1) {
+        String normalized = stringValue(fileName).replaceAll("[?#].*$", "");
+        int index = normalized.lastIndexOf('.');
+        if (index < 0 || index == normalized.length() - 1) {
             return "";
         }
-        return fileName.substring(index + 1).toLowerCase();
+        String candidate = normalized.substring(index + 1).toLowerCase();
+        if (!candidate.matches("[a-z0-9]{1,10}")) {
+            return "";
+        }
+        return candidate;
     }
 
     private String normalizeFrameRole(String frameRole) {
