@@ -10,12 +10,12 @@ com/jiandou/api/generation/MediaProviderProfile.class
 com/jiandou/api/admin/AdminController$TaskIdsRequest.class
 com/jiandou/api/task/infrastructure/mybatis/QueueCandidateRow.class
 com/jiandou/api/task/web/dto/CreateGenerationTaskRequest.class
+com/jiandou/api/task/TaskExecutionRuntimeSupport.class
 com/jiandou/api/task/exception/TaskNotFoundException.class
 com/jiandou/api/generation/GenerationRunNotFoundException.class
 com/jiandou/api/task/web/dto/GenerateCreativePromptRequest.class
 com/jiandou/api/generation/text/ChatCompletionsInvocationStrategy.class
 com/jiandou/api/task/infrastructure/mybatis/TaskMybatisReadMapper.class
-com/jiandou/api/task/TaskWorkerRunner$TaskExecutionAbortedException.class
 com/jiandou/api/generation/text/ResponsesApiInvocationStrategy.class
 com/jiandou/api/task/domain/GenerationRequestSnapshot.class
 com/jiandou/api/task/TaskApplicationServiceImpl.class
@@ -38,6 +38,7 @@ com/jiandou/api/generation/GenerationCatalogService.class
 com/jiandou/api/task/persistence/TaskStageRunRow.class
 com/jiandou/api/config/DatabaseSchemaInitializer.class
 com/jiandou/api/health/dto/RuntimeDescriptorResponse$RuntimeInfo.class
+com/jiandou/api/task/TaskWorkerStatusStageService.class
 com/jiandou/api/generation/text/TextCompletionInvocation.class
 com/jiandou/api/task/application/port/TaskAggregateQueryPort.class
 com/jiandou/api/generation/RemoteVideoGenerationResult.class
@@ -46,6 +47,7 @@ com/jiandou/api/generation/ModelRuntimePropertiesResolver$CachedSnapshot.class
 com/jiandou/api/generation/RemoteMediaGenerationClient$1.class
 com/jiandou/api/task/infrastructure/mybatis/StaleRunningTaskRow.class
 com/jiandou/api/generation/GenerationController.class
+com/jiandou/api/task/TaskWorkerRenderStageService.class
 com/jiandou/api/generation/LocalGenerationRunStore.class
 com/jiandou/api/generation/ModelRuntimePropertiesResolver$ConfigSnapshot.class
 com/jiandou/api/task/TaskViewMapper$TaskDiagnosisSummary.class
@@ -55,6 +57,7 @@ com/jiandou/api/task/infrastructure/mybatis/TaskQueueEventEntity.class
 com/jiandou/api/upload/application/UploadApplicationService.class
 com/jiandou/api/generation/RemoteMediaGenerationClient$DownloadedBinary.class
 com/jiandou/api/upload/UploadController.class
+com/jiandou/api/task/TaskExecutionArtifactAssembler.class
 com/jiandou/api/generation/PromptTemplateResolver.class
 com/jiandou/api/task/TaskRepository.class
 com/jiandou/api/config/MybatisPlusConfig.class
@@ -62,6 +65,7 @@ com/jiandou/api/task/web/dto/RateTaskEffectRequest.class
 com/jiandou/api/generation/GenerationNotImplementedException.class
 com/jiandou/api/generation/GenerationRunSupport$TextGenerationAttempt.class
 com/jiandou/api/task/TaskDiagnosisService.class
+com/jiandou/api/task/TaskWorkerJoinStageService.class
 com/jiandou/api/task/domain/TaskStatus.class
 com/jiandou/api/generation/ModelRuntimePropertiesResolver$ConfigFileState.class
 com/jiandou/api/task/persistence/TaskAttemptRow.class
@@ -70,6 +74,7 @@ com/jiandou/api/generation/UnsupportedGenerationKindException.class
 com/jiandou/api/task/TaskRecordAssembler$TaskWriteModel.class
 com/jiandou/api/generation/RemoteVideoTaskSubmission.class
 com/jiandou/api/task/infrastructure/mybatis/TaskModelCallMapper.class
+com/jiandou/api/task/TaskWorkerPipelineHandler.class
 com/jiandou/api/task/TaskRequestSnapshotFactory.class
 com/jiandou/api/task/TaskStoryboardPlanner.class
 com/jiandou/api/task/TaskStoryboardPlanner$StoryboardTableSchema.class
@@ -80,6 +85,7 @@ com/jiandou/api/task/infrastructure/mybatis/TaskMapper.class
 com/jiandou/api/task/TaskDiagnosisService$TaskFinding.class
 com/jiandou/api/task/TaskCommandService.class
 com/jiandou/api/task/domain/GenerationRequestSnapshot$RequestedDuration.class
+com/jiandou/api/task/TaskStateTransition.class
 com/jiandou/api/task/infrastructure/mybatis/TaskAttemptMapper.class
 com/jiandou/api/task/infrastructure/mybatis/SystemLogMapper.class
 com/jiandou/api/task/infrastructure/mybatis/MybatisTaskRepository.class
@@ -88,10 +94,12 @@ com/jiandou/api/generation/GenerationRunSupport.class
 com/jiandou/api/task/application/TaskApplicationService.class
 com/jiandou/api/generation/CompatibleTextModelClient$1.class
 com/jiandou/api/health/dto/RuntimeDescriptorResponse.class
+com/jiandou/api/task/TaskExecutionAbortedException.class
 com/jiandou/api/task/domain/GenerationRequestSnapshot$RequestedOutputCount.class
 com/jiandou/api/task/TaskQueueCoordinator.class
 com/jiandou/api/generation/text/TextModelTransportPolicy.class
 com/jiandou/api/task/domain/TaskAttemptSnapshot.class
+com/jiandou/api/task/TaskWorkerRenderStageService$RenderStageRequest.class
 com/jiandou/api/health/RuntimeDescriptorService$ModelCatalogItem.class
 com/jiandou/api/generation/GenerationConfigurationException.class
 com/jiandou/api/generation/GenerationConfigPathLocator$LocatedConfig.class
@@ -103,9 +111,9 @@ com/jiandou/api/task/infrastructure/mybatis/MaterialAssetEntity.class
 com/jiandou/api/common/web/GlobalApiExceptionHandler.class
 com/jiandou/api/task/application/port/TaskPersistencePort.class
 com/jiandou/api/task/infrastructure/mybatis/MaterialAssetMapper.class
+com/jiandou/api/task/TaskWorkerExecutionContext.class
 com/jiandou/api/generation/GenerationConfigPathLocator.class
 com/jiandou/api/health/dto/RuntimeDescriptorResponse$ModelInfo.class
-com/jiandou/api/task/TaskWorkerRunner$StoryboardTableSchema.class
 com/jiandou/api/task/web/TaskController.class
 com/jiandou/api/task/infrastructure/mybatis/SystemLogEntity.class
 com/jiandou/api/generation/text/TextModelInvocationStrategy.class
@@ -115,6 +123,7 @@ com/jiandou/api/task/infrastructure/mybatis/TaskResultMapper.class
 com/jiandou/api/generation/text/TextModelInvocation.class
 com/jiandou/api/health/dto/RuntimeDescriptorResponse$PlanningCapabilities.class
 com/jiandou/api/generation/application/GenerationApplicationService.class
+com/jiandou/api/task/TaskWorkerRenderStageService$RenderStageResult.class
 com/jiandou/api/task/TaskExecutionCoordinator.class
 com/jiandou/api/upload/EmptyUploadFileException.class
 com/jiandou/api/task/infrastructure/mybatis/TaskStatusHistoryEntity.class

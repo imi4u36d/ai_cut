@@ -7,30 +7,33 @@
 :root {
   color-scheme: light;
   font-family: "Inter", "PingFang SC", "Noto Sans SC", sans-serif;
-  --bg-base: #e0e5ec;
-  --bg-surface: #e0e5ec;
-  --bg-soft: #e7ebf1;
-  --bg-accent: #ffd3d3;
-  --bg-accent-soft: #ffe6e6;
-  --text-strong: #475569;
-  --text-body: #64748b;
-  --text-muted: #8b97a8;
-  --accent: #ff9aa2;
-  --accent-strong: #c97f86;
-  --warning: #d8b67e;
-  --danger: #c895a0;
+  --bg-base: #edf2f7;
+  --bg-surface: #f3f6fa;
+  --bg-soft: #e7edf5;
+  --bg-accent: #ffb7ae;
+  --bg-accent-soft: #ffe5de;
+  --text-strong: #18212f;
+  --text-body: #536275;
+  --text-muted: #7d8999;
+  --accent: #ff8d82;
+  --accent-strong: #c56c73;
+  --warning: #b48757;
+  --danger: #b36d7c;
+  --surface-border: rgba(128, 144, 167, 0.18);
+  --surface-border-strong: rgba(128, 144, 167, 0.28);
   --shadow-raise:
-    -12px -12px 24px rgba(255, 255, 255, 0.78),
-    12px 12px 24px rgba(163, 177, 198, 0.5);
+    0 24px 48px rgba(147, 165, 187, 0.18),
+    0 8px 18px rgba(147, 165, 187, 0.1);
   --shadow-raise-soft:
-    -8px -8px 16px rgba(255, 255, 255, 0.72),
-    8px 8px 16px rgba(163, 177, 198, 0.36);
+    0 14px 28px rgba(147, 165, 187, 0.12),
+    0 4px 10px rgba(147, 165, 187, 0.08);
   --shadow-pressed:
-    inset 8px 8px 16px rgba(163, 177, 198, 0.42),
-    inset -8px -8px 16px rgba(255, 255, 255, 0.82);
+    inset 0 1px 0 rgba(255, 255, 255, 0.72),
+    inset 0 -1px 0 rgba(143, 159, 181, 0.08),
+    inset 0 0 0 1px rgba(143, 159, 181, 0.12);
   --shadow-accent:
-    -10px -10px 20px rgba(238, 246, 241, 0.72),
-    12px 12px 22px rgba(197, 163, 163, 0.34);
+    0 18px 36px rgba(214, 136, 135, 0.22),
+    0 8px 18px rgba(214, 136, 135, 0.14);
   --radius-xl: 2rem;
   --radius-lg: 1.5rem;
   --radius-md: 1.1rem;
@@ -47,7 +50,10 @@ body {
   min-width: 320px;
   color: var(--text-strong);
   font-family: "Inter", "PingFang SC", "Noto Sans SC", sans-serif;
-  background: var(--bg-base);
+  background:
+    radial-gradient(circle at top left, rgba(255, 214, 209, 0.46), transparent 24%),
+    radial-gradient(circle at 85% 14%, rgba(201, 216, 241, 0.38), transparent 22%),
+    linear-gradient(180deg, #f4f7fb 0%, #edf2f7 100%);
 }
 
 a {
@@ -84,7 +90,7 @@ textarea {
 
 #app {
   min-height: 100vh;
-  background: var(--bg-base);
+  background: transparent;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -122,8 +128,10 @@ textarea {
   .surface-chip,
   .meta-item,
   .empty-state {
-    border: 0;
-    background: var(--bg-surface);
+    border: 1px solid var(--surface-border);
+    background:
+      linear-gradient(180deg, rgba(255, 255, 255, 0.72), rgba(255, 255, 255, 0.3)),
+      var(--bg-surface);
     box-shadow: var(--shadow-raise-soft);
   }
 
@@ -140,6 +148,7 @@ textarea {
     padding: 1.35rem;
     border-radius: 2rem;
     box-shadow: var(--shadow-raise);
+    backdrop-filter: blur(16px);
   }
 
   .app-sidebar__header,
@@ -207,7 +216,7 @@ textarea {
     gap: 0.3rem;
     border-radius: 1.3rem;
     padding: 1rem 1.05rem;
-    transition: transform 180ms ease, box-shadow 180ms ease, color 180ms ease;
+    transition: transform 180ms ease, box-shadow 180ms ease, color 180ms ease, border-color 180ms ease;
   }
 
   .nav-link:hover,
@@ -247,6 +256,7 @@ textarea {
   }
 
   .nav-link-active {
+    border-color: var(--surface-border-strong);
     box-shadow: var(--shadow-pressed);
   }
 
@@ -309,13 +319,15 @@ textarea {
   .field-select,
   .field-textarea {
     width: 100%;
-    border: 0;
+    border: 1px solid transparent;
     border-radius: 1rem;
-    background: var(--bg-surface);
+    background:
+      linear-gradient(180deg, rgba(255, 255, 255, 0.88), rgba(255, 255, 255, 0.4)),
+      var(--bg-surface);
     color: var(--text-strong);
     padding: 0.88rem 1rem;
     box-shadow: var(--shadow-pressed);
-    transition: box-shadow 180ms ease, color 180ms ease;
+    transition: box-shadow 180ms ease, color 180ms ease, border-color 180ms ease, background 180ms ease;
   }
 
   .field-input::placeholder,
@@ -496,7 +508,7 @@ textarea {
 
   .btn-primary {
     background: linear-gradient(145deg, var(--bg-accent-soft), var(--bg-accent));
-    color: #4d6a5b;
+    color: #553b44;
     box-shadow: var(--shadow-accent);
   }
 
@@ -512,11 +524,11 @@ textarea {
   }
 
   .btn-warning {
-    color: #8f7251;
+    color: #8b6540;
   }
 
   .btn-danger {
-    color: #9a6973;
+    color: #975b68;
   }
 
   .btn-primary:active,
@@ -584,6 +596,7 @@ textarea {
     color: var(--text-body);
     font-size: 0.78rem;
     font-weight: 700;
+    border: 1px solid var(--surface-border);
   }
 
   .status-pill[data-tone="neutral"] {

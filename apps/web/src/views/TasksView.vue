@@ -106,12 +106,57 @@
     </div>
 
     <template v-else>
-      <div v-if="filteredTasks.length === 0" class="surface-panel tasks-empty p-10 text-center">
-        <h3 class="text-lg font-semibold text-slate-900">没有匹配的任务</h3>
-        <p class="mt-2 text-sm text-slate-600">尝试清空搜索和筛选，或者直接新建一个任务。</p>
-        <button class="btn-warning mt-5" type="button" @click="clearFilters">
-          清空筛选
-        </button>
+      <div v-if="filteredTasks.length === 0" class="surface-panel tasks-empty p-0">
+        <div class="tasks-empty__copy">
+          <p class="tasks-empty__eyebrow">{{ isFilterActive ? "当前筛选下无结果" : "Task Workspace" }}</p>
+          <h3 class="tasks-empty__title">{{ isFilterActive ? "没有匹配的任务" : "先创建第一个生成任务" }}</h3>
+          <p class="tasks-empty__description">
+            {{
+              isFilterActive
+                ? "当前搜索词或状态过滤后没有结果。你可以先清空筛选，再继续巡检所有任务。"
+                : "这里会集中展示排队、运行、完成和失败任务。创建后可在同一页查看进度、日志和产物目录。"
+            }}
+          </p>
+          <div class="tasks-empty__actions">
+            <button v-if="isFilterActive" class="btn-warning" type="button" @click="clearFilters">
+              清空筛选
+            </button>
+            <RouterLink v-else to="/tasks/new" class="btn-primary">
+              创建任务
+            </RouterLink>
+            <RouterLink to="/generate" class="btn-secondary">
+              打开生成器
+            </RouterLink>
+          </div>
+          <div class="tasks-empty__chips">
+            <span class="surface-chip">TXT 导入</span>
+            <span class="surface-chip">进度轮询</span>
+            <span class="surface-chip">结果可回看</span>
+          </div>
+        </div>
+        <div class="tasks-empty__preview">
+          <div class="tasks-empty__preview-head">
+            <span>Ready Queue</span>
+            <strong>{{ isFilterActive ? 0 : metrics.total }}</strong>
+          </div>
+          <div class="tasks-empty__preview-body">
+            <article class="tasks-empty__preview-card">
+              <p>分析队列</p>
+              <strong>{{ metrics.running }}</strong>
+              <small>创建任务后会优先显示进行中的执行链路。</small>
+            </article>
+            <article class="tasks-empty__preview-card">
+              <p>结果归档</p>
+              <strong>{{ metrics.completed }}</strong>
+              <small>完成后可在这里进入详情、查看评分和下载产物。</small>
+            </article>
+            <article class="tasks-empty__preview-card tasks-empty__preview-card-accent">
+              <p>下一步</p>
+              <strong>{{ isFilterActive ? "调整筛选" : "启动首个任务" }}</strong>
+              <small>{{ isFilterActive ? "检查状态或关键词条件。" : "从文本输入、模型选择和提示词开始。" }}</small>
+            </article>
+          </div>
+        </div>
       </div>
 
       <div v-else class="grid gap-5">
@@ -1076,5 +1121,144 @@ onUnmounted(() => {
 
 .rating-button-active {
   box-shadow: var(--shadow-pressed);
+}
+
+.tasks-empty {
+  display: grid;
+  overflow: hidden;
+  border-radius: 1.6rem;
+  border: 1px solid var(--surface-border);
+  background:
+    radial-gradient(circle at top right, rgba(255, 183, 174, 0.18), transparent 28%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.88), rgba(255, 255, 255, 0.34)),
+    var(--bg-surface);
+  box-shadow: var(--shadow-raise);
+}
+
+.tasks-empty__copy,
+.tasks-empty__preview {
+  padding: 1.5rem;
+}
+
+.tasks-empty__eyebrow {
+  margin: 0;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.tasks-empty__title {
+  margin: 0.7rem 0 0;
+  font-size: clamp(1.5rem, 3vw, 2.2rem);
+  line-height: 1.05;
+  letter-spacing: -0.05em;
+  color: var(--text-strong);
+}
+
+.tasks-empty__description {
+  margin: 0.85rem 0 0;
+  max-width: 38rem;
+  font-size: 0.96rem;
+  line-height: 1.8;
+  color: var(--text-body);
+}
+
+.tasks-empty__actions,
+.tasks-empty__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 1.2rem;
+}
+
+.tasks-empty__preview {
+  border-top: 1px solid rgba(128, 144, 167, 0.12);
+  background: rgba(255, 255, 255, 0.28);
+}
+
+.tasks-empty__preview-head {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.tasks-empty__preview-head span {
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.tasks-empty__preview-head strong {
+  font-size: 2.4rem;
+  line-height: 1;
+  letter-spacing: -0.08em;
+  color: var(--text-strong);
+}
+
+.tasks-empty__preview-body {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.tasks-empty__preview-card {
+  border-radius: 1rem;
+  border: 1px solid var(--surface-border);
+  padding: 1rem;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.84), rgba(255, 255, 255, 0.3)),
+    var(--bg-surface);
+  box-shadow: var(--shadow-pressed);
+}
+
+.tasks-empty__preview-card p,
+.tasks-empty__preview-card strong,
+.tasks-empty__preview-card small {
+  display: block;
+}
+
+.tasks-empty__preview-card p {
+  margin: 0;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.tasks-empty__preview-card strong {
+  margin-top: 0.45rem;
+  font-size: 1.35rem;
+  line-height: 1.15;
+  color: var(--text-strong);
+}
+
+.tasks-empty__preview-card small {
+  margin-top: 0.45rem;
+  line-height: 1.7;
+  color: var(--text-body);
+}
+
+.tasks-empty__preview-card-accent {
+  border-color: rgba(197, 108, 115, 0.18);
+  background:
+    linear-gradient(180deg, rgba(255, 240, 236, 0.9), rgba(255, 255, 255, 0.38)),
+    var(--bg-surface);
+}
+
+@media (min-width: 960px) {
+  .tasks-empty {
+    grid-template-columns: minmax(0, 1.2fr) minmax(300px, 0.8fr);
+  }
+
+  .tasks-empty__preview {
+    border-top: 0;
+    border-left: 1px solid rgba(128, 144, 167, 0.12);
+  }
 }
 </style>

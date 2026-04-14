@@ -106,32 +106,6 @@ public record GenerationRequestSnapshot(
         };
     }
 
-    /**
-     * Compatibility accessor for legacy task pipeline code that still reads snapshot fields by map-like key.
-     */
-    public Object get(String fieldName) {
-        return switch (fieldName) {
-            case "taskType" -> taskType;
-            case "title" -> title;
-            case "creativePrompt" -> creativePrompt;
-            case "aspectRatio" -> aspectRatio;
-            case "stylePreset" -> stylePreset;
-            case "textAnalysisModel" -> textAnalysisModel;
-            case "visionModel" -> visionModel;
-            case "imageModel" -> imageModel;
-            case "videoModel" -> videoModel;
-            case "videoSize" -> videoSize;
-            case "seed" -> seed;
-            case "videoDurationSeconds" -> videoDuration == null ? "auto" : videoDuration.toValue();
-            case "outputCount" -> outputCount == null ? "auto" : outputCount.toValue();
-            case "minDurationSeconds" -> minDurationSeconds;
-            case "maxDurationSeconds" -> maxDurationSeconds;
-            case "transcriptText" -> transcriptText;
-            case "stopBeforeVideoGeneration" -> stopBeforeVideoGeneration;
-            default -> null;
-        };
-    }
-
     private static String stringValue(Object value, String fallback) {
         String normalized = value == null ? "" : String.valueOf(value).trim();
         return normalized.isBlank() ? fallback : normalized;

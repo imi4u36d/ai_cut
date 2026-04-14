@@ -2,222 +2,260 @@
   <section class="new-task-view">
     <div class="new-task-layout">
       <div class="new-task-main surface-panel surface-panel-warm p-6">
-        <PageHeader eyebrow="创建任务" title="文本生成 Task" description="文本驱动视频生成，统一进入 Task 链路" />
-        <div class="mt-3 flex flex-wrap items-center gap-3 text-sm text-slate-500">
-          <HintBell title="模型参数" :items="['文本模型用于提示词理解', '视频模型决定生成质量', '清晰度与时长直接影响成本']" />
-          <HintBell title="TXT 能力" text="支持上传小说 TXT，自动填充文本并辅助生成提示词。" />
-        </div>
-
-        <form class="mt-6 grid gap-5" @submit.prevent="submitTask">
-          <div class="surface-tile grid gap-4 p-4 md:grid-cols-[2fr,1fr]">
-            <label class="grid gap-2 text-sm text-slate-700">
-              任务标题
-              <input v-model="form.title" class="field-input" required placeholder="例如：都市小说第 3 章视频预告" />
-            </label>
-            <label class="grid gap-2 text-sm text-slate-700">
-              画幅比例
-              <select v-model="form.aspectRatio" class="field-select">
-                <option v-for="item in aspectRatioOptions" :key="item.value" :value="item.value">{{ item.label }}</option>
-              </select>
-            </label>
-          </div>
-
-          <div class="surface-tile grid gap-4 p-4 sm:grid-cols-2">
-            <label class="grid gap-2 text-sm text-slate-700">
-              文本模型
-              <select v-model="form.textAnalysisModel" class="field-select">
-                <option :value="null">请选择文本模型</option>
-                <option v-for="item in textModelOptions" :key="item.value" :value="item.value">{{ item.label }}</option>
-              </select>
-            </label>
-            <label class="grid gap-2 text-sm text-slate-700">
-              视觉模型
-              <select v-model="form.visionModel" class="field-select">
-                <option :value="null">请选择视觉模型</option>
-                <option v-for="item in visionModelOptions" :key="item.value" :value="item.value">{{ item.label }}</option>
-              </select>
-            </label>
-            <label class="grid gap-2 text-sm text-slate-700">
-              关键帧模型
-              <select v-model="form.imageModel" class="field-select">
-                <option :value="null">请选择关键帧模型</option>
-                <option v-for="item in imageModelOptions" :key="item.value" :value="item.value">{{ item.label }}</option>
-              </select>
-            </label>
-            <label class="grid gap-2 text-sm text-slate-700">
-              视频模型
-              <select v-model="form.videoModel" class="field-select">
-                <option :value="null">请选择视频模型</option>
-                <option v-for="item in videoModelOptions" :key="item.value" :value="item.value">{{ item.label }}</option>
-              </select>
-            </label>
-            <label class="grid gap-2 text-sm text-slate-700">
-              Seed
-              <input
-                v-model="seedInput"
-                class="field-input"
-                type="number"
-                min="0"
-                step="1"
-                placeholder="留空则不指定"
-              />
-              <span class="text-xs text-slate-500">{{ seedCapabilityHint }}</span>
-            </label>
-            <label class="grid gap-2 text-sm text-slate-700">
-              清晰度 / 画幅
-              <select v-model="form.videoSize" class="field-select">
-                <option v-for="item in videoSizeOptions" :key="item.value" :value="item.value">{{ item.label }}</option>
-              </select>
-            </label>
-            <label class="grid gap-2 text-sm text-slate-700">
-              输出视频数量
-              <select v-model="form.outputCount" class="field-select">
-                <option value="auto">自动（按脚本分镜）</option>
-                <option v-for="item in outputCountOptions" :key="item" :value="item">{{ item }} 条</option>
-              </select>
-            </label>
-            <label class="grid gap-2 text-sm text-slate-700">
-              视频总时长限制
-              <select v-model="durationLimitMode" class="field-select">
-                <option value="auto">自动</option>
-                <option value="manual">手动输入最大时长</option>
-              </select>
-            </label>
-            <label v-if="durationLimitMode === 'manual'" class="grid gap-2 text-sm text-slate-700">
-              最大总时长（秒）
-              <input
-                v-model="manualMaxDurationSeconds"
-                class="field-input"
-                type="number"
-                :min="minimumAllowedDurationSeconds ?? 1"
-                max="120"
-                step="1"
-                :placeholder="manualDurationPlaceholder"
-              />
-              <span class="text-xs text-slate-500">{{ manualDurationHint }}</span>
-            </label>
-          </div>
-
-          <div class="surface-tile p-4">
-            <div class="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <p class="text-sm font-semibold text-slate-900">高分 Seed 复用</p>
-                <p class="mt-1 text-xs text-slate-500">按任务效果评分倒序读取已验证过的 seed，点击即可回填当前表单。</p>
-              </div>
-              <button type="button" class="btn-ghost btn-sm" :disabled="loadingReusableSeeds" @click="loadReusableSeeds">
-                {{ loadingReusableSeeds ? "刷新中..." : "刷新列表" }}
-              </button>
-            </div>
-            <p v-if="reusableSeedError" class="mt-3 text-sm text-rose-600">{{ reusableSeedError }}</p>
-            <div v-else-if="reusableSeedTasks.length" class="mt-4 grid gap-3">
-              <button
-                v-for="task in reusableSeedTasks"
-                :key="task.id"
-                type="button"
-                class="seed-source-card rounded-2xl px-4 py-3 text-left transition"
-                @click="applySeedFromTask(task)"
-              >
-                <div class="flex flex-wrap items-center gap-2 text-xs text-slate-500">
-                  <span class="surface-chip">Seed {{ formatReusableSeed(task.taskSeed) }}</span>
-                  <span class="surface-chip">评分 {{ formatReusableRating(task.effectRating) }}</span>
-                  <span v-if="task.ratedAt">{{ formatReusableDate(task.ratedAt) }}</span>
+        <form class="grid gap-6" @submit.prevent="submitTask">
+          <div class="new-task-workspace">
+            <section class="composer-column composer-column-left">
+              <section class="composer-section">
+                <div class="composer-section__head">
+                  <div>
+                    <p class="composer-section__eyebrow">Parameters</p>
+                    <h3>模型、Seed 与输出设置</h3>
+                    <p>左侧只负责决定生成链路本身，包括模型组合、分辨率、数量和时长限制。</p>
+                  </div>
+                  <span class="surface-chip">{{ selectedModelCount }}/4 模型已选</span>
                 </div>
-                <p class="mt-2 text-sm font-semibold text-slate-900">{{ task.title }}</p>
-                <p class="mt-1 text-xs text-slate-500">
-                  {{ task.aspectRatio || "未知画幅" }} · {{ task.status }} · {{ task.id }}
-                </p>
-                <p v-if="task.effectRatingNote" class="mt-2 line-clamp-2 text-sm text-slate-600">{{ task.effectRatingNote }}</p>
-                <p
-                  v-if="selectedSeedSourceTaskId === task.id"
-                  class="mt-2 text-xs font-medium text-emerald-700"
-                >
-                  已回填到当前任务
-                </p>
-              </button>
-            </div>
-            <p v-else class="mt-3 text-sm text-slate-500">当前还没有可复用的高分 seed。</p>
-            <p class="mt-3 text-xs text-slate-500">提示：seed 复用只会回填种子，不会自动改动你当前选择的模型组合。</p>
-          </div>
 
-          <div class="surface-tile p-4">
-            <div class="flex flex-wrap items-center justify-between gap-3">
-              <p class="text-sm font-semibold text-slate-900">全局提示词</p>
-              <div class="flex items-center gap-2">
-                <button type="button" class="btn-primary btn-sm" :disabled="generatingPrompt" @click="handleGeneratePrompt">
-                  {{ generatingPrompt ? "生成中..." : "AI 生成提示词" }}
-                </button>
-                <button type="button" class="btn-ghost btn-sm" @click="form.creativePrompt = ''">清空</button>
-              </div>
-            </div>
-            <textarea
-              v-model="form.creativePrompt"
-              rows="6"
-              class="field-textarea mt-3"
-              placeholder="描述人物关系、冲突推进、镜头语气、情绪节奏；留空则使用系统默认提示词。"
-            ></textarea>
-            <p class="mt-2 text-xs text-slate-500">提示词来源：{{ promptSourceLabel }}</p>
-          </div>
+                <div class="surface-tile parameter-cluster p-4">
+                  <div class="parameter-cluster__head">
+                    <p class="parameter-cluster__eyebrow">Task Frame</p>
+                    <strong>任务框架</strong>
+                  </div>
+                  <div class="grid gap-4 md:grid-cols-[2fr,1fr]">
+                    <label class="grid gap-2 text-sm text-slate-700">
+                      任务标题
+                      <input v-model="form.title" class="field-input" required placeholder="例如：都市小说第 3 章视频预告" />
+                    </label>
+                    <label class="grid gap-2 text-sm text-slate-700">
+                      画幅比例
+                      <select v-model="form.aspectRatio" class="field-select">
+                        <option v-for="item in aspectRatioOptions" :key="item.value" :value="item.value">{{ item.label }}</option>
+                      </select>
+                    </label>
+                  </div>
+                </div>
 
-          <div class="surface-tile p-4">
-            <div class="flex flex-wrap items-center justify-between gap-3">
-              <p class="text-sm font-semibold text-slate-900">小说 TXT 输入</p>
-              <button type="button" class="btn-secondary btn-sm" :disabled="uploadingText" @click="textFileInput?.click()">
-                {{ uploadingText ? "上传中..." : "上传 TXT" }}
-              </button>
-            </div>
-            <input
-              ref="textFileInput"
-              type="file"
-              accept=".txt,text/plain"
-              class="hidden"
-              @change="handleTextFileChange"
-            />
-            <p class="mt-2 text-xs text-slate-500">{{ uploadedTextLabel }}</p>
-            <textarea
-              v-model="form.transcriptText"
-              rows="8"
-              class="field-textarea mt-3 font-mono text-sm"
-              placeholder="可直接粘贴小说正文或上传 TXT 后自动填充。"
-            ></textarea>
-          </div>
+                <div class="surface-tile parameter-cluster field-matrix p-4">
+                  <div class="parameter-cluster__head">
+                    <p class="parameter-cluster__eyebrow">Model Pipeline</p>
+                    <strong>模型链路</strong>
+                  </div>
+                  <div class="grid gap-4 sm:grid-cols-2">
+                    <label class="grid gap-2 text-sm text-slate-700">
+                      文本模型
+                      <select v-model="form.textAnalysisModel" class="field-select">
+                        <option :value="null">请选择文本模型</option>
+                        <option v-for="item in textModelOptions" :key="item.value" :value="item.value">{{ item.label }}</option>
+                      </select>
+                    </label>
+                    <label class="grid gap-2 text-sm text-slate-700">
+                      视觉模型
+                      <select v-model="form.visionModel" class="field-select">
+                        <option :value="null">请选择视觉模型</option>
+                        <option v-for="item in visionModelOptions" :key="item.value" :value="item.value">{{ item.label }}</option>
+                      </select>
+                    </label>
+                    <label class="grid gap-2 text-sm text-slate-700">
+                      关键帧模型
+                      <select v-model="form.imageModel" class="field-select">
+                        <option :value="null">请选择关键帧模型</option>
+                        <option v-for="item in imageModelOptions" :key="item.value" :value="item.value">{{ item.label }}</option>
+                      </select>
+                    </label>
+                    <label class="grid gap-2 text-sm text-slate-700">
+                      视频模型
+                      <select v-model="form.videoModel" class="field-select">
+                        <option :value="null">请选择视频模型</option>
+                        <option v-for="item in videoModelOptions" :key="item.value" :value="item.value">{{ item.label }}</option>
+                      </select>
+                    </label>
+                  </div>
+                </div>
 
-          <div class="submit-row">
-            <div class="submit-actions">
-              <button class="btn-primary" type="submit" :disabled="submitting || !isFormReady">{{ submitLabel }}</button>
-              <button class="btn-secondary" type="button" :disabled="submitting" @click="goToTasks">查看任务列表</button>
-              <button class="btn-ghost" type="button" :disabled="!progressTaskId" @click="goToCurrentTask">查看当前任务</button>
-            </div>
-            <p class="submit-status">{{ statusText }}</p>
+                <div class="surface-tile parameter-cluster p-4">
+                  <div class="parameter-cluster__head">
+                    <p class="parameter-cluster__eyebrow">Output Control</p>
+                    <strong>输出控制</strong>
+                  </div>
+                  <div class="grid gap-4 sm:grid-cols-2">
+                    <label class="grid gap-2 text-sm text-slate-700">
+                      Seed
+                      <input
+                        v-model="seedInput"
+                        class="field-input"
+                        type="number"
+                        min="0"
+                        step="1"
+                        placeholder="留空则不指定"
+                      />
+                      <span class="text-xs text-slate-500">{{ seedCapabilityHint }}</span>
+                    </label>
+                    <label class="grid gap-2 text-sm text-slate-700">
+                      清晰度 / 画幅
+                      <select v-model="form.videoSize" class="field-select">
+                        <option v-for="item in videoSizeOptions" :key="item.value" :value="item.value">{{ item.label }}</option>
+                      </select>
+                    </label>
+                    <label class="grid gap-2 text-sm text-slate-700">
+                      输出视频数量
+                      <select v-model="form.outputCount" class="field-select">
+                        <option value="auto">自动（按脚本分镜）</option>
+                        <option v-for="item in outputCountOptions" :key="item" :value="item">{{ item }} 条</option>
+                      </select>
+                    </label>
+                    <label class="grid gap-2 text-sm text-slate-700">
+                      视频总时长限制
+                      <select v-model="durationLimitMode" class="field-select">
+                        <option value="auto">自动</option>
+                        <option value="manual">手动输入最大时长</option>
+                      </select>
+                    </label>
+                    <label v-if="durationLimitMode === 'manual'" class="grid gap-2 text-sm text-slate-700">
+                      最大总时长（秒）
+                      <input
+                        v-model="manualMaxDurationSeconds"
+                        class="field-input"
+                        type="number"
+                        :min="minimumAllowedDurationSeconds ?? 1"
+                        max="120"
+                        step="1"
+                        :placeholder="manualDurationPlaceholder"
+                      />
+                      <span class="text-xs text-slate-500">{{ manualDurationHint }}</span>
+                    </label>
+                  </div>
+                </div>
+
+                <div class="surface-tile p-4">
+                  <div class="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <p class="text-sm font-semibold text-slate-900">高分 Seed 复用</p>
+                      <p class="mt-1 text-xs text-slate-500">按任务效果评分倒序读取已验证过的 seed，点击即可回填当前表单。</p>
+                    </div>
+                    <button type="button" class="btn-ghost btn-sm" :disabled="loadingReusableSeeds" @click="loadReusableSeeds">
+                      {{ loadingReusableSeeds ? "刷新中..." : "刷新列表" }}
+                    </button>
+                  </div>
+                  <p v-if="reusableSeedError" class="mt-3 text-sm text-rose-600">{{ reusableSeedError }}</p>
+                  <div v-else-if="reusableSeedTasks.length" class="mt-4 grid gap-3">
+                    <button
+                      v-for="task in reusableSeedTasks"
+                      :key="task.id"
+                      type="button"
+                      class="seed-source-card rounded-2xl px-4 py-3 text-left transition"
+                      @click="applySeedFromTask(task)"
+                    >
+                      <div class="flex flex-wrap items-center gap-2 text-xs text-slate-500">
+                        <span class="surface-chip">Seed {{ formatReusableSeed(task.taskSeed) }}</span>
+                        <span class="surface-chip">评分 {{ formatReusableRating(task.effectRating) }}</span>
+                        <span v-if="task.ratedAt">{{ formatReusableDate(task.ratedAt) }}</span>
+                      </div>
+                      <p class="mt-2 text-sm font-semibold text-slate-900">{{ task.title }}</p>
+                      <p class="mt-1 text-xs text-slate-500">
+                        {{ task.aspectRatio || "未知画幅" }} · {{ task.status }} · {{ task.id }}
+                      </p>
+                      <p v-if="task.effectRatingNote" class="mt-2 line-clamp-2 text-sm text-slate-600">{{ task.effectRatingNote }}</p>
+                      <p
+                        v-if="selectedSeedSourceTaskId === task.id"
+                        class="mt-2 text-xs font-medium text-emerald-700"
+                      >
+                        已回填到当前任务
+                      </p>
+                    </button>
+                  </div>
+                  <p v-else class="mt-3 text-sm text-slate-500">当前还没有可复用的高分 seed。</p>
+                  <p class="mt-3 text-xs text-slate-500">提示：seed 复用只会回填种子，不会自动改动你当前选择的模型组合。</p>
+                </div>
+              </section>
+            </section>
+
+            <section class="composer-column composer-column-right">
+              <section class="composer-section">
+                <div class="composer-section__head">
+                  <div>
+                    <p class="composer-section__eyebrow">Creative Input</p>
+                    <h3>提示词、正文输入与操作按钮</h3>
+                    <p>右侧负责实际创作内容，填写提示词、导入正文，并从这里直接发起生成。</p>
+                  </div>
+                  <span class="surface-chip">{{ transcriptCharacterCount > 0 ? `${transcriptCharacterCount} 字文本` : "等待正文输入" }}</span>
+                </div>
+
+                <div class="creative-grid">
+                  <div class="surface-tile p-4 creative-card">
+                    <div class="creative-card__header flex flex-wrap items-center justify-between gap-3">
+                      <p class="text-sm font-semibold text-slate-900">全局提示词</p>
+                      <div class="flex items-center gap-2">
+                        <button type="button" class="btn-primary btn-sm" :disabled="generatingPrompt" @click="handleGeneratePrompt">
+                          {{ generatingPrompt ? "生成中..." : "AI 生成提示词" }}
+                        </button>
+                        <button type="button" class="btn-ghost btn-sm" @click="form.creativePrompt = ''">清空</button>
+                      </div>
+                    </div>
+                    <textarea
+                      v-model="form.creativePrompt"
+                      rows="12"
+                      class="field-textarea mt-3 creative-card__textarea"
+                      placeholder="描述人物关系、冲突推进、镜头语气、情绪节奏；留空则使用系统默认提示词。"
+                    ></textarea>
+                    <p class="mt-2 text-xs text-slate-500 creative-card__meta">提示词来源：{{ promptSourceLabel }}</p>
+                  </div>
+
+                  <div class="surface-tile p-4 creative-card">
+                    <div class="creative-card__header flex flex-wrap items-center justify-between gap-3">
+                      <p class="text-sm font-semibold text-slate-900">小说 TXT 输入</p>
+                      <button type="button" class="btn-secondary btn-sm" :disabled="uploadingText" @click="textFileInput?.click()">
+                        {{ uploadingText ? "上传中..." : "上传 TXT" }}
+                      </button>
+                    </div>
+                    <input
+                      ref="textFileInput"
+                      type="file"
+                      accept=".txt,text/plain"
+                      class="hidden"
+                      @change="handleTextFileChange"
+                    />
+                    <p class="mt-2 text-xs text-slate-500">{{ uploadedTextLabel }}</p>
+                    <textarea
+                      v-model="form.transcriptText"
+                      rows="12"
+                      class="field-textarea mt-3 font-mono text-sm creative-card__textarea"
+                      placeholder="可直接粘贴小说正文或上传 TXT 后自动填充。"
+                    ></textarea>
+                  </div>
+                </div>
+
+                <div class="submit-row">
+                  <div class="submit-row__copy">
+                    <p class="submit-row__eyebrow">Ready Check</p>
+                    <strong>{{ submitLabel }}</strong>
+                    <p class="submit-status">{{ statusText }}</p>
+                  </div>
+                  <div class="submit-actions">
+                    <button class="btn-primary" type="submit" :disabled="submitting || !isFormReady">{{ submitLabel }}</button>
+                    <button class="btn-secondary" type="button" :disabled="submitting" @click="goToTasks">查看任务列表</button>
+                    <button class="btn-ghost" type="button" :disabled="!progressTaskId" @click="goToCurrentTask">查看当前任务</button>
+                  </div>
+                </div>
+              </section>
+            </section>
           </div>
         </form>
       </div>
 
-      <aside class="new-task-side">
-        <TaskProgressCard
-          :state="progressState"
-          :task-id="progressTaskId"
-          :trace-count="progressTraceCount"
-          :elapsed-label="progressElapsedLabel"
-          :result-title="previewResultTitle"
-          :result-meta="previewResultMeta"
-          :output-url="previewOutputUrl"
-          :poster-url="previewPosterUrl"
-        />
+      <section class="new-task-progress-area">
+        <div class="new-task-progress-card">
+          <TaskProgressCard
+            :state="progressState"
+            :task-id="progressTaskId"
+            :trace-count="progressTraceCount"
+            :elapsed-label="progressElapsedLabel"
+            :result-title="previewResultTitle"
+            :result-meta="previewResultMeta"
+            :output-url="previewOutputUrl"
+            :poster-url="previewPosterUrl"
+          />
+        </div>
 
-        <section class="surface-panel p-5">
-          <div class="panel-head">
-            <p class="panel-eyebrow">Runtime Snapshot</p>
-            <h3>当前任务摘要</h3>
-          </div>
-          <div class="summary-grid">
-            <div v-for="item in summaryRows" :key="item.label" class="summary-item">
-              <span>{{ item.label }}</span>
-              <strong>{{ item.value }}</strong>
-            </div>
-          </div>
-        </section>
-
-        <section class="surface-panel p-5">
+        <section class="surface-panel p-5 new-task-trace-card">
           <div class="panel-head">
             <p class="panel-eyebrow">Trace Feed</p>
             <h3>最近追踪</h3>
@@ -233,7 +271,7 @@
           </ul>
           <p v-else class="trace-empty">创建任务后会在这里显示实时追踪事件。</p>
         </section>
-      </aside>
+      </section>
     </div>
   </section>
 </template>
@@ -245,16 +283,6 @@ import { fetchGenerationOptions } from "@/api/generation";
 import { createGenerationTask, fetchTasks, generateCreativePrompt, uploadText } from "@/api/tasks";
 import TaskProgressCard from "@/components/generate/TaskProgressCard.vue";
 import { useTaskProgress } from "@/components/generate/useTaskProgress";
-import HintBell from "@/components/HintBell.vue";
-import PageHeader from "@/components/PageHeader.vue";
-import {
-  formatTaskModelValue,
-  formatTaskOutputCount,
-  formatTaskRequestedDuration,
-  formatTaskResolvedDuration,
-  formatTaskSeed,
-  getTaskRequestSnapshot,
-} from "@/utils/task-request";
 import { shouldStopBeforeVideoGeneration } from "@/workbench/developer-settings";
 import type {
   CreateGenerationTaskRequest,
@@ -359,17 +387,6 @@ function parseSeed(value: unknown): number | null {
     return null;
   }
   return seed;
-}
-
-function formatDurationSelection(): string {
-  if (durationLimitMode.value === "auto") {
-    return "自动";
-  }
-  const manualMax = parseDurationSeconds(manualMaxDurationSeconds.value);
-  if (manualMax !== null) {
-    return `手动上限 ${manualMax}s`;
-  }
-  return "手动（未填写）";
 }
 
 function formatReusableSeed(value: number | null | undefined): string {
@@ -571,6 +588,17 @@ const promptSourceLabel = computed(() => {
   return form.value.creativePrompt?.trim() ? promptSource.value : "系统默认";
 });
 
+const selectedModelCount = computed(() => {
+  return [
+    form.value.textAnalysisModel,
+    form.value.visionModel,
+    form.value.imageModel,
+    form.value.videoModel,
+  ].filter(Boolean).length;
+});
+
+const transcriptCharacterCount = computed(() => form.value.transcriptText.trim().length);
+
 const seedCapabilityHint = computed(() => {
   const visionSupportsSeed = Boolean(selectedVisionModelOption.value?.supportsSeed);
   const videoSupportsSeed = Boolean(selectedVideoModelOption.value?.supportsSeed);
@@ -691,32 +719,6 @@ const previewResultMeta = computed(() => {
     durationLabel,
     task.outputs?.length ? `输出 ${task.outputs.length} 条` : "",
   ].filter(Boolean);
-});
-
-const summaryRows = computed(() => {
-  const task = progressTaskDetail.value;
-  const snapshot = getTaskRequestSnapshot(task);
-  const progressValue = task ? Math.round(task.progress ?? 0) : progressState.value.progress;
-  const modelSummary = task
-    ? `${formatTaskModelValue(snapshot.textAnalysisModel)} / ${formatTaskModelValue(snapshot.visionModel)} / ${formatTaskModelValue(snapshot.imageModel)} / ${formatTaskModelValue(snapshot.videoModel)}`
-    : loadingOptions.value
-    ? "加载中"
-    : `${form.value.textAnalysisModel || "未选择"} / ${form.value.visionModel || "未选择"} / ${form.value.imageModel || "未选择"} / ${form.value.videoModel || "未选择"}`;
-  const videoSizeSummary = task ? formatTaskModelValue(snapshot.videoSize) : form.value.videoSize || "未选择";
-  const durationSummary = task
-    ? `${formatTaskRequestedDuration(snapshot)} / 生效 ${formatTaskResolvedDuration(task)}`
-    : formatDurationSelection();
-  return [
-    { label: "任务 ID", value: progressTaskId.value || "未创建" },
-    { label: "当前状态", value: task?.status || (submitting.value ? "CREATING" : progressState.value.stage) },
-    { label: "当前进度", value: `${Math.max(0, Math.min(100, progressValue))}%` },
-    { label: "模型配置", value: modelSummary },
-    { label: "清晰度 / 画幅", value: videoSizeSummary },
-    { label: "输出数量", value: task ? formatTaskOutputCount(snapshot) : form.value.outputCount === "auto" ? "自动" : `${form.value.outputCount ?? 1} 条` },
-    { label: "视频时长", value: durationSummary },
-    { label: "Seed", value: task ? formatTaskSeed(snapshot) : String(parseSeed(seedInput.value) ?? "未设置") },
-    { label: "已生成结果", value: task?.outputs?.length ? `${task.outputs.length} 条` : "暂无" },
-  ];
 });
 
 watch(
@@ -1006,18 +1008,160 @@ onUnmounted(() => {
   align-items: start;
 }
 
-.new-task-main {
-  min-width: 0;
+.composer-section__eyebrow,
+.submit-row__eyebrow {
+  margin: 0;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--text-muted);
 }
 
-.new-task-side {
+.composer-section {
   display: grid;
   gap: 1rem;
 }
 
-.submit-row {
+.new-task-workspace {
   display: grid;
-  gap: 0.75rem;
+  gap: 1rem;
+  align-items: start;
+}
+
+.composer-column {
+  min-width: 0;
+}
+
+.composer-section__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  justify-content: space-between;
+  gap: 0.85rem;
+}
+
+.composer-section__head h3 {
+  margin: 0.35rem 0 0;
+  font-size: 1.15rem;
+  line-height: 1.1;
+  letter-spacing: -0.03em;
+  color: var(--text-strong);
+}
+
+.composer-section__head p:last-child {
+  margin: 0.35rem 0 0;
+  max-width: 56ch;
+  line-height: 1.7;
+  color: var(--text-body);
+}
+
+.field-matrix {
+  position: relative;
+}
+
+.parameter-cluster {
+  display: grid;
+  gap: 0.95rem;
+}
+
+.parameter-cluster__head {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.parameter-cluster__eyebrow {
+  margin: 0;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.parameter-cluster__head strong {
+  color: var(--text-strong);
+  font-size: 0.98rem;
+  letter-spacing: -0.02em;
+}
+
+.creative-grid {
+  display: grid;
+  gap: 1rem;
+}
+
+.creative-card {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+}
+
+.creative-card__header {
+  min-height: 2.5rem;
+}
+
+.creative-card__textarea {
+  flex: 1;
+}
+
+.creative-card__meta {
+  margin-top: 0.75rem;
+}
+
+.new-task-main {
+  min-width: 0;
+  position: relative;
+  overflow: hidden;
+}
+
+.new-task-main::before {
+  content: "";
+  position: absolute;
+  inset: -20% auto auto -12%;
+  width: 280px;
+  height: 280px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 183, 174, 0.18), transparent 70%);
+  pointer-events: none;
+}
+
+.new-task-progress-area {
+  display: grid;
+  gap: 1rem;
+}
+
+.new-task-progress-card,
+.new-task-trace-card {
+  min-width: 0;
+}
+
+.submit-row {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  border-radius: 1.4rem;
+  border: 1px solid rgba(197, 108, 115, 0.16);
+  padding: 1rem 1.05rem;
+  background:
+    linear-gradient(180deg, rgba(255, 240, 236, 0.88), rgba(255, 255, 255, 0.48)),
+    var(--bg-surface);
+  box-shadow: var(--shadow-raise-soft);
+}
+
+.submit-row__copy {
+  min-width: 220px;
+}
+
+.submit-row__copy strong {
+  display: block;
+  margin-top: 0.3rem;
+  font-size: 1.05rem;
+  line-height: 1.2;
+  color: var(--text-strong);
 }
 
 .submit-actions {
@@ -1027,7 +1171,7 @@ onUnmounted(() => {
 }
 
 .submit-status {
-  margin: 0;
+  margin: 0.35rem 0 0;
   font-size: 0.9rem;
   color: var(--text-body);
 }
@@ -1051,36 +1195,6 @@ onUnmounted(() => {
   color: var(--text-strong);
 }
 
-.summary-grid {
-  display: grid;
-  gap: 0.6rem;
-}
-
-.summary-item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.8rem;
-  border-radius: 0.8rem;
-  background: var(--bg-surface);
-  padding: 0.58rem 0.72rem;
-  box-shadow: var(--shadow-pressed);
-}
-
-.summary-item span {
-  font-size: 0.76rem;
-  color: var(--text-muted);
-}
-
-.summary-item strong {
-  max-width: 72%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 0.8rem;
-  color: var(--text-strong);
-}
-
 .trace-list {
   margin: 0;
   padding: 0;
@@ -1092,8 +1206,11 @@ onUnmounted(() => {
 }
 
 .trace-item {
-  border-radius: 0.8rem;
-  background: var(--bg-surface);
+  border-radius: 0.95rem;
+  border: 1px solid var(--surface-border);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.84), rgba(255, 255, 255, 0.3)),
+    var(--bg-surface);
   padding: 0.6rem 0.7rem;
   box-shadow: var(--shadow-pressed);
 }
@@ -1130,11 +1247,17 @@ onUnmounted(() => {
   margin: 0;
   font-size: 0.86rem;
   color: var(--text-body);
+  border-radius: 0.95rem;
+  border: 1px dashed var(--surface-border-strong);
+  padding: 0.85rem 0.95rem;
+  background: rgba(255, 255, 255, 0.44);
 }
 
 .seed-source-card {
-  border: 0;
-  background: var(--bg-surface);
+  border: 1px solid var(--surface-border);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.86), rgba(255, 255, 255, 0.34)),
+    var(--bg-surface);
   box-shadow: var(--shadow-raise-soft);
 }
 
@@ -1147,20 +1270,28 @@ onUnmounted(() => {
 }
 
 @media (min-width: 1200px) {
-  .new-task-layout {
-    grid-template-columns: minmax(0, 1.45fr) minmax(340px, 0.95fr);
+  .new-task-workspace {
+    grid-template-columns: minmax(0, 1.08fr) minmax(0, 0.92fr);
   }
 
-  .new-task-side {
-    position: sticky;
-    top: 1rem;
-    align-self: start;
+  .creative-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
+  }
+
+  .creative-grid > * {
+    height: 100%;
+  }
+
+  .new-task-progress-area {
+    grid-template-columns: minmax(0, 1.12fr) minmax(320px, 0.88fr);
+    align-items: start;
   }
 }
 
 @media (max-width: 640px) {
-  .summary-item strong {
-    max-width: 60%;
+  .submit-row {
+    padding: 1rem;
   }
 }
 </style>

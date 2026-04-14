@@ -81,11 +81,13 @@ const statusLabel = computed(() => {
   gap: 1rem;
   padding: 1.5rem;
   border-radius: 32px;
-  background: #E0E5EC;
-  color: #1f2a37;
-  box-shadow:
-    20px 20px 40px rgba(138, 148, 164, 0.45),
-    -20px -20px 40px rgba(255, 255, 255, 0.95);
+  background:
+    radial-gradient(circle at top right, rgba(255, 183, 174, 0.24), transparent 26%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.88), rgba(255, 255, 255, 0.42)),
+    var(--bg-surface);
+  color: var(--text-strong);
+  border: 1px solid var(--surface-border);
+  box-shadow: var(--shadow-raise);
 }
 
 .progress-orb {
@@ -101,7 +103,7 @@ const statusLabel = computed(() => {
   right: -1.5rem;
   width: 10rem;
   height: 10rem;
-  background: rgba(255, 156, 156, 0.24);
+  background: rgba(255, 183, 174, 0.28);
 }
 
 .progress-orb-emerald {
@@ -109,7 +111,7 @@ const statusLabel = computed(() => {
   left: -2rem;
   width: 9rem;
   height: 9rem;
-  background: rgba(255, 156, 156, 0.18);
+  background: rgba(194, 212, 235, 0.18);
 }
 
 .card-head {
@@ -127,14 +129,14 @@ const statusLabel = computed(() => {
   font-weight: 700;
   letter-spacing: 0.16em;
   text-transform: uppercase;
-  color: #5f6b7c;
+  color: var(--text-muted);
 }
 
 .card-head h2 {
   margin: 0.25rem 0 0;
   font-size: 1.25rem;
   font-weight: 700;
-  color: #1f2a37;
+  color: var(--text-strong);
 }
 
 .status-pill {
@@ -143,11 +145,10 @@ const statusLabel = computed(() => {
   font-size: 0.78rem;
   font-weight: 700;
   padding: 0.32rem 0.8rem;
-  background: #E7EBF2;
+  background: rgba(255, 255, 255, 0.74);
   color: var(--status-color);
-  box-shadow:
-    2px 2px 6px rgba(138, 148, 164, 0.3),
-    -2px -2px 6px rgba(255, 255, 255, 0.9);
+  border: 1px solid var(--surface-border);
+  box-shadow: none;
   text-transform: uppercase;
   letter-spacing: 0.12em;
 }
@@ -179,10 +180,11 @@ const statusLabel = computed(() => {
   gap: 0.4rem;
   padding: 1rem;
   border-radius: 26px;
-  background: #E7EBF2;
-  box-shadow:
-    inset 6px 6px 14px rgba(138, 148, 164, 0.35),
-    inset -6px -6px 14px rgba(255, 255, 255, 0.8);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.84), rgba(255, 255, 255, 0.34)),
+    var(--bg-surface);
+  border: 1px solid var(--surface-border);
+  box-shadow: var(--shadow-pressed);
 }
 
 .progress-top {
@@ -190,7 +192,7 @@ const statusLabel = computed(() => {
   justify-content: space-between;
   align-items: center;
   gap: 0.75rem;
-  color: #1f2a37;
+  color: var(--text-strong);
   font-size: 0.92rem;
 }
 
@@ -198,28 +200,26 @@ const statusLabel = computed(() => {
   width: 100%;
   height: 10px;
   border-radius: 999px;
-  background: #E0E5EC;
-  box-shadow:
-    inset 2px 2px 6px rgba(138, 148, 164, 0.25),
-    inset -2px -2px 6px rgba(255, 255, 255, 0.9);
+  background: rgba(197, 208, 223, 0.52);
+  box-shadow: inset 0 0 0 1px rgba(141, 157, 180, 0.08);
 }
 
 .progress-bar {
   height: 100%;
   border-radius: 999px;
-  background: linear-gradient(90deg, rgba(255, 156, 156, 0.4), #ffd3d3);
+  background: linear-gradient(90deg, #c56c73, #ffb7ae);
   transition: width 240ms ease;
 }
 
 .progress-message {
   margin: 0;
-  color: #5c6774;
+  color: var(--text-body);
   font-size: 0.85rem;
 }
 
 .progress-meta {
   margin: 0;
-  color: #5a6370;
+  color: var(--text-muted);
   font-size: 0.75rem;
   display: flex;
   flex-wrap: wrap;
@@ -233,15 +233,16 @@ const statusLabel = computed(() => {
   gap: 0.6rem;
   padding: 1rem;
   border-radius: 26px;
-  background: #E7EBF2;
-  box-shadow:
-    inset 6px 6px 14px rgba(138, 148, 164, 0.25),
-    inset -6px -6px 14px rgba(255, 255, 255, 0.9);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.84), rgba(255, 255, 255, 0.34)),
+    var(--bg-surface);
+  border: 1px solid var(--surface-border);
+  box-shadow: var(--shadow-pressed);
 }
 
 .result-title {
   margin: 0;
-  color: #1f2a37;
+  color: var(--text-strong);
   font-size: 0.88rem;
   font-weight: 600;
 }
@@ -266,21 +267,21 @@ const statusLabel = computed(() => {
   border-radius: 999px;
   padding: 0.28rem 0.6rem;
   font-size: 0.73rem;
-  color: #3b4f68;
-  background: #E0E5EC;
-  box-shadow:
-    inset 2px 2px 6px rgba(255, 255, 255, 0.9),
-    inset -2px -2px 6px rgba(138, 148, 164, 0.2);
+  color: var(--text-body);
+  background: rgba(255, 255, 255, 0.66);
+  border: 1px solid var(--surface-border);
+  box-shadow: none;
 }
 
 .empty-shell {
   padding: 1.1rem;
   border-radius: 26px;
-  color: #5c6774;
+  color: var(--text-body);
   text-align: center;
-  background: #E0E5EC;
-  box-shadow:
-    inset 6px 6px 14px rgba(138, 148, 164, 0.25),
-    inset -6px -6px 14px rgba(255, 255, 255, 0.9);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.78), rgba(255, 255, 255, 0.26)),
+    var(--bg-surface);
+  border: 1px dashed var(--surface-border-strong);
+  box-shadow: var(--shadow-pressed);
 }
 </style>

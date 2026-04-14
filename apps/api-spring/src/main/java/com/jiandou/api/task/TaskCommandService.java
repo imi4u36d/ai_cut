@@ -119,14 +119,20 @@ public class TaskCommandService {
     }
 
     public TaskRecord pause(TaskRecord task) {
-        String previousStatus = task.status;
         executionCoordinator.dequeue(task);
-        task.status = "PAUSED";
         task.isQueued = false;
         task.queuePosition = null;
-        executionCoordinator.markActiveAttemptFinished(task, "PAUSED", "");
-        executionCoordinator.recordTrace(task, "api", "task.paused", "任务已暂停。", "INFO", Map.of("reason", "manual"));
-        executionCoordinator.recordStatusHistory(task, previousStatus, "PAUSED", "api", "task.paused", "任务已暂停。");
+        executionCoordinator.transitionTask(
+            task,
+            TaskStateTransition.info(
+                "PAUSED",
+                task.progress,
+                "api",
+                "task.paused",
+                "任务已暂停。",
+                Map.of("reason", "manual")
+            ).withAttempt("PAUSED", "")
+        );
         executionCoordinator.recomputeQueuePositions(taskRepository.findAll());
         return task;
     }
@@ -139,16 +145,25 @@ public class TaskCommandService {
     }
 
     public TaskRecord terminate(TaskRecord task) {
-        String previousStatus = task.status;
         executionCoordinator.dequeue(task);
-        task.status = "FAILED";
         task.isQueued = false;
         task.queuePosition = null;
-        task.errorMessage = "任务已手动终止。";
-        task.finishedAt = task.nowIso();
-        executionCoordinator.markActiveAttemptFinished(task, "TERMINATED", task.errorMessage);
-        executionCoordinator.recordTrace(task, "api", "task.terminated", "任务已终止。", "WARN", Map.of("reason", "manual"));
-        executionCoordinator.recordStatusHistory(task, previousStatus, "FAILED", "api", "task.terminated", "任务已终止。");
+        String errorMessage = "任务已手动终止。";
+        executionCoordinator.transitionTask(
+            task,
+            TaskStateTransition.warn(
+                "FAILED",
+                task.progress,
+                "api",
+                "task.terminated",
+                "任务已终止。",
+                Map.of("reason", "manual")
+            ).withAttempt("TERMINATED", errorMessage),
+            currentTask -> {
+                currentTask.errorMessage = errorMessage;
+                currentTask.finishedAt = currentTask.nowIso();
+            }
+        );
         executionCoordinator.recomputeQueuePositions(taskRepository.findAll());
         return task;
     }

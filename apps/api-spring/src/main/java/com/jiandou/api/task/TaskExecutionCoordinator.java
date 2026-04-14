@@ -9,6 +9,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.function.Consumer;
 import org.springframework.stereotype.Component;
 
 @Component
@@ -154,6 +155,55 @@ public class TaskExecutionCoordinator {
             .taskId(task.id)
             .addAttempt(attempt)
             .addQueueEvent(queueEvent));
+    }
+
+    public void transitionTask(TaskRecord task, TaskStateTransition transition) {
+        transitionTask(task, transition, null);
+    }
+
+    public void transitionTask(TaskRecord task, TaskStateTransition transition, Consumer<TaskRecord> taskMutator) {
+        if (task == null || transition == null) {
+            return;
+        }
+        String previousStatus = task.status;
+        if (taskMutator != null) {
+            taskMutator.accept(task);
+        }
+        task.status = transition.nextStatus();
+        task.progress = transition.progress();
+        Map<String, Object> trace = newTraceRow(
+            transition.stage(),
+            transition.event(),
+            transition.message(),
+            transition.level(),
+            transition.payload()
+        );
+        Map<String, Object> statusHistory = newStatusHistoryRow(
+            task,
+            previousStatus,
+            transition.nextStatus(),
+            transition.stage(),
+            transition.event(),
+            transition.message()
+        );
+        task.trace.add(trace);
+        task.statusHistory.add(statusHistory);
+        touch(task);
+
+        TaskPersistenceMutation mutation = new TaskPersistenceMutation()
+            .task(task)
+            .addTrace(trace)
+            .addStatusHistory(statusHistory);
+        Map<String, Object> attempt = applyAttemptTransition(task, transition);
+        if (attempt != null) {
+            mutation
+                .addAttempt(attempt)
+                .addQueueEvent(newQueueEventRow(task, transition.attemptStatus().toLowerCase(), Map.of(
+                    "status", transition.attemptStatus(),
+                    "errorMessage", transition.attemptErrorMessage()
+                )));
+        }
+        taskRepository.saveMutation(mutation);
     }
 
     public void recordTrace(TaskRecord task, String stage, String event, String message, String level, Map<String, Object> payload) {
@@ -376,6 +426,40 @@ public class TaskExecutionCoordinator {
         attempt.put("workerInstanceId", "");
         attempt.put("finishedAt", null);
         attempt.put("failureMessage", "");
+        return attempt;
+    }
+
+    private Map<String, Object> applyAttemptTransition(TaskRecord task, TaskStateTransition transition) {
+        if (task == null || transition == null || !transition.updatesAttempt()) {
+            return null;
+        }
+        Map<String, Object> attempt = activeAttempt(task);
+        if (attempt == null) {
+            return null;
+        }
+        String now = nowIso();
+        String status = transition.attemptStatus();
+        attempt.put("status", status);
+        if ("QUEUED".equalsIgnoreCase(status)) {
+            attempt.put("queueEnteredAt", now);
+            attempt.put("queueLeftAt", null);
+            attempt.put("claimedAt", null);
+            attempt.put("startedAt", null);
+            attempt.put("workerInstanceId", "");
+            attempt.put("finishedAt", null);
+            attempt.put("failureMessage", "");
+            return attempt;
+        }
+        if ("RUNNING".equalsIgnoreCase(status)) {
+            attempt.put("queueLeftAt", now);
+            attempt.put("claimedAt", now);
+            attempt.put("startedAt", now);
+            attempt.put("finishedAt", null);
+            attempt.put("failureMessage", "");
+            return attempt;
+        }
+        attempt.put("finishedAt", now);
+        attempt.put("failureMessage", transition.attemptErrorMessage());
         return attempt;
     }
 

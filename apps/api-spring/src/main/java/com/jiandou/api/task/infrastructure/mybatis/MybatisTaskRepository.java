@@ -46,107 +46,50 @@ public class MybatisTaskRepository implements TaskRepository {
             return;
         }
         try (SqlSession session = sqlSessionFactory.openSession(false)) {
-            TaskRecord task = mutation.task();
-            String taskId = mutation.taskId();
-            if ((taskId == null || taskId.isBlank()) && task != null) {
-                taskId = taskRecordAssembler.toWriteModel(task).taskId();
+            try {
+                TaskRecord task = mutation.task();
+                String taskId = mutation.taskId();
+                if ((taskId == null || taskId.isBlank()) && task != null) {
+                    taskId = taskRecordAssembler.toWriteModel(task).taskId();
+                }
+                if ((taskId == null || taskId.isBlank()) && requiresTaskId(mutation)) {
+                    throw new IllegalArgumentException("Task persistence mutation requires taskId for task-scoped rows.");
+                }
+                if (task != null) {
+                    saveTask(session, task);
+                }
+                for (Map<String, Object> attempt : mutation.attempts()) {
+                    saveAttempt(session, taskId, attempt);
+                }
+                for (Map<String, Object> statusHistory : mutation.statusHistoryRows()) {
+                    saveStatusHistory(session, taskId, statusHistory);
+                }
+                for (Map<String, Object> trace : mutation.traceRows()) {
+                    saveTrace(session, taskId, trace);
+                }
+                for (Map<String, Object> stageRun : mutation.stageRunRows()) {
+                    saveStageRun(session, taskId, stageRun);
+                }
+                for (Map<String, Object> modelCall : mutation.modelCallRows()) {
+                    saveModelCall(session, taskId, modelCall);
+                }
+                for (Map<String, Object> material : mutation.materialRows()) {
+                    saveMaterial(session, taskId, material);
+                }
+                for (Map<String, Object> result : mutation.resultRows()) {
+                    saveResult(session, taskId, result);
+                }
+                for (Map<String, Object> queueEvent : mutation.queueEventRows()) {
+                    saveQueueEvent(session, taskId, queueEvent);
+                }
+                for (Map<String, Object> workerInstance : mutation.workerInstanceRows()) {
+                    saveWorkerInstance(session, workerInstance);
+                }
+                session.commit();
+            } catch (RuntimeException ex) {
+                session.rollback();
+                throw ex;
             }
-            if (task != null) {
-                saveTask(session, task);
-            }
-            for (Map<String, Object> attempt : mutation.attempts()) {
-                saveAttempt(session, taskId, attempt);
-            }
-            for (Map<String, Object> statusHistory : mutation.statusHistoryRows()) {
-                saveStatusHistory(session, taskId, statusHistory);
-            }
-            for (Map<String, Object> trace : mutation.traceRows()) {
-                saveTrace(session, taskId, trace);
-            }
-            for (Map<String, Object> stageRun : mutation.stageRunRows()) {
-                saveStageRun(session, taskId, stageRun);
-            }
-            for (Map<String, Object> modelCall : mutation.modelCallRows()) {
-                saveModelCall(session, taskId, modelCall);
-            }
-            for (Map<String, Object> material : mutation.materialRows()) {
-                saveMaterial(session, taskId, material);
-            }
-            for (Map<String, Object> result : mutation.resultRows()) {
-                saveResult(session, taskId, result);
-            }
-            for (Map<String, Object> queueEvent : mutation.queueEventRows()) {
-                saveQueueEvent(session, taskId, queueEvent);
-            }
-            for (Map<String, Object> workerInstance : mutation.workerInstanceRows()) {
-                saveWorkerInstance(session, workerInstance);
-            }
-            session.commit();
-        } catch (RuntimeException ex) {
-            throw ex;
-        }
-    }
-
-    @Override
-    public void saveAttempt(String taskId, Map<String, Object> attempt) {
-        try (SqlSession session = sqlSessionFactory.openSession(true)) {
-            saveAttempt(session, taskId, attempt);
-        }
-    }
-
-    @Override
-    public void saveStatusHistory(String taskId, Map<String, Object> statusHistory) {
-        try (SqlSession session = sqlSessionFactory.openSession(true)) {
-            saveStatusHistory(session, taskId, statusHistory);
-        }
-    }
-
-    @Override
-    public void saveTrace(String taskId, Map<String, Object> trace) {
-        try (SqlSession session = sqlSessionFactory.openSession(true)) {
-            saveTrace(session, taskId, trace);
-        }
-    }
-
-    @Override
-    public void saveStageRun(String taskId, Map<String, Object> stageRun) {
-        try (SqlSession session = sqlSessionFactory.openSession(true)) {
-            saveStageRun(session, taskId, stageRun);
-        }
-    }
-
-    @Override
-    public void saveModelCall(String taskId, Map<String, Object> modelCall) {
-        try (SqlSession session = sqlSessionFactory.openSession(true)) {
-            saveModelCall(session, taskId, modelCall);
-        }
-    }
-
-    @Override
-    public void saveMaterial(String taskId, Map<String, Object> material) {
-        try (SqlSession session = sqlSessionFactory.openSession(true)) {
-            saveMaterial(session, taskId, material);
-        }
-    }
-
-    @Override
-    public void saveResult(String taskId, Map<String, Object> result) {
-        try (SqlSession session = sqlSessionFactory.openSession(true)) {
-            saveResult(session, taskId, result);
-        }
-    }
-
-    @Override
-    public void saveQueueEvent(String taskId, Map<String, Object> queueEvent) {
-        try (SqlSession session = sqlSessionFactory.openSession(true)) {
-            saveQueueEvent(session, taskId, queueEvent);
-        }
-    }
-
-    @Override
-    public void saveWorkerInstance(Map<String, Object> workerInstance) {
-        try (SqlSession session = sqlSessionFactory.openSession(true)) {
-            saveWorkerInstance(session, workerInstance);
         }
     }
 
@@ -563,5 +506,16 @@ public class MybatisTaskRepository implements TaskRepository {
         } else {
             updateAction.run();
         }
+    }
+
+    private boolean requiresTaskId(TaskPersistenceMutation mutation) {
+        return !mutation.attempts().isEmpty()
+            || !mutation.statusHistoryRows().isEmpty()
+            || !mutation.traceRows().isEmpty()
+            || !mutation.stageRunRows().isEmpty()
+            || !mutation.modelCallRows().isEmpty()
+            || !mutation.materialRows().isEmpty()
+            || !mutation.resultRows().isEmpty()
+            || !mutation.queueEventRows().isEmpty();
     }
 }

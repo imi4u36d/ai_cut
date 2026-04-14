@@ -13,24 +13,6 @@ public interface TaskPersistencePort {
 
     void saveMutation(TaskPersistenceMutation mutation);
 
-    void saveAttempt(String taskId, Map<String, Object> attempt);
-
-    void saveStatusHistory(String taskId, Map<String, Object> statusHistory);
-
-    void saveTrace(String taskId, Map<String, Object> trace);
-
-    void saveStageRun(String taskId, Map<String, Object> stageRun);
-
-    void saveModelCall(String taskId, Map<String, Object> modelCall);
-
-    void saveMaterial(String taskId, Map<String, Object> material);
-
-    void saveResult(String taskId, Map<String, Object> result);
-
-    void saveQueueEvent(String taskId, Map<String, Object> queueEvent);
-
-    void saveWorkerInstance(Map<String, Object> workerInstance);
-
     Map<String, Object> findWorkerInstance(String workerInstanceId);
 
     List<Map<String, Object>> listWorkerInstances(int limit);

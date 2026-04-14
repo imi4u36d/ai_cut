@@ -77,7 +77,7 @@ class TaskViewMapper {
         row.put("effectRatingNote", task.effectRatingNote);
         row.put("ratedAt", task.ratedAt);
         row.put("errorMessage", task.errorMessage);
-        row.put("transcriptPreview", task.transcriptText.isBlank() ? null : task.transcriptText.substring(0, Math.min(220, task.transcriptText.length())));
+        row.put("transcriptPreview", transcriptPreview(task.transcriptText));
         row.put("transcriptCueCount", 0);
         row.put("source", null);
         row.put("sourceAssets", task.sourceAssets);
@@ -103,7 +103,7 @@ class TaskViewMapper {
         int contiguousRenderedClipCount = monitoring.contiguousRenderedClipCount();
         int joinClipIndex = monitoring.latestJoinClipIndex();
         boolean hasAudioClip = task.outputsView().stream()
-            .filter(item -> "video".equalsIgnoreCase(stringValue(item.get("resultType"))))
+            .filter(item -> isVideoResultType(item.get("resultType")))
             .anyMatch(item -> boolValue(mapValue(item.get("extra")).get("hasAudio")));
         if ("FAILED".equals(task.status)) {
             return diagnosis("high", "task_failed", "任务已失败，建议查看诊断并执行恢复重试。", contiguousRenderedClipCount > 0
@@ -138,17 +138,34 @@ class TaskViewMapper {
     private TaskMonitoringSnapshot monitoringSummary(TaskRecord task) {
         Map<String, Object> activeAttempt = activeAttempt(task);
         Map<String, Object> latestTrace = latestByTimestamp(task.traceView(), "timestamp");
-        Map<String, Object> latestStageRun = latestByTimestamp(task.stageRunsView(), "finishedAt");
+        Map<String, Object> latestStageRun = latestStageRun(task);
         Map<String, Object> latestVideoOutput = latestVideoOutput(task);
         Map<String, Object> latestJoinOutput = latestJoinOutput(task);
-        int plannedClipCount = intValue(task.executionContext.get("plannedClipCount"), 0);
+        int plannedClipCount = resolvePlannedClipCount(task);
         List<Integer> renderedClipIndices = renderedClipIndices(task);
+        Map<String, Object> attemptPayload = mapValue(activeAttempt.get("payload"));
         return new TaskMonitoringSnapshot(
-            currentStage(task, latestStageRun, latestTrace),
+            currentStage(task, activeAttempt, latestStageRun, latestTrace),
             stringValue(activeAttempt.get("status")),
-            stringValue(activeAttempt.get("workerInstanceId")),
-            stringValue(activeAttempt.get("resumeFromStage")),
-            intValue(activeAttempt.get("resumeFromClipIndex"), 0),
+            firstNonBlank(
+                stringValue(activeAttempt.get("workerInstanceId")),
+                stringValue(task.executionContext.get("workerInstanceId")),
+                stringValue(latestStageRun.get("workerInstanceId")),
+                stringValue(latestTrace.get("workerInstanceId"))
+            ),
+            firstNonBlank(
+                stringValue(activeAttempt.get("resumeFromStage")),
+                stringValue(attemptPayload.get("resumeFromStage")),
+                stringValue(task.executionContext.get("attemptResumeFromStage"))
+            ),
+            intValue(
+                firstPresent(
+                    activeAttempt.get("resumeFromClipIndex"),
+                    attemptPayload.get("resumeFromClipIndex"),
+                    task.executionContext.get("attemptResumeFromClipIndex")
+                ),
+                0
+            ),
             plannedClipCount,
             renderedClipIndices.size(),
             contiguousClipCount(renderedClipIndices),
@@ -178,14 +195,14 @@ class TaskViewMapper {
 
     private Map<String, Object> activeAttempt(TaskRecord task) {
         if (task.activeAttemptId == null || task.activeAttemptId.isBlank()) {
-            return Map.of();
+            return latestAttempt(task);
         }
         for (Map<String, Object> item : task.attemptsView()) {
             if (task.activeAttemptId.equals(stringValue(item.get("attemptId")))) {
                 return item;
             }
         }
-        return Map.of();
+        return latestAttempt(task);
     }
 
     private Map<String, Object> latestByTimestamp(List<Map<String, Object>> rows, String fieldName) {
@@ -194,36 +211,76 @@ class TaskViewMapper {
             .orElse(Map.of());
     }
 
+    private Map<String, Object> latestAttempt(TaskRecord task) {
+        return task.attemptsView().stream()
+            .max(Comparator.comparing(this::attemptSortKey))
+            .orElse(Map.of());
+    }
+
+    private String attemptSortKey(Map<String, Object> item) {
+        return firstNonBlank(
+            stringValue(item.get("finishedAt")),
+            stringValue(item.get("startedAt")),
+            stringValue(item.get("claimedAt")),
+            stringValue(item.get("queueEnteredAt"))
+        );
+    }
+
+    private Map<String, Object> latestStageRun(TaskRecord task) {
+        return task.stageRunsView().stream()
+            .max(Comparator.comparing(this::stageRunSortKey))
+            .orElse(Map.of());
+    }
+
+    private String stageRunSortKey(Map<String, Object> stageRun) {
+        return firstNonBlank(
+            stringValue(stageRun.get("finishedAt")),
+            stringValue(stageRun.get("updatedAt")),
+            stringValue(stageRun.get("startedAt")),
+            stringValue(stageRun.get("createdAt"))
+        );
+    }
+
     private Map<String, Object> latestVideoOutput(TaskRecord task) {
         return task.outputsView().stream()
-            .filter(item -> "video".equalsIgnoreCase(stringValue(item.get("resultType"))))
+            .filter(item -> isVideoResultType(item.get("resultType")))
             .max(Comparator.comparingInt(item -> intValue(item.get("clipIndex"), 0)))
             .orElse(Map.of());
     }
 
     private Map<String, Object> latestJoinOutput(TaskRecord task) {
         return task.outputsView().stream()
-            .filter(item -> "video_join".equalsIgnoreCase(stringValue(item.get("resultType"))))
+            .filter(item -> isJoinResultType(item.get("resultType")))
             .max(Comparator.comparingInt(item -> intValue(item.get("clipIndex"), 0)))
             .orElse(Map.of());
     }
 
-    private String currentStage(TaskRecord task, Map<String, Object> latestStageRun, Map<String, Object> latestTrace) {
-        String stage = firstNonBlank(stringValue(latestStageRun.get("stageName")), stringValue(latestTrace.get("stage")));
+    private String currentStage(TaskRecord task, Map<String, Object> activeAttempt, Map<String, Object> latestStageRun, Map<String, Object> latestTrace) {
+        String stage = firstNonBlank(
+            stringValue(task.executionContext.get("currentStage")),
+            stringValue(latestStageRun.get("stageName")),
+            stringValue(latestStageRun.get("stage")),
+            stringValue(activeAttempt.get("stageName")),
+            stringValue(activeAttempt.get("resumeFromStage")),
+            stringValue(latestTrace.get("stage"))
+        );
         if (!stage.isBlank()) {
             return stage;
         }
-        return switch (task.status) {
+        return switch (stringValue(task.status).toUpperCase()) {
             case "ANALYZING" -> "analysis";
             case "PLANNING" -> "planning";
             case "RENDERING" -> "render";
+            case "RUNNING" -> "dispatch";
+            case "PAUSED" -> "paused";
+            case "PENDING" -> task.isQueued ? "dispatch" : "";
             default -> "";
         };
     }
 
     private List<Integer> renderedClipIndices(TaskRecord task) {
         return task.outputsView().stream()
-            .filter(item -> "video".equalsIgnoreCase(stringValue(item.get("resultType"))))
+            .filter(item -> isVideoResultType(item.get("resultType")))
             .map(item -> intValue(item.get("clipIndex"), 0))
             .filter(item -> item > 0)
             .sorted()
@@ -242,11 +299,11 @@ class TaskViewMapper {
     }
 
     private List<Map<String, Object>> durationDiagnostics(TaskRecord task) {
-        List<Map<String, Object>> planRows = listMapValue(task.executionContext.get("clipDurationPlan"));
+        List<Map<String, Object>> planRows = durationPlanRows(task);
         List<Map<String, Object>> diagnostics = new ArrayList<>();
         Map<Integer, Map<String, Object>> outputsByClip = new LinkedHashMap<>();
         for (Map<String, Object> output : task.outputsView()) {
-            if (!"video".equalsIgnoreCase(stringValue(output.get("resultType")))) {
+            if (!isVideoResultType(output.get("resultType"))) {
                 continue;
             }
             int clipIndex = intValue(output.get("clipIndex"), 0);
@@ -266,11 +323,43 @@ class TaskViewMapper {
             row.put("durationSource", stringValue(planRow.get("durationSource")));
             row.put("scriptMinDurationSeconds", nullableInt(planRow.get("scriptMinDurationSeconds")));
             row.put("scriptMaxDurationSeconds", nullableInt(planRow.get("scriptMaxDurationSeconds")));
-            row.put("plannedTargetDurationSeconds", intValue(planRow.get("targetDurationSeconds"), 0));
-            row.put("plannedMinDurationSeconds", intValue(planRow.get("minDurationSeconds"), 0));
-            row.put("plannedMaxDurationSeconds", intValue(planRow.get("maxDurationSeconds"), 0));
-            row.put("requestedDurationSeconds", nullableDouble(outputExtra.get("requestedDurationSeconds")));
-            row.put("appliedDurationSeconds", nullableDouble(outputExtra.get("appliedDurationSeconds")));
+            row.put("plannedTargetDurationSeconds", intValue(
+                firstPresent(
+                    planRow.get("plannedTargetDurationSeconds"),
+                    planRow.get("targetDurationSeconds"),
+                    outputExtra.get("plannedTargetDurationSeconds"),
+                    outputExtra.get("targetDurationSeconds")
+                ),
+                0
+            ));
+            row.put("plannedMinDurationSeconds", intValue(
+                firstPresent(
+                    planRow.get("plannedMinDurationSeconds"),
+                    planRow.get("minDurationSeconds"),
+                    outputExtra.get("plannedMinDurationSeconds"),
+                    outputExtra.get("minDurationSeconds")
+                ),
+                0
+            ));
+            row.put("plannedMaxDurationSeconds", intValue(
+                firstPresent(
+                    planRow.get("plannedMaxDurationSeconds"),
+                    planRow.get("maxDurationSeconds"),
+                    outputExtra.get("plannedMaxDurationSeconds"),
+                    outputExtra.get("maxDurationSeconds")
+                ),
+                0
+            ));
+            row.put("requestedDurationSeconds", nullableDouble(firstPresent(
+                outputExtra.get("requestedDurationSeconds"),
+                outputExtra.get("requestedDuration"),
+                planRow.get("requestedDurationSeconds")
+            )));
+            row.put("appliedDurationSeconds", nullableDouble(firstPresent(
+                outputExtra.get("appliedDurationSeconds"),
+                outputExtra.get("resolvedDurationSeconds"),
+                planRow.get("appliedDurationSeconds")
+            )));
             row.put("actualDurationSeconds", output.isEmpty() ? null : nullableDouble(output.get("durationSeconds")));
             row.put("status", output.isEmpty() ? "pending" : "rendered");
             diagnostics.add(row);
@@ -283,17 +372,113 @@ class TaskViewMapper {
             row.put("durationSource", "");
             row.put("scriptMinDurationSeconds", null);
             row.put("scriptMaxDurationSeconds", null);
-            row.put("plannedTargetDurationSeconds", nullableInt(outputExtra.get("plannedTargetDurationSeconds")));
-            row.put("plannedMinDurationSeconds", nullableInt(outputExtra.get("plannedMinDurationSeconds")));
-            row.put("plannedMaxDurationSeconds", nullableInt(outputExtra.get("plannedMaxDurationSeconds")));
-            row.put("requestedDurationSeconds", nullableDouble(outputExtra.get("requestedDurationSeconds")));
-            row.put("appliedDurationSeconds", nullableDouble(outputExtra.get("appliedDurationSeconds")));
+            row.put("plannedTargetDurationSeconds", nullableInt(firstPresent(
+                outputExtra.get("plannedTargetDurationSeconds"),
+                outputExtra.get("targetDurationSeconds")
+            )));
+            row.put("plannedMinDurationSeconds", nullableInt(firstPresent(
+                outputExtra.get("plannedMinDurationSeconds"),
+                outputExtra.get("minDurationSeconds")
+            )));
+            row.put("plannedMaxDurationSeconds", nullableInt(firstPresent(
+                outputExtra.get("plannedMaxDurationSeconds"),
+                outputExtra.get("maxDurationSeconds")
+            )));
+            row.put("requestedDurationSeconds", nullableDouble(firstPresent(
+                outputExtra.get("requestedDurationSeconds"),
+                outputExtra.get("requestedDuration")
+            )));
+            row.put("appliedDurationSeconds", nullableDouble(firstPresent(
+                outputExtra.get("appliedDurationSeconds"),
+                outputExtra.get("resolvedDurationSeconds")
+            )));
             row.put("actualDurationSeconds", nullableDouble(output.get("durationSeconds")));
             row.put("status", "rendered");
             diagnostics.add(row);
         }
         diagnostics.sort(Comparator.comparingInt(item -> intValue(item.get("clipIndex"), Integer.MAX_VALUE)));
         return diagnostics;
+    }
+
+    private List<Map<String, Object>> durationPlanRows(TaskRecord task) {
+        List<Map<String, Object>> clipDurationPlan = listMapValue(task.executionContext.get("clipDurationPlan"));
+        if (!clipDurationPlan.isEmpty()) {
+            return clipDurationPlan;
+        }
+        List<Map<String, Object>> normalizedPlan = listMapValue(task.executionContext.get("durationPlan"));
+        if (!normalizedPlan.isEmpty()) {
+            return withClipIndexFallback(normalizedPlan);
+        }
+        List<Map<String, Object>> clipDiagnostics = listMapValue(task.executionContext.get("clipDurationDiagnostics"));
+        if (!clipDiagnostics.isEmpty()) {
+            return withClipIndexFallback(clipDiagnostics);
+        }
+        List<Map<String, Object>> diagnostics = listMapValue(task.executionContext.get("durationDiagnostics"));
+        if (!diagnostics.isEmpty()) {
+            return withClipIndexFallback(diagnostics);
+        }
+        return List.of();
+    }
+
+    private List<Map<String, Object>> withClipIndexFallback(List<Map<String, Object>> rows) {
+        List<Map<String, Object>> normalized = new ArrayList<>();
+        int fallbackClipIndex = 1;
+        for (Map<String, Object> item : rows) {
+            Map<String, Object> row = new LinkedHashMap<>(item);
+            if (!row.containsKey("clipIndex")) {
+                row.put("clipIndex", fallbackClipIndex);
+            }
+            fallbackClipIndex += 1;
+            normalized.add(row);
+        }
+        return normalized;
+    }
+
+    private int resolvePlannedClipCount(TaskRecord task) {
+        int plannedClipCount = intValue(task.executionContext.get("plannedClipCount"), 0);
+        if (plannedClipCount > 0) {
+            return plannedClipCount;
+        }
+        plannedClipCount = listValue(task.executionContext.get("clipPrompts")).size();
+        if (plannedClipCount > 0) {
+            return plannedClipCount;
+        }
+        plannedClipCount = durationPlanRows(task).size();
+        if (plannedClipCount > 0) {
+            return plannedClipCount;
+        }
+        return renderedClipIndices(task).size();
+    }
+
+    private boolean isVideoResultType(Object rawValue) {
+        String resultType = stringValue(rawValue).toLowerCase();
+        return "video".equals(resultType) || "video_clip".equals(resultType);
+    }
+
+    private boolean isJoinResultType(Object rawValue) {
+        String resultType = stringValue(rawValue).toLowerCase();
+        return "video_join".equals(resultType) || "join_video".equals(resultType) || "joined_video".equals(resultType);
+    }
+
+    private String transcriptPreview(String transcriptText) {
+        String normalized = stringValue(transcriptText);
+        if (normalized.isBlank()) {
+            return null;
+        }
+        return normalized.substring(0, Math.min(220, normalized.length()));
+    }
+
+    private Object firstPresent(Object... values) {
+        for (Object value : values) {
+            if (value == null) {
+                continue;
+            }
+            if (value instanceof String text && text.isBlank()) {
+                continue;
+            }
+            return value;
+        }
+        return null;
     }
 
     @SuppressWarnings("unchecked")

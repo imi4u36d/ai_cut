@@ -41,7 +41,7 @@ public class TaskQueryService {
         return tasks.stream()
             .sorted(taskComparator(sort))
             .filter(item -> q == null || q.isBlank() || containsIgnoreCase(item.title, q) || containsIgnoreCase(item.creativePrompt, q))
-            .filter(item -> status == null || status.isBlank() || Objects.equals(item.status, status))
+            .filter(item -> matchesStatus(item, status))
             .map(taskViewMapper::toListItem)
             .collect(Collectors.toList());
     }
@@ -92,7 +92,7 @@ public class TaskQueryService {
             .map(taskViewMapper::toListItem)
             .toList();
         List<Map<String, Object>> recentRunning = values.stream()
-            .filter(item -> List.of("ANALYZING", "PLANNING", "RENDERING").contains(item.status))
+            .filter(item -> isRunningStatus(item.status))
             .limit(6)
             .map(taskViewMapper::toListItem)
             .toList();
@@ -102,7 +102,7 @@ public class TaskQueryService {
         payload.put("counts", Map.of(
             "totalTasks", total,
             "queuedTasks", queueSnapshot.size(),
-            "runningTasks", values.stream().mapToInt(item -> List.of("ANALYZING", "PLANNING", "RENDERING").contains(item.status) ? 1 : 0).sum(),
+            "runningTasks", values.stream().mapToInt(item -> isRunningStatus(item.status) ? 1 : 0).sum(),
             "completedTasks", values.stream().mapToInt(item -> "COMPLETED".equals(item.status) ? 1 : 0).sum(),
             "failedTasks", values.stream().mapToInt(item -> "FAILED".equals(item.status) ? 1 : 0).sum(),
             "highRiskTasks", listItems.stream().mapToInt(item -> "high".equals(String.valueOf(item.getOrDefault("diagnosisSeverity", ""))) ? 1 : 0).sum(),
@@ -234,6 +234,34 @@ public class TaskQueryService {
 
     private boolean containsIgnoreCase(String source, String query) {
         return source != null && source.toLowerCase().contains(query.toLowerCase());
+    }
+
+    private boolean matchesStatus(TaskRecord task, String statusFilter) {
+        String normalizedFilter = normalizeStatus(statusFilter);
+        if (normalizedFilter.isBlank()) {
+            return true;
+        }
+        if ("RUNNING".equals(normalizedFilter)) {
+            return isRunningStatus(task.status);
+        }
+        if ("QUEUED".equals(normalizedFilter)) {
+            return task.isQueued;
+        }
+        return Objects.equals(normalizeStatus(task.status), normalizedFilter);
+    }
+
+    private boolean isRunningStatus(String status) {
+        return switch (normalizeStatus(status)) {
+            case "ANALYZING", "PLANNING", "RENDERING", "RUNNING", "DISPATCHING", "PROCESSING", "JOINING" -> true;
+            default -> false;
+        };
+    }
+
+    private String normalizeStatus(String status) {
+        if (status == null) {
+            return "";
+        }
+        return status.trim().toUpperCase();
     }
 
     private String trimmed(String value, String fallback) {
