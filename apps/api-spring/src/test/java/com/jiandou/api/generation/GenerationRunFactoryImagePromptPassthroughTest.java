@@ -12,11 +12,17 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.mock.env.MockEnvironment;
 
+/**
+ * 生成运行工厂图像提示词Passthrough相关测试。
+ */
 class GenerationRunFactoryImagePromptPassthroughTest {
 
     @TempDir
     Path tempDir;
 
+    /**
+     * 创建图像运行Uses分镜提示词Directly。
+     */
     @Test
     void createImageRunUsesStoryboardPromptDirectly() {
         ModelRuntimeProfile textProfile = new ModelRuntimeProfile(
@@ -56,21 +62,43 @@ class GenerationRunFactoryImagePromptPassthroughTest {
             "test"
         );
         ModelRuntimePropertiesResolver modelResolver = new ModelRuntimePropertiesResolver(new MockEnvironment()) {
+            /**
+             * 检查是否supports种子。
+             * @param requestedModel requested模型值
+             * @return 是否满足条件
+             */
             @Override
             public boolean supportsSeed(String requestedModel) {
                 return false;
             }
 
+            /**
+             * 处理解析文本Profile。
+             * @param requestedModel requested模型值
+             * @return 处理结果
+             */
             @Override
             public ModelRuntimeProfile resolveTextProfile(String requestedModel) {
                 return "gpt-vision".equals(requestedModel) ? visionProfile : textProfile;
             }
 
+            /**
+             * 处理解析图像Profile。
+             * @param requestedModel requested模型值
+             * @return 处理结果
+             */
             @Override
             public MediaProviderProfile resolveImageProfile(String requestedModel) {
                 return imageProfile;
             }
 
+            /**
+             * 处理值。
+             * @param section section值
+             * @param key key值
+             * @param fallback 兜底值
+             * @return 处理结果
+             */
             @Override
             public String value(String section, String key, String fallback) {
                 return fallback;
@@ -82,6 +110,15 @@ class GenerationRunFactoryImagePromptPassthroughTest {
             new GenerationConfigPathLocator(new MockEnvironment())
         );
         CompatibleTextModelClient textModelClient = new CompatibleTextModelClient(new ObjectMapper(), java.util.List.of()) {
+            /**
+             * 生成文本。
+             * @param profile profile值
+             * @param systemPrompt 系统提示词值
+             * @param userPrompt user提示词值
+             * @param temperature temperature值
+             * @param maxTokens 最大Tokens值
+             * @return 处理结果
+             */
             @Override
             public TextModelResponse generateText(
                 ModelRuntimeProfile profile,
@@ -93,6 +130,17 @@ class GenerationRunFactoryImagePromptPassthroughTest {
                 throw new AssertionError("image prompt rewrite should not be called");
             }
 
+            /**
+             * 生成视觉文本。
+             * @param profile profile值
+             * @param systemPrompt 系统提示词值
+             * @param userPrompt user提示词值
+             * @param imageUrls 图像Urls值
+             * @param temperature temperature值
+             * @param maxTokens 最大Tokens值
+             * @param seed 种子值
+             * @return 处理结果
+             */
             @Override
             public TextModelResponse generateVisionText(
                 ModelRuntimeProfile profile,
@@ -109,6 +157,16 @@ class GenerationRunFactoryImagePromptPassthroughTest {
         LocalMediaArtifactService localMediaArtifactService = new LocalMediaArtifactService(tempDir.toString(), "ffmpeg");
         final String[] submittedPrompt = new String[1];
         RemoteMediaGenerationClient remoteMediaGenerationClient = new RemoteMediaGenerationClient(new ObjectMapper()) {
+            /**
+             * 生成Seedream图像。
+             * @param profile profile值
+             * @param requestedModel requested模型值
+             * @param prompt 提示词值
+             * @param width width值
+             * @param height height值
+             * @param seed 种子值
+             * @return 处理结果
+             */
             @Override
             public RemoteImageGenerationResult generateSeedreamImage(
                 MediaProviderProfile profile,

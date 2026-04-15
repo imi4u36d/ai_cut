@@ -9,20 +9,32 @@ import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 
+/**
+ * 远程媒体生成客户端相关测试。
+ */
 class RemoteMediaGenerationClientTest {
 
     private final RemoteMediaGenerationClient client = new RemoteMediaGenerationClient(new ObjectMapper());
 
+    /**
+     * 处理seedream45Uses2k预设。
+     */
     @Test
     void seedream45Uses2kPreset() {
         assertEquals("2K", client.seedreamSize("Doubao-Seedream-4.5", 720, 1280));
     }
 
+    /**
+     * 处理seedream50Keeps1k预设。
+     */
     @Test
     void seedream50Keeps1kPreset() {
         assertEquals("1K", client.seedreamSize("seedream-5.0", 720, 1280));
     }
 
+    /**
+     * 处理seedream请求Includes种子AndDisablesWatermark。
+     */
     @Test
     void seedreamRequestIncludesSeedAndDisablesWatermark() {
         Map<String, Object> body = client.buildSeedreamImageRequestBody(
@@ -36,6 +48,9 @@ class RemoteMediaGenerationClientTest {
         assertFalse((Boolean) body.get("watermark"));
     }
 
+    /**
+     * 处理seedream请求Omits种子WhenNotProvided。
+     */
     @Test
     void seedreamRequestOmitsSeedWhenNotProvided() {
         Map<String, Object> body = client.buildSeedreamImageRequestBody(
@@ -50,6 +65,9 @@ class RemoteMediaGenerationClientTest {
         assertFalse((Boolean) body.get("watermark"));
     }
 
+    /**
+     * 处理dashscope视频请求BuildsExpectedParameters。
+     */
     @Test
     void dashscopeVideoRequestBuildsExpectedParameters() {
         Map<String, Object> body = client.buildDashscopeVideoRequestBody(
@@ -73,6 +91,9 @@ class RemoteMediaGenerationClientTest {
         assertEquals(7, parameters.get("seed"));
     }
 
+    /**
+     * 处理Seedance视频请求AddsLastFrameOnlyWhenProvided。
+     */
     @Test
     void seedanceVideoRequestAddsLastFrameOnlyWhenProvided() {
         Map<String, Object> body = client.buildSeedanceVideoRequestBody(

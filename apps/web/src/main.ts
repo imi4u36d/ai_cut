@@ -1,3 +1,6 @@
+/**
+ * Web 客户端应用启动入口。
+ */
 import { createApp } from "vue";
 import App from "./App.vue";
 import router from "./router";

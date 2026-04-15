@@ -1,3 +1,9 @@
+/**
+ * 运行时配置。
+ */
+/**
+ * 运行时配置相关 API 请求封装。
+ */
 export interface RuntimeConfig {
   // 前端调用后端 REST 接口时使用的基础路径。
   apiBaseUrl: string;
@@ -13,11 +19,21 @@ const defaultRuntimeConfig: RuntimeConfig = {
 
 let runtimeConfig: RuntimeConfig = { ...defaultRuntimeConfig };
 
+/**
+ * 检查是否非EmptyString。
+ * @param value 待处理的值
+ * @return 是否满足条件
+ */
 function isNonEmptyString(value: unknown): value is string {
   return typeof value === "string" && value.trim().length > 0;
 }
 
 // 允许只覆盖部分字段，其余字段回退到默认值。
+/**
+ * 规范化运行时配置。
+ * @param config 配置值
+ * @return 处理结果
+ */
 function normalizeRuntimeConfig(config: Partial<RuntimeConfig>): RuntimeConfig {
   return {
     apiBaseUrl: isNonEmptyString(config.apiBaseUrl) ? config.apiBaseUrl : defaultRuntimeConfig.apiBaseUrl,
@@ -46,6 +62,9 @@ export async function loadRuntimeConfig() {
   return runtimeConfig;
 }
 
+/**
+ * 返回运行时配置。
+ */
 export function getRuntimeConfig() {
   return runtimeConfig;
 }

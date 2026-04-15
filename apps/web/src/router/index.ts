@@ -1,3 +1,6 @@
+/**
+ * 前端路由注册入口。
+ */
 import { createRouter, createWebHistory } from "vue-router";
 import WorkspaceShell from "@/components/layout/WorkspaceShell.vue";
 import HomeView from "@/views/HomeView.vue";

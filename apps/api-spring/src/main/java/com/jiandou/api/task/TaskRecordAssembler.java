@@ -9,9 +9,17 @@ import java.util.List;
 import java.util.Map;
 import org.springframework.stereotype.Component;
 
+/**
+ * 任务记录Assembler。
+ */
 @Component
 public class TaskRecordAssembler {
 
+    /**
+     * 处理from任务行。
+     * @param row 行值
+     * @return 处理结果
+     */
     public TaskRecord fromTaskRow(TaskRow row) {
         TaskRecord task = new TaskRecord();
         task.id = row.taskId();
@@ -47,6 +55,11 @@ public class TaskRecordAssembler {
         return task;
     }
 
+    /**
+     * 应用状态History。
+     * @param task 要处理的任务对象
+     * @param rows 行值
+     */
     public void applyStatusHistory(TaskRecord task, List<TaskStatusHistoryRow> rows) {
         task.statusHistory.clear();
         for (TaskStatusHistoryRow row : rows) {
@@ -66,6 +79,11 @@ public class TaskRecordAssembler {
         }
     }
 
+    /**
+     * 处理转为写入模型。
+     * @param task 要处理的任务对象
+     * @return 处理结果
+     */
     public TaskWriteModel toWriteModel(TaskRecord task) {
         Map<String, Object> context = task.executionContext == null ? new LinkedHashMap<>() : new LinkedHashMap<>(task.executionContext);
         if (task.transcriptText != null && !task.transcriptText.isBlank()) {
@@ -110,14 +128,29 @@ public class TaskRecordAssembler {
         );
     }
 
+    /**
+     * 检查是否正文。
+     * @param context context值
+     * @return 是否满足条件
+     */
     private boolean hasTranscript(Map<String, Object> context) {
         return !transcriptText(context).isBlank();
     }
 
+    /**
+     * 检查是否Timed正文。
+     * @param context context值
+     * @return 是否满足条件
+     */
     private boolean hasTimedTranscript(Map<String, Object> context) {
         return transcriptText(context).contains("-->");
     }
 
+    /**
+     * 处理正文文本。
+     * @param context context值
+     * @return 处理结果
+     */
     private String transcriptText(Map<String, Object> context) {
         if (context == null) {
             return "";
@@ -126,6 +159,11 @@ public class TaskRecordAssembler {
         return value == null ? "" : String.valueOf(value);
     }
 
+    /**
+     * 处理分镜脚本。
+     * @param context context值
+     * @return 处理结果
+     */
     private String storyboardScript(Map<String, Object> context) {
         if (context == null) {
             return null;
@@ -134,10 +172,20 @@ public class TaskRecordAssembler {
         return value == null ? null : String.valueOf(value);
     }
 
+    /**
+     * 格式化format。
+     * @param value 待处理的值
+     * @return 处理结果
+     */
     private String format(OffsetDateTime value) {
         return value == null ? null : value.toString();
     }
 
+    /**
+     * 解析解析。
+     * @param value 待处理的值
+     * @return 处理结果
+     */
     private OffsetDateTime parse(String value) {
         if (value == null || value.isBlank()) {
             return null;
@@ -145,6 +193,35 @@ public class TaskRecordAssembler {
         return OffsetDateTime.parse(value);
     }
 
+    /**
+     * 处理任务写入模型。
+     * @param taskId 任务标识
+     * @param title title值
+     * @param aspectRatio aspectRatio值
+     * @param minDurationSeconds 最小时长Seconds值
+     * @param maxDurationSeconds 最大时长Seconds值
+     * @param sourceFileName 来源文件Name值
+     * @param introTemplate intro模板值
+     * @param outroTemplate outro模板值
+     * @param creativePrompt 创意提示词值
+     * @param taskSeed 任务种子值
+     * @param effectRating 效果评分值
+     * @param effectRatingNote 效果评分Note值
+     * @param ratedAt ratedAt值
+     * @param editingMode 编辑模式值
+     * @param status 状态值
+     * @param progress 进度值
+     * @param errorMessage errorMessage值
+     * @param retryCount 重试数量值
+     * @param completedOutputCount completed输出数量值
+     * @param requestPayload 请求负载值
+     * @param context context值
+     * @param sourceAssetIds 来源素材标识列表值
+     * @param sourceFileNames 来源文件Names值
+     * @param startedAt startedAt值
+     * @param finishedAt finishedAt值
+     * @return 处理结果
+     */
     public record TaskWriteModel(
         String taskId,
         String title,

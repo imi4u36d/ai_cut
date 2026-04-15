@@ -17,20 +17,40 @@ public class UploadController {
 
     private final UploadApplicationService uploadService;
 
+    /**
+     * 创建新的上传控制器。
+     * @param uploadService 上传服务值
+     */
     public UploadController(UploadApplicationService uploadService) {
         this.uploadService = uploadService;
     }
 
+    /**
+     * 上传文本。
+     * @param file 待上传的文件
+     * @return 处理结果
+     */
     @PostMapping("/texts")
     public UploadAssetResponse uploadText(@RequestParam("file") MultipartFile file) {
         return save(file, true);
     }
 
+    /**
+     * 上传视频。
+     * @param file 待上传的文件
+     * @return 处理结果
+     */
     @PostMapping("/videos")
     public UploadAssetResponse uploadVideo(@RequestParam("file") MultipartFile file) {
         return save(file, false);
     }
 
+    /**
+     * 保存save。
+     * @param file 待上传的文件
+     * @param textUpload 文本上传值
+     * @return 处理结果
+     */
     private UploadAssetResponse save(MultipartFile file, boolean textUpload) {
         if (file.isEmpty()) {
             throw new EmptyUploadFileException();

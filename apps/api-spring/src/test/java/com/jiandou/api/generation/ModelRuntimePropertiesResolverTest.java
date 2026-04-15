@@ -12,11 +12,17 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.mock.env.MockEnvironment;
 
+/**
+ * 模型运行时Properties相关测试。
+ */
 class ModelRuntimePropertiesResolverTest {
 
     @TempDir
     Path tempDir;
 
+    /**
+     * 处理cacheReloadsWhenTtlExpiresAnd文件Changes。
+     */
     @Test
     void cacheReloadsWhenTtlExpiresAndFileChanges() throws Exception {
         Path configFile = tempDir.resolve("app.yml");
@@ -36,6 +42,9 @@ class ModelRuntimePropertiesResolverTest {
         assertEquals(0.95d, Double.parseDouble(resolver.value("model", "temperature", "fallback")), 0.0001d);
     }
 
+    /**
+     * 处理missing配置Can失败Fast。
+     */
     @Test
     void missingConfigCanFailFast() {
         Path missingFile = tempDir.resolve("missing.yml");
@@ -47,6 +56,9 @@ class ModelRuntimePropertiesResolverTest {
         assertThrows(GenerationConfigurationException.class, () -> resolver.value("model", "temperature", "0.15"));
     }
 
+    /**
+     * 处理missing配置IsObservableWhen失败FastDisabled。
+     */
     @Test
     void missingConfigIsObservableWhenFailFastDisabled() {
         Path missingFile = tempDir.resolve("missing.yml");
@@ -60,6 +72,11 @@ class ModelRuntimePropertiesResolverTest {
         assertTrue(resolver.configSource().contains("missing"));
     }
 
+    /**
+     * 处理写入配置。
+     * @param configFile 配置文件值
+     * @param temperature temperature值
+     */
     private void writeConfig(Path configFile, String temperature) throws IOException {
         Files.writeString(
             configFile,

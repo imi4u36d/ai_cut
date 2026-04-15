@@ -13,6 +13,9 @@ import java.util.Locale;
 import java.util.Map;
 import org.springframework.stereotype.Component;
 
+/**
+ * 生成运行支持。
+ */
 @Component
 public class GenerationRunSupport {
 
@@ -20,6 +23,12 @@ public class GenerationRunSupport {
     private final ModelRuntimePropertiesResolver modelResolver;
     private final CompatibleTextModelClient textModelClient;
 
+    /**
+     * 创建新的生成运行支持。
+     * @param localMediaArtifactService 本地媒体产物服务值
+     * @param modelResolver 模型解析器值
+     * @param textModelClient 文本模型客户端值
+     */
     public GenerationRunSupport(
         LocalMediaArtifactService localMediaArtifactService,
         ModelRuntimePropertiesResolver modelResolver,
@@ -30,6 +39,15 @@ public class GenerationRunSupport {
         this.textModelClient = textModelClient;
     }
 
+    /**
+     * 处理运行Envelope。
+     * @param runId 运行标识值
+     * @param kind 类型值
+     * @param request 请求体
+     * @param result 结果值
+     * @param specificResultKey 特定结果Key值
+     * @return 处理结果
+     */
     public Map<String, Object> runEnvelope(
         String runId,
         String kind,
@@ -40,6 +58,16 @@ public class GenerationRunSupport {
         return runEnvelope(runId, kind, request, result, specificResultKey, "succeeded");
     }
 
+    /**
+     * 处理运行Envelope。
+     * @param runId 运行标识值
+     * @param kind 类型值
+     * @param request 请求体
+     * @param result 结果值
+     * @param specificResultKey 特定结果Key值
+     * @param status 状态值
+     * @return 处理结果
+     */
     public Map<String, Object> runEnvelope(
         String runId,
         String kind,
@@ -64,11 +92,24 @@ public class GenerationRunSupport {
         return run;
     }
 
+    /**
+     * 更新运行状态。
+     * @param run 运行值
+     * @param status 状态值
+     */
     public void updateRunStatus(Map<String, Object> run, String status) {
         run.put("status", status);
         run.put("updatedAt", nowIso());
     }
 
+    /**
+     * 处理嵌套值。
+     * @param payload 附加负载数据
+     * @param parentKey 父级Key值
+     * @param childKey childKey值
+     * @param defaultValue 默认值
+     * @return 处理结果
+     */
     public String nestedValue(Map<String, Object> payload, String parentKey, String childKey, String defaultValue) {
         Object parent = payload.get(parentKey);
         if (parent instanceof Map<?, ?> map) {
@@ -80,6 +121,11 @@ public class GenerationRunSupport {
         return defaultValue;
     }
 
+    /**
+     * 映射值。
+     * @param value 待处理的值
+     * @return 处理结果
+     */
     public Map<String, Object> mapValue(Object value) {
         if (value instanceof Map<?, ?> map) {
             Map<String, Object> normalized = new LinkedHashMap<>();
@@ -91,6 +137,14 @@ public class GenerationRunSupport {
         return new LinkedHashMap<>();
     }
 
+    /**
+     * 处理嵌套Int。
+     * @param payload 附加负载数据
+     * @param parentKey 父级Key值
+     * @param childKey childKey值
+     * @param defaultValue 默认值
+     * @return 处理结果
+     */
     public int nestedInt(Map<String, Object> payload, String parentKey, String childKey, int defaultValue) {
         Object parent = payload.get(parentKey);
         if (parent instanceof Map<?, ?> map) {
@@ -108,6 +162,13 @@ public class GenerationRunSupport {
         return defaultValue;
     }
 
+    /**
+     * 处理嵌套NullableInt。
+     * @param payload 附加负载数据
+     * @param parentKey 父级Key值
+     * @param childKey childKey值
+     * @return 处理结果
+     */
     public Integer nestedNullableInt(Map<String, Object> payload, String parentKey, String childKey) {
         Object parent = payload.get(parentKey);
         if (!(parent instanceof Map<?, ?> map)) {
@@ -126,6 +187,14 @@ public class GenerationRunSupport {
         return null;
     }
 
+    /**
+     * 检查是否嵌套Boolean。
+     * @param payload 附加负载数据
+     * @param parentKey 父级Key值
+     * @param childKey childKey值
+     * @param defaultValue 默认值
+     * @return 是否满足条件
+     */
     public boolean nestedBoolean(Map<String, Object> payload, String parentKey, String childKey, boolean defaultValue) {
         Object parent = payload.get(parentKey);
         if (!(parent instanceof Map<?, ?> map)) {
@@ -150,6 +219,15 @@ public class GenerationRunSupport {
         return defaultValue;
     }
 
+    /**
+     * 处理调用日志。
+     * @param stage 阶段名称
+     * @param event 事件名称
+     * @param status 状态值
+     * @param message 消息文本
+     * @param details details值
+     * @return 处理结果
+     */
     public Map<String, Object> callLog(String stage, String event, String status, String message, Map<String, Object> details) {
         Map<String, Object> safeDetails = new LinkedHashMap<>();
         if (details != null) {
@@ -172,6 +250,16 @@ public class GenerationRunSupport {
         return row;
     }
 
+    /**
+     * 处理写入Placeholder图像。
+     * @param runId 运行标识值
+     * @param fileName 文件Name值
+     * @param width width值
+     * @param height height值
+     * @param prompt 提示词值
+     * @param stylePreset 风格预设值
+     * @return 处理结果
+     */
     public ImageArtifact writePlaceholderImage(String runId, String fileName, int width, int height, String prompt, String stylePreset) {
         try {
             return localMediaArtifactService.writePromptCard(
@@ -188,6 +276,14 @@ public class GenerationRunSupport {
         }
     }
 
+    /**
+     * 处理写入文本产物。
+     * @param runId 运行标识值
+     * @param request 请求体
+     * @param fileName 文件Name值
+     * @param content content值
+     * @return 处理结果
+     */
     public TextArtifact writeTextArtifact(String runId, Map<String, Object> request, String fileName, String content) {
         try {
             return localMediaArtifactService.writeText(storageRelativeDir(request, runId), storageFileName(request, fileName), content);
@@ -196,6 +292,15 @@ public class GenerationRunSupport {
         }
     }
 
+    /**
+     * 处理写入Binary产物。
+     * @param runId 运行标识值
+     * @param request 请求体
+     * @param fileStem 文件Stem值
+     * @param extension extension值
+     * @param data data值
+     * @return 处理结果
+     */
     public BinaryArtifact writeBinaryArtifact(String runId, Map<String, Object> request, String fileStem, String extension, byte[] data) {
         try {
             String relativeDir = storageRelativeDir(request, runId);
@@ -214,6 +319,14 @@ public class GenerationRunSupport {
         }
     }
 
+    /**
+     * 处理materializeBinary产物。
+     * @param runId 运行标识值
+     * @param relativeDir relativeDir值
+     * @param fileStem 文件Stem值
+     * @param sourceUrl 来源URL值
+     * @return 处理结果
+     */
     public BinaryArtifact materializeBinaryArtifact(String runId, String relativeDir, String fileStem, String sourceUrl) {
         try {
             String extension = extensionFromMimeOrUrl("", sourceUrl, "video");
@@ -231,6 +344,13 @@ public class GenerationRunSupport {
         }
     }
 
+    /**
+     * 解析Dimensions。
+     * @param raw 原始值
+     * @param fallbackWidth 兜底Width值
+     * @param fallbackHeight 兜底Height值
+     * @return 处理结果
+     */
     public int[] parseDimensions(String raw, int fallbackWidth, int fallbackHeight) {
         String normalized = raw == null ? "" : raw.trim().toLowerCase(Locale.ROOT).replace("x", "*");
         String[] parts = normalized.split("\\*");
@@ -243,10 +363,22 @@ public class GenerationRunSupport {
         return new int[] {fallbackWidth, fallbackHeight};
     }
 
+    /**
+     * 处理boundedTemperature。
+     * @param value 待处理的值
+     * @param min 最小值
+     * @param max 最大值
+     * @return 处理结果
+     */
     public double boundedTemperature(double value, double min, double max) {
         return Math.max(min, Math.min(max, value));
     }
 
+    /**
+     * 处理条带MarkdownFence。
+     * @param text 文本值
+     * @return 处理结果
+     */
     public String stripMarkdownFence(String text) {
         String value = text == null ? "" : text.trim();
         if (!value.startsWith("```")) {
@@ -260,6 +392,12 @@ public class GenerationRunSupport {
         return value.substring(firstBreak + 1, lastFence).trim();
     }
 
+    /**
+     * 处理truncate文本。
+     * @param value 待处理的值
+     * @param limit 返回的最大条目数
+     * @return 处理结果
+     */
     public String truncateText(String value, int limit) {
         if (value == null) {
             return "";
@@ -267,6 +405,13 @@ public class GenerationRunSupport {
         return value.length() <= limit ? value : value.substring(0, limit);
     }
 
+    /**
+     * 处理extensionFromMimeOrURL。
+     * @param mimeType mime类型值
+     * @param sourceUrl 来源URL值
+     * @param mediaType 媒体类型值
+     * @return 处理结果
+     */
     public String extensionFromMimeOrUrl(String mimeType, String sourceUrl, String mediaType) {
         String normalizedMime = mimeType == null ? "" : mimeType.toLowerCase(Locale.ROOT);
         if (normalizedMime.startsWith("image/png")) {
@@ -298,32 +443,65 @@ public class GenerationRunSupport {
         return "image".equals(mediaType) ? "png" : "mp4";
     }
 
+    /**
+     * 处理当前Iso。
+     * @return 处理结果
+     */
     public String nowIso() {
         return OffsetDateTime.now(ZoneOffset.UTC).toString();
     }
 
+    /**
+     * 处理storageRelativeDir。
+     * @param request 请求体
+     * @param runId 运行标识值
+     * @return 处理结果
+     */
     public String storageRelativeDir(Map<String, Object> request, String runId) {
         Map<String, Object> storage = mapValue(request.get("storage"));
         String configured = stringValue(storage.get("relativeDir"));
         return configured.isBlank() ? "gen/_runs/" + runId : configured;
     }
 
+    /**
+     * 处理storage文件Stem。
+     * @param request 请求体
+     * @param fallback 兜底值
+     * @return 处理结果
+     */
     public String storageFileStem(Map<String, Object> request, String fallback) {
         Map<String, Object> storage = mapValue(request.get("storage"));
         String configured = stringValue(storage.get("fileStem"));
         return configured.isBlank() ? fallback : configured;
     }
 
+    /**
+     * 处理storage文件Name。
+     * @param request 请求体
+     * @param fallback 兜底值
+     * @return 处理结果
+     */
     public String storageFileName(Map<String, Object> request, String fallback) {
         Map<String, Object> storage = mapValue(request.get("storage"));
         String configured = stringValue(storage.get("fileName"));
         return configured.isBlank() ? fallback : configured;
     }
 
+    /**
+     * 处理string值。
+     * @param value 待处理的值
+     * @return 处理结果
+     */
     public String stringValue(Object value) {
         return value == null ? "" : String.valueOf(value).trim();
     }
 
+    /**
+     * 处理positiveInt。
+     * @param raw 原始值
+     * @param fallback 兜底值
+     * @return 处理结果
+     */
     public int positiveInt(String raw, int fallback) {
         try {
             int value = Integer.parseInt(String.valueOf(raw).trim());
@@ -333,6 +511,11 @@ public class GenerationRunSupport {
         }
     }
 
+    /**
+     * 处理首个PositiveInt。
+     * @param values 值
+     * @return 处理结果
+     */
     public int firstPositiveInt(int... values) {
         for (int value : values) {
             if (value > 0) {
@@ -342,10 +525,22 @@ public class GenerationRunSupport {
         return 0;
     }
 
+    /**
+     * 规范化值。
+     * @param value 待处理的值
+     * @return 处理结果
+     */
     public String normalizeValue(String value) {
         return value == null ? "" : value.trim().toLowerCase(Locale.ROOT);
     }
 
+    /**
+     * 处理required模型。
+     * @param value 待处理的值
+     * @param fieldName fieldName值
+     * @param label 标签值
+     * @return 处理结果
+     */
     public String requiredModel(String value, String fieldName, String label) {
         String normalized = value == null ? "" : value.trim();
         if (!normalized.isBlank()) {
@@ -354,6 +549,11 @@ public class GenerationRunSupport {
         throw new IllegalArgumentException("请先选择" + label + "（" + fieldName + "）");
     }
 
+    /**
+     * 处理首个非空白。
+     * @param values 值
+     * @return 处理结果
+     */
     public String firstNonBlank(String... values) {
         for (String value : values) {
             if (value != null && !value.isBlank()) {
@@ -363,6 +563,12 @@ public class GenerationRunSupport {
         return "";
     }
 
+    /**
+     * 解析String列表。
+     * @param raw 原始值
+     * @param fallback 兜底值
+     * @return 处理结果
+     */
     public List<String> parseStringList(String raw, List<String> fallback) {
         List<String> items = new ArrayList<>();
         if (raw != null) {
@@ -376,6 +582,12 @@ public class GenerationRunSupport {
         return items.isEmpty() ? fallback : items;
     }
 
+    /**
+     * 解析Integer列表。
+     * @param raw 原始值
+     * @param fallback 兜底值
+     * @return 处理结果
+     */
     public List<Integer> parseIntegerList(String raw, List<Integer> fallback) {
         List<Integer> items = new ArrayList<>();
         if (raw != null) {
@@ -389,6 +601,11 @@ public class GenerationRunSupport {
         return items.isEmpty() ? fallback : items;
     }
 
+    /**
+     * 处理string列表。
+     * @param value 待处理的值
+     * @return 处理结果
+     */
     public List<String> stringList(Object value) {
         if (value instanceof List<?> items) {
             List<String> results = new ArrayList<>();
@@ -403,6 +620,11 @@ public class GenerationRunSupport {
         return List.of();
     }
 
+    /**
+     * 处理integer列表。
+     * @param value 待处理的值
+     * @return 处理结果
+     */
     public List<Integer> integerList(Object value) {
         if (value instanceof List<?> items) {
             List<Integer> results = new ArrayList<>();
@@ -417,10 +639,21 @@ public class GenerationRunSupport {
         return List.of();
     }
 
+    /**
+     * 规范化FrameRole。
+     * @param frameRole frameRole值
+     * @return 处理结果
+     */
     public String normalizeFrameRole(String frameRole) {
         return "last".equalsIgnoreCase(stringValue(frameRole)) ? "last" : "first";
     }
 
+    /**
+     * 处理appendNegative提示词。
+     * @param prompt 提示词值
+     * @param negativePrompt negative提示词值
+     * @return 处理结果
+     */
     public String appendNegativePrompt(String prompt, String negativePrompt) {
         if (prompt == null || prompt.isBlank()) {
             return "写实影视风格。负面约束：" + negativePrompt;
@@ -428,6 +661,12 @@ public class GenerationRunSupport {
         return prompt.trim() + "\n负面约束：" + negativePrompt;
     }
 
+    /**
+     * 检查是否inferSeedanceCameraFixed。
+     * @param prompt 提示词值
+     * @param fallback 兜底值
+     * @return 是否满足条件
+     */
     public boolean inferSeedanceCameraFixed(String prompt, boolean fallback) {
         String normalized = stringValue(prompt).toLowerCase(Locale.ROOT);
         if (normalized.isBlank()) {
@@ -446,6 +685,17 @@ public class GenerationRunSupport {
         return fallback;
     }
 
+    /**
+     * 生成文本With兜底。
+     * @param primaryProfile primaryProfile值
+     * @param stage 阶段名称
+     * @param systemPrompt 系统提示词值
+     * @param userPrompt user提示词值
+     * @param temperature temperature值
+     * @param maxTokens 最大Tokens值
+     * @param callChain 调用Chain值
+     * @return 处理结果
+     */
     public TextGenerationAttempt generateTextWithFallback(
         ModelRuntimeProfile primaryProfile,
         String stage,
@@ -468,6 +718,12 @@ public class GenerationRunSupport {
             callChain.add(callLog(stage, stage + ".fallback", "retry", "主文本模型失败，尝试回退到备用模型。", Map.of(
                 "requestedModel", primaryProfile.modelName(),
                 "fallbackModel", fallbackModel,
+                /**
+                 * 处理truncate文本。
+                 * @param primaryEx.getMessage( primaryEx.getMessage(值
+                 * @param 240 240值
+                 * @return 处理结果
+                 */
                 "error", truncateText(primaryEx.getMessage(), 240)
             )));
             ModelRuntimeProfile fallbackProfile = modelResolver.resolveTextProfile(fallbackModel);
@@ -478,6 +734,15 @@ public class GenerationRunSupport {
         }
     }
 
+    /**
+     * 构建模型信息。
+     * @param profile profile值
+     * @param requestedModel requested模型值
+     * @param mediaKind 媒体类型值
+     * @param response 响应体
+     * @param sourceTag 来源Tag值
+     * @return 处理结果
+     */
     public Map<String, Object> buildModelInfo(
         ModelRuntimeProfile profile,
         String requestedModel,
@@ -499,6 +764,22 @@ public class GenerationRunSupport {
         return modelInfo;
     }
 
+    /**
+     * 构建媒体模型信息。
+     * @param textProfile 文本Profile值
+     * @param rewriteProfile rewriteProfile值
+     * @param visionProfile 视觉Profile值
+     * @param mediaProfile 媒体Profile值
+     * @param requestedModel requested模型值
+     * @param mediaKind 媒体类型值
+     * @param textResponse 文本响应值
+     * @param visionResponse 视觉响应值
+     * @param resolvedModel resolved模型值
+     * @param endpointHost endpointHost值
+     * @param taskEndpointHost 任务EndpointHost值
+     * @param sourceTag 来源Tag值
+     * @return 处理结果
+     */
     public Map<String, Object> buildMediaModelInfo(
         ModelRuntimeProfile textProfile,
         ModelRuntimeProfile rewriteProfile,
@@ -540,6 +821,11 @@ public class GenerationRunSupport {
         return modelInfo;
     }
 
+    /**
+     * 处理mime类型From文件Name。
+     * @param fileName 文件Name值
+     * @return 处理结果
+     */
     private String mimeTypeFromFileName(String fileName) {
         String value = fileName == null ? "" : fileName.toLowerCase(Locale.ROOT);
         if (value.endsWith(".mp4")) {
@@ -560,6 +846,15 @@ public class GenerationRunSupport {
         return "application/octet-stream";
     }
 
+    /**
+     * 处理Binary产物。
+     * @param fileName 文件Name值
+     * @param absolutePath absolute路径值
+     * @param publicUrl publicURL值
+     * @param sizeBytes sizeBytes值
+     * @param mimeType mime类型值
+     * @return 处理结果
+     */
     public record BinaryArtifact(
         String fileName,
         String absolutePath,
@@ -569,6 +864,12 @@ public class GenerationRunSupport {
     ) {
     }
 
+    /**
+     * 处理文本生成尝试。
+     * @param profile profile值
+     * @param response 响应体
+     * @return 处理结果
+     */
     public record TextGenerationAttempt(
         ModelRuntimeProfile profile,
         TextModelResponse response

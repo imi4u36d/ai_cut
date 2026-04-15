@@ -5,6 +5,9 @@
 </template>
 
 <script setup lang="ts">
+/**
+ * Linear组件。
+ */
 import { computed } from "vue";
 
 const props = defineProps<{
@@ -12,4 +15,5 @@ const props = defineProps<{
 }>();
 
 const clampedValue = computed(() => Math.max(0, Math.min(100, Math.round(props.value))));
+
 </script>

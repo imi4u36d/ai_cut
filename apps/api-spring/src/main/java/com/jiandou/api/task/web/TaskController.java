@@ -25,15 +25,29 @@ public class TaskController {
 
     private final TaskApplicationService taskService;
 
+    /**
+     * 创建新的任务控制器。
+     * @param taskService 任务服务值
+     */
     public TaskController(TaskApplicationService taskService) {
         this.taskService = taskService;
     }
 
+    /**
+     * 创建生成任务。
+     * @param request 请求体
+     * @return 处理结果
+     */
     @PostMapping("/generation")
     public Map<String, Object> createGenerationTask(@RequestBody CreateGenerationTaskRequest request) {
         return taskService.createGenerationTask(request);
     }
 
+    /**
+     * 生成创意提示词。
+     * @param request 请求体
+     * @return 处理结果
+     */
     @PostMapping("/generate-prompt")
     public Map<String, Object> generateCreativePrompt(@RequestBody GenerateCreativePromptRequest request) {
         return taskService.generateCreativePrompt(request);
@@ -48,6 +62,11 @@ public class TaskController {
         return taskService.listTasks(q, status, sort);
     }
 
+    /**
+     * 返回任务。
+     * @param taskId 任务标识
+     * @return 处理结果
+     */
     @GetMapping("/{taskId}")
     public Map<String, Object> getTask(@PathVariable String taskId) {
         return taskService.getTask(taskId);
@@ -73,46 +92,92 @@ public class TaskController {
         return taskService.getModelCalls(taskId, limit == null ? 500 : limit);
     }
 
+    /**
+     * 返回Results。
+     * @param taskId 任务标识
+     * @return 处理结果
+     */
     @GetMapping("/{taskId}/results")
     public List<Map<String, Object>> getResults(@PathVariable String taskId) {
         return taskService.getResults(taskId);
     }
 
+    /**
+     * 返回素材。
+     * @param taskId 任务标识
+     * @return 处理结果
+     */
     @GetMapping("/{taskId}/materials")
     public List<Map<String, Object>> getMaterials(@PathVariable String taskId) {
         return taskService.getMaterials(taskId);
     }
 
+    /**
+     * 返回Seedance任务结果。
+     * @param remoteTaskId 远程任务标识值
+     * @return 处理结果
+     */
     @GetMapping("/seedance/{remoteTaskId}")
     public Map<String, Object> getSeedanceTaskResult(@PathVariable String remoteTaskId) {
         return taskService.getSeedanceTaskResult(remoteTaskId);
     }
 
+    /**
+     * 重试重试。
+     * @param taskId 任务标识
+     * @return 处理结果
+     */
     @PostMapping("/{taskId}/retry")
     public Map<String, Object> retry(@PathVariable String taskId) {
         return taskService.retryTask(taskId);
     }
 
+    /**
+     * 暂停pause。
+     * @param taskId 任务标识
+     * @return 处理结果
+     */
     @PostMapping("/{taskId}/pause")
     public Map<String, Object> pause(@PathVariable String taskId) {
         return taskService.pauseTask(taskId);
     }
 
+    /**
+     * 恢复resume。
+     * @param taskId 任务标识
+     * @return 处理结果
+     */
     @PostMapping("/{taskId}/continue")
     public Map<String, Object> resume(@PathVariable String taskId) {
         return taskService.continueTask(taskId);
     }
 
+    /**
+     * 终止terminate。
+     * @param taskId 任务标识
+     * @return 处理结果
+     */
     @PostMapping("/{taskId}/terminate")
     public Map<String, Object> terminate(@PathVariable String taskId) {
         return taskService.terminateTask(taskId);
     }
 
+    /**
+     * 处理评分效果。
+     * @param taskId 任务标识
+     * @param request 请求体
+     * @return 处理结果
+     */
     @PostMapping("/{taskId}/effect-rating")
     public Map<String, Object> rateEffect(@PathVariable String taskId, @RequestBody RateTaskEffectRequest request) {
         return taskService.rateTaskEffect(taskId, request);
     }
 
+    /**
+     * 删除删除。
+     * @param taskId 任务标识
+     * @return 处理结果
+     */
     @DeleteMapping("/{taskId}")
     public Map<String, Object> delete(@PathVariable String taskId) {
         return taskService.deleteTask(taskId);

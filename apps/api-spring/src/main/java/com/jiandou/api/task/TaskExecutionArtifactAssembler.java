@@ -15,6 +15,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
+/**
+ * 任务执行产物Assembler。
+ */
 @Component
 final class TaskExecutionArtifactAssembler {
 
@@ -26,6 +29,13 @@ final class TaskExecutionArtifactAssembler {
         this.localMediaArtifactService = localMediaArtifactService;
     }
 
+    /**
+     * 创建文本素材。
+     * @param task 要处理的任务对象
+     * @param run 运行值
+     * @param result 结果值
+     * @return 处理结果
+     */
     Map<String, Object> createTextMaterial(TaskRecord task, Map<String, Object> run, Map<String, Object> result) {
         String fileUrl = stringValue(result.get("markdownUrl"));
         LocalMediaArtifactService.StoredArtifact artifact = normalizeTaskArtifact(
@@ -54,6 +64,15 @@ final class TaskExecutionArtifactAssembler {
         );
     }
 
+    /**
+     * 创建图像素材。
+     * @param task 要处理的任务对象
+     * @param run 运行值
+     * @param result 结果值
+     * @param clipIndex 片段索引值
+     * @param frameRole frameRole值
+     * @return 处理结果
+     */
     Map<String, Object> createImageMaterial(TaskRecord task, Map<String, Object> run, Map<String, Object> result, int clipIndex, String frameRole) {
         String outputUrl = stringValue(result.get("outputUrl"));
         Map<String, Object> metadata = mapValue(result.get("metadata"));
@@ -83,12 +102,25 @@ final class TaskExecutionArtifactAssembler {
                 "taskArtifact", true,
                 "clipIndex", clipIndex,
                 "frameRole", normalizedFrameRole,
+                /**
+                 * 处理string值。
+                 * @param metadata.get("remoteSourceUrl" metadata.get("远程来源Url"值
+                 * @return 处理结果
+                 */
                 "remoteSourceUrl", stringValue(metadata.get("remoteSourceUrl"))
             ),
             stringValue(metadata.get("remoteSourceUrl"))
         );
     }
 
+    /**
+     * 创建ReferenceFrame素材。
+     * @param task 要处理的任务对象
+     * @param clipIndex 片段索引值
+     * @param sourceUrl 来源URL值
+     * @param frameRole frameRole值
+     * @return 处理结果
+     */
     Map<String, Object> createReferenceFrameMaterial(TaskRecord task, int clipIndex, String sourceUrl, String frameRole) {
         String normalizedFrameRole = normalizeFrameRole(frameRole);
         String targetFileName = TaskArtifactNaming.clipFrameFileName(
@@ -128,6 +160,11 @@ final class TaskExecutionArtifactAssembler {
                 "taskArtifact", fileUrl.startsWith("/storage/"),
                 "clipIndex", clipIndex,
                 "frameRole", normalizedFrameRole,
+                /**
+                 * 处理string值。
+                 * @param sourceUrl 来源URL值
+                 * @return 处理结果
+                 */
                 "remoteSourceUrl", stringValue(sourceUrl),
                 "reusedFromPreviousClip", true
             ),
@@ -135,6 +172,15 @@ final class TaskExecutionArtifactAssembler {
         );
     }
 
+    /**
+     * 创建视频素材。
+     * @param task 要处理的任务对象
+     * @param run 运行值
+     * @param result 结果值
+     * @param clipIndex 片段索引值
+     * @param fallbackDurationSeconds 兜底时长Seconds值
+     * @return 处理结果
+     */
     Map<String, Object> createVideoMaterial(
         TaskRecord task,
         Map<String, Object> run,
@@ -173,15 +219,50 @@ final class TaskExecutionArtifactAssembler {
             Map.of(
                 "taskArtifact", true,
                 "clipIndex", clipIndex,
+                /**
+                 * 处理string值。
+                 * @param metadata.get("firstFrameUrl" metadata.get("首个FrameUrl"值
+                 * @return 处理结果
+                 */
                 "firstFrameUrl", stringValue(metadata.get("firstFrameUrl")),
+                /**
+                 * 处理extractLastFrameURL。
+                 * @param result 结果值
+                 * @return 处理结果
+                 */
                 "lastFrameUrl", extractLastFrameUrl(result),
+                /**
+                 * 处理string值。
+                 * @param metadata.get("requestedLastFrameUrl" metadata.get("requestedLastFrameUrl"值
+                 * @return 处理结果
+                 */
                 "requestedLastFrameUrl", stringValue(metadata.get("requestedLastFrameUrl")),
+                /**
+                 * 处理string值。
+                 * @param metadata.get("remoteSourceUrl" metadata.get("远程来源Url"值
+                 * @return 处理结果
+                 */
                 "remoteSourceUrl", stringValue(metadata.get("remoteSourceUrl"))
             ),
             stringValue(metadata.get("remoteSourceUrl"))
         );
     }
 
+    /**
+     * 创建结果。
+     * @param task 要处理的任务对象
+     * @param videoRun 视频运行值
+     * @param videoResult 视频结果值
+     * @param videoMaterial 视频素材值
+     * @param imageMaterial 图像素材值
+     * @param videoModelCall 视频模型调用值
+     * @param resolvedLastFrameUrl resolvedLastFrameURL值
+     * @param clipIndex 片段索引值
+     * @param fallbackDurationSeconds 兜底时长Seconds值
+     * @param minDurationSeconds 最小时长Seconds值
+     * @param maxDurationSeconds 最大时长Seconds值
+     * @return 处理结果
+     */
     Map<String, Object> createResult(
         TaskRecord task,
         Map<String, Object> videoRun,
@@ -234,6 +315,12 @@ final class TaskExecutionArtifactAssembler {
         return row;
     }
 
+    /**
+     * 规范化Optional任务产物。
+     * @param task 要处理的任务对象
+     * @param sourceUrl 来源URL值
+     * @param targetFileName target文件Name值
+     */
     void normalizeOptionalTaskArtifact(TaskRecord task, String sourceUrl, String targetFileName) {
         if (stringValue(sourceUrl).isBlank() || stringValue(targetFileName).isBlank()) {
             return;
@@ -251,6 +338,11 @@ final class TaskExecutionArtifactAssembler {
         }
     }
 
+    /**
+     * 处理extractLastFrameURL。
+     * @param value 待处理的值
+     * @return 处理结果
+     */
     String extractLastFrameUrl(Object value) {
         String direct = findNestedString(value, "lastFrameUrl", "last_frame_url");
         if (!direct.isBlank()) {
@@ -259,6 +351,26 @@ final class TaskExecutionArtifactAssembler {
         return findNestedRoleUrl(value, "last_frame");
     }
 
+    /**
+     * 创建素材。
+     * @param task 要处理的任务对象
+     * @param run 运行值
+     * @param mediaType 媒体类型值
+     * @param title title值
+     * @param fileUrl 文件URL值
+     * @param previewUrl previewURL值
+     * @param mimeType mime类型值
+     * @param durationSeconds 时长Seconds值
+     * @param width width值
+     * @param height height值
+     * @param hasAudio hasAudio值
+     * @param clipIndex 片段索引值
+     * @param kind 类型值
+     * @param sourceMetadata 来源Metadata值
+     * @param extraMetadata extraMetadata值
+     * @param remoteUrl 远程URL值
+     * @return 处理结果
+     */
     private Map<String, Object> createMaterial(
         TaskRecord task,
         Map<String, Object> run,
@@ -346,11 +458,22 @@ final class TaskExecutionArtifactAssembler {
         }
     }
 
+    /**
+     * 处理文件ExtOr默认。
+     * @param fileName 文件Name值
+     * @param fallback 兜底值
+     * @return 处理结果
+     */
     private String fileExtOrDefault(String fileName, String fallback) {
         String resolved = fileExt(fileName);
         return resolved.isBlank() ? fallback : resolved;
     }
 
+    /**
+     * 处理图像Mime类型。
+     * @param fileName 文件Name值
+     * @return 处理结果
+     */
     private String imageMimeType(String fileName) {
         String ext = fileExt(fileName);
         return switch (ext) {
@@ -360,6 +483,12 @@ final class TaskExecutionArtifactAssembler {
         };
     }
 
+    /**
+     * 查找嵌套String。
+     * @param value 待处理的值
+     * @param keys keys值
+     * @return 处理结果
+     */
     @SuppressWarnings("unchecked")
     private String findNestedString(Object value, String... keys) {
         if (value instanceof Map<?, ?> rawMap) {
@@ -394,6 +523,12 @@ final class TaskExecutionArtifactAssembler {
         return "";
     }
 
+    /**
+     * 查找嵌套RoleURL。
+     * @param value 待处理的值
+     * @param role role值
+     * @return 处理结果
+     */
     @SuppressWarnings("unchecked")
     private String findNestedRoleUrl(Object value, String role) {
         if (value instanceof Map<?, ?> rawMap) {
@@ -427,6 +562,11 @@ final class TaskExecutionArtifactAssembler {
         return "";
     }
 
+    /**
+     * 处理首个非空白。
+     * @param values 值
+     * @return 处理结果
+     */
     private String firstNonBlank(String... values) {
         for (String value : values) {
             if (value != null && !value.isBlank()) {
@@ -436,10 +576,19 @@ final class TaskExecutionArtifactAssembler {
         return "";
     }
 
+    /**
+     * 处理当前Iso。
+     * @return 处理结果
+     */
     private String nowIso() {
         return OffsetDateTime.now(ZoneOffset.UTC).toString();
     }
 
+    /**
+     * 处理结果Map。
+     * @param run 运行值
+     * @return 处理结果
+     */
     @SuppressWarnings("unchecked")
     private Map<String, Object> resultMap(Map<String, Object> run) {
         Object result = run.get("result");
@@ -449,6 +598,11 @@ final class TaskExecutionArtifactAssembler {
         return Map.of();
     }
 
+    /**
+     * 映射值。
+     * @param value 待处理的值
+     * @return 处理结果
+     */
     @SuppressWarnings("unchecked")
     private Map<String, Object> mapValue(Object value) {
         if (value instanceof Map<?, ?> map) {
@@ -457,6 +611,11 @@ final class TaskExecutionArtifactAssembler {
         return Map.of();
     }
 
+    /**
+     * 处理文件Size。
+     * @param absolutePath absolute路径值
+     * @return 处理结果
+     */
     private long fileSize(String absolutePath) {
         if (absolutePath == null || absolutePath.isBlank()) {
             return 0L;
@@ -469,6 +628,11 @@ final class TaskExecutionArtifactAssembler {
         }
     }
 
+    /**
+     * 处理文件NameFromURL。
+     * @param url URL值
+     * @return 处理结果
+     */
     private String fileNameFromUrl(String url) {
         String normalized = stringValue(url)
             .replaceAll("[?#].*$", "")
@@ -477,6 +641,11 @@ final class TaskExecutionArtifactAssembler {
         return index >= 0 ? normalized.substring(index + 1) : normalized;
     }
 
+    /**
+     * 处理文件Ext。
+     * @param fileName 文件Name值
+     * @return 处理结果
+     */
     private String fileExt(String fileName) {
         String normalized = stringValue(fileName).replaceAll("[?#].*$", "");
         int index = normalized.lastIndexOf('.');
@@ -490,19 +659,41 @@ final class TaskExecutionArtifactAssembler {
         return candidate;
     }
 
+    /**
+     * 规范化FrameRole。
+     * @param frameRole frameRole值
+     * @return 处理结果
+     */
     private String normalizeFrameRole(String frameRole) {
         return "last".equalsIgnoreCase(stringValue(frameRole)) ? "last" : "first";
     }
 
+    /**
+     * 处理stable标识。
+     * @param prefix prefix值
+     * @param parts parts值
+     * @return 处理结果
+     */
     private String stableId(String prefix, String... parts) {
         String seed = prefix + ":" + String.join(":", parts);
         return prefix + "_" + UUID.nameUUIDFromBytes(seed.getBytes(StandardCharsets.UTF_8)).toString().replace("-", "");
     }
 
+    /**
+     * 处理string值。
+     * @param value 待处理的值
+     * @return 处理结果
+     */
     private String stringValue(Object value) {
         return value == null ? "" : String.valueOf(value).trim();
     }
 
+    /**
+     * 处理int值。
+     * @param value 待处理的值
+     * @param defaultValue 默认值
+     * @return 处理结果
+     */
     private int intValue(Object value, int defaultValue) {
         if (value instanceof Number number) {
             return number.intValue();
@@ -516,6 +707,12 @@ final class TaskExecutionArtifactAssembler {
         return defaultValue;
     }
 
+    /**
+     * 处理double值。
+     * @param value 待处理的值
+     * @param defaultValue 默认值
+     * @return 处理结果
+     */
     private double doubleValue(Object value, double defaultValue) {
         if (value instanceof Number number) {
             return number.doubleValue();
@@ -529,6 +726,11 @@ final class TaskExecutionArtifactAssembler {
         return defaultValue;
     }
 
+    /**
+     * 检查是否布尔值。
+     * @param value 待处理的值
+     * @return 是否满足条件
+     */
     private boolean boolValue(Object value) {
         if (value instanceof Boolean bool) {
             return bool;

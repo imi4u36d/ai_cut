@@ -279,6 +279,9 @@
 </template>
 
 <script setup lang="ts">
+/**
+ * New任务页面组件。
+ */
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 import { fetchGenerationOptions } from "@/api/generation";
@@ -347,6 +350,11 @@ const form = ref<CreateGenerationTaskRequest>({
   transcriptText: "",
 });
 
+/**
+ * 规范化模型Name。
+ * @param value 待处理的值
+ * @return 处理结果
+ */
 function normalizeModelName(value: string | null | undefined): string {
   return String(value ?? "")
     .trim()
@@ -354,6 +362,11 @@ function normalizeModelName(value: string | null | undefined): string {
     .replace(/[\s._-]/g, "");
 }
 
+/**
+ * 解析时长Seconds。
+ * @param value 待处理的值
+ * @return 处理结果
+ */
 function parseDurationSeconds(value: unknown): number | null {
   if (value === null || value === undefined) {
     return null;
@@ -373,6 +386,11 @@ function parseDurationSeconds(value: unknown): number | null {
   return seconds;
 }
 
+/**
+ * 解析种子。
+ * @param value 待处理的值
+ * @return 处理结果
+ */
 function parseSeed(value: unknown): number | null {
   if (value === null || value === undefined) {
     return null;
@@ -392,14 +410,29 @@ function parseSeed(value: unknown): number | null {
   return seed;
 }
 
+/**
+ * 格式化可复用种子。
+ * @param value 待处理的值
+ * @return 处理结果
+ */
 function formatReusableSeed(value: number | null | undefined): string {
   return typeof value === "number" && Number.isFinite(value) ? String(Math.trunc(value)) : "未设置";
 }
 
+/**
+ * 格式化可复用评分。
+ * @param value 待处理的值
+ * @return 处理结果
+ */
 function formatReusableRating(value: number | null | undefined): string {
   return typeof value === "number" && Number.isFinite(value) && value > 0 ? `${Math.trunc(value)}/5` : "未评分";
 }
 
+/**
+ * 格式化可复用日期。
+ * @param value 待处理的值
+ * @return 处理结果
+ */
 function formatReusableDate(value: string | null | undefined): string {
   if (!value) {
     return "";
@@ -411,6 +444,10 @@ function formatReusableDate(value: string | null | undefined): string {
   return new Date(parsed).toLocaleString("zh-CN", { hour12: false });
 }
 
+/**
+ * 处理解析提示词时长Seconds。
+ * @return 处理结果
+ */
 function resolvePromptDurationSeconds(): number {
   const manualMax = parseDurationSeconds(manualMaxDurationSeconds.value);
   if (durationLimitMode.value === "manual" && manualMax !== null) {
@@ -427,6 +464,10 @@ function resolvePromptDurationSeconds(): number {
   return 5;
 }
 
+/**
+ * 处理解析视频Size。
+ * @param size size值
+ */
 function resolveVideoSize(size: GenerationVideoSizeOption): { width: number; height: number } | null {
   if (typeof size.width === "number" && typeof size.height === "number" && size.width > 0 && size.height > 0) {
     return {
@@ -451,6 +492,11 @@ function resolveVideoSize(size: GenerationVideoSizeOption): { width: number; hei
   };
 }
 
+/**
+ * 处理解析AspectRatio。
+ * @param size size值
+ * @return 处理结果
+ */
 function resolveAspectRatio(size: GenerationVideoSizeOption): "9:16" | "16:9" | null {
   const parsed = resolveVideoSize(size);
   if (!parsed) {
@@ -459,6 +505,12 @@ function resolveAspectRatio(size: GenerationVideoSizeOption): "9:16" | "16:9" | 
   return parsed.width >= parsed.height ? "16:9" : "9:16";
 }
 
+/**
+ * 处理比较视频SizeBy面积。
+ * @param a a值
+ * @param b b值
+ * @return 处理结果
+ */
 function compareVideoSizeByArea(a: GenerationVideoSizeOption, b: GenerationVideoSizeOption): number {
   const aSize = resolveVideoSize(a);
   const bSize = resolveVideoSize(b);
@@ -512,6 +564,7 @@ const videoSizeOptions = computed<GenerationVideoSizeOption[]>(() => {
   const selectedVideoModel = normalizeModelName(form.value.videoModel);
   const filtered = source
     .filter((item) => {
+      // 先按画幅比过滤，避免把当前任务无法直接使用的尺寸暴露给用户。
       const ratio = resolveAspectRatio(item);
       return !ratio || ratio === targetAspectRatio;
     })
@@ -519,6 +572,7 @@ const videoSizeOptions = computed<GenerationVideoSizeOption[]>(() => {
       if (!selectedVideoModel) {
         return true;
       }
+      // 再按模型能力收窄选项，确保表单提交前就满足后端目录配置约束。
       const supportedModels = Array.isArray(item.supportedModels) ? item.supportedModels : [];
       if (!supportedModels.length) {
         return true;
@@ -532,6 +586,7 @@ const durationOptions = computed<GenerationVideoDurationOption[]>(() => {
     ? selectedVideoModelOption.value?.supportedDurations ?? []
     : [];
   if (modelDurations.length) {
+    // 模型显式声明支持时长时，优先使用模型能力本身，避免被全局默认值误导。
     return [...new Set(modelDurations)]
       .filter((item) => Number.isFinite(item) && item > 0)
       .sort((a, b) => a - b)
@@ -617,6 +672,11 @@ const seedCapabilityHint = computed(() => {
   return "当前所选模型未声明支持 seed，保存后仅做任务记录。";
 });
 
+/**
+ * 解析时间戳毫秒。
+ * @param value 待处理的值
+ * @return 处理结果
+ */
 function parseTimestampMs(value: string | null | undefined): number | null {
   if (!value) {
     return null;
@@ -628,6 +688,11 @@ function parseTimestampMs(value: string | null | undefined): number | null {
   return parsed;
 }
 
+/**
+ * 格式化Elapsed标签。
+ * @param seconds seconds值
+ * @return 处理结果
+ */
 function formatElapsedLabel(seconds: number): string {
   const safeSeconds = Math.max(0, Math.floor(seconds));
   const hours = Math.floor(safeSeconds / 3600);
@@ -748,6 +813,11 @@ watch(
   { immediate: true },
 );
 
+/**
+ * 处理read文本文件。
+ * @param file 待上传的文件
+ * @return 处理结果
+ */
 function readTextFile(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -801,6 +871,10 @@ async function loadReusableSeeds() {
   }
 }
 
+/**
+ * 应用种子From任务。
+ * @param task 要处理的任务对象
+ */
 function applySeedFromTask(task: TaskListItem) {
   const seed = task.taskSeed;
   if (typeof seed !== "number" || !Number.isFinite(seed)) {
@@ -963,6 +1037,10 @@ async function goToCurrentTask() {
   await router.push({ name: "tasks", query: { selected: progressTaskId.value } });
 }
 
+/**
+ * 格式化追踪时间。
+ * @param value 待处理的值
+ */
 function formatTraceTime(value: string) {
   const parsed = Date.parse(value);
   if (!Number.isFinite(parsed)) {
@@ -985,6 +1063,7 @@ onUnmounted(() => {
     nowTicker = null;
   }
 });
+
 </script>
 
 <style scoped>

@@ -16,10 +16,19 @@ public class TaskDiagnosisService {
 
     private final TaskViewMapper taskViewMapper;
 
+    /**
+     * 创建新的任务诊断服务。
+     * @param taskViewMapper 任务视图映射器值
+     */
     public TaskDiagnosisService(TaskViewMapper taskViewMapper) {
         this.taskViewMapper = taskViewMapper;
     }
 
+    /**
+     * 处理diagnose。
+     * @param task 要处理的任务对象
+     * @return 处理结果
+     */
     public Map<String, Object> diagnose(TaskRecord task) {
         Map<String, Object> detail = taskViewMapper.toDetail(task);
         Map<String, Object> monitoring = mapValue(detail.get("monitoring"));
@@ -142,6 +151,12 @@ public class TaskDiagnosisService {
         return diagnosis;
     }
 
+    /**
+     * 处理latest输出类型。
+     * @param task 要处理的任务对象
+     * @param resultType 结果类型值
+     * @return 处理结果
+     */
     private Map<String, Object> latestOutputOfKind(TaskRecord task, String resultType) {
         List<Map<String, Object>> outputs = task.outputsView().stream()
             .filter(item -> resultType.equalsIgnoreCase(stringValue(item.get("resultType"))))
@@ -150,6 +165,12 @@ public class TaskDiagnosisService {
         return outputs.isEmpty() ? Map.of() : outputs.get(outputs.size() - 1);
     }
 
+    /**
+     * 处理missing片段Indices。
+     * @param plannedClipCount 计划片段数量值
+     * @param renderedClipIndices 已渲染片段Indices值
+     * @return 处理结果
+     */
     private List<Integer> missingClipIndices(int plannedClipCount, List<Integer> renderedClipIndices) {
         if (plannedClipCount <= 0) {
             return List.of();
@@ -164,6 +185,11 @@ public class TaskDiagnosisService {
         return missing;
     }
 
+    /**
+     * 处理highestSeverity。
+     * @param findings findings值
+     * @return 处理结果
+     */
     private String highestSeverity(List<TaskFinding> findings) {
         int level = 0;
         String label = "info";
@@ -182,6 +208,14 @@ public class TaskDiagnosisService {
         return label;
     }
 
+    /**
+     * 处理诊断摘要。
+     * @param findings findings值
+     * @param plannedClipCount 计划片段数量值
+     * @param videoClipCount 视频片段数量值
+     * @param joinCount 拼接数量值
+     * @return 处理结果
+     */
     private String diagnosisSummary(List<TaskFinding> findings, int plannedClipCount, int videoClipCount, int joinCount) {
         String highest = highestSeverity(findings);
         if ("high".equals(highest)) {
@@ -193,6 +227,14 @@ public class TaskDiagnosisService {
         return "任务当前整体健康。计划镜头 " + plannedClipCount + "，视频片段 " + videoClipCount + "，拼接结果 " + joinCount + "。";
     }
 
+    /**
+     * 处理recommendedAction。
+     * @param task 要处理的任务对象
+     * @param findings findings值
+     * @param contiguousRenderedClipCount contiguous已渲染片段数量值
+     * @param plannedClipCount 计划片段数量值
+     * @return 处理结果
+     */
     private String recommendedAction(TaskRecord task, List<TaskFinding> findings, int contiguousRenderedClipCount, int plannedClipCount) {
         if ("FAILED".equals(task.status)) {
             return contiguousRenderedClipCount > 0 ? "执行 retry，按已有分镜从失败镜头继续恢复。" : "执行 retry，重新从分析阶段开始。";
@@ -209,10 +251,20 @@ public class TaskDiagnosisService {
         return "继续观察最新 trace 与 stage run，如长时间无进展再执行 retry。";
     }
 
+    /**
+     * 处理contiguousSeverity。
+     * @param taskStatus 任务状态值
+     * @return 处理结果
+     */
     private String contiguousSeverity(String taskStatus) {
         return "COMPLETED".equals(taskStatus) || "FAILED".equals(taskStatus) ? "high" : "medium";
     }
 
+    /**
+     * 处理existing视频片段Indices。
+     * @param task 要处理的任务对象
+     * @return 处理结果
+     */
     private List<Integer> existingVideoClipIndices(TaskRecord task) {
         LinkedHashSet<Integer> indices = new LinkedHashSet<>();
         for (Map<String, Object> output : task.outputsView()) {
@@ -227,6 +279,11 @@ public class TaskDiagnosisService {
         return indices.stream().sorted().toList();
     }
 
+    /**
+     * 映射值。
+     * @param value 待处理的值
+     * @return 处理结果
+     */
     @SuppressWarnings("unchecked")
     private Map<String, Object> mapValue(Object value) {
         if (value instanceof Map<?, ?> map) {
@@ -235,6 +292,11 @@ public class TaskDiagnosisService {
         return Map.of();
     }
 
+    /**
+     * 列出值。
+     * @param value 待处理的值
+     * @return 处理结果
+     */
     @SuppressWarnings("unchecked")
     private List<Object> listValue(Object value) {
         if (value instanceof List<?> list) {
@@ -243,6 +305,11 @@ public class TaskDiagnosisService {
         return List.of();
     }
 
+    /**
+     * 处理integer值。
+     * @param value 待处理的值
+     * @return 处理结果
+     */
     private Integer integerValue(Object value) {
         if (value instanceof Number number) {
             return number.intValue();
@@ -257,15 +324,31 @@ public class TaskDiagnosisService {
         }
     }
 
+    /**
+     * 处理int值。
+     * @param value 待处理的值
+     * @param fallback 兜底值
+     * @return 处理结果
+     */
     private int intValue(Object value, int fallback) {
         Integer resolved = integerValue(value);
         return resolved == null ? fallback : resolved;
     }
 
+    /**
+     * 处理string值。
+     * @param value 待处理的值
+     * @return 处理结果
+     */
     private String stringValue(Object value) {
         return value == null ? "" : String.valueOf(value).trim();
     }
 
+    /**
+     * 检查是否布尔值。
+     * @param value 待处理的值
+     * @return 是否满足条件
+     */
     private boolean boolValue(Object value) {
         if (value instanceof Boolean bool) {
             return bool;
@@ -276,6 +359,11 @@ public class TaskDiagnosisService {
         return "true".equalsIgnoreCase(stringValue(value));
     }
 
+    /**
+     * 处理首个非空白。
+     * @param values 值
+     * @return 处理结果
+     */
     private String firstNonBlank(String... values) {
         for (String value : values) {
             if (value != null && !value.isBlank()) {
@@ -290,6 +378,10 @@ public class TaskDiagnosisService {
      */
     private record TaskFinding(String code, String severity, String title, String detail) {
 
+        /**
+         * 处理转为Map。
+         * @return 处理结果
+         */
         Map<String, Object> toMap() {
             Map<String, Object> row = new LinkedHashMap<>();
             row.put("code", code);

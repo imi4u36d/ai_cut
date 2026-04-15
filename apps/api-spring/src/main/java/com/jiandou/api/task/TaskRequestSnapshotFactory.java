@@ -13,10 +13,20 @@ public class TaskRequestSnapshotFactory {
 
     private final ModelRuntimePropertiesResolver modelResolver;
 
+    /**
+     * 创建新的任务请求快照工厂。
+     * @param modelResolver 模型解析器值
+     */
     public TaskRequestSnapshotFactory(ModelRuntimePropertiesResolver modelResolver) {
         this.modelResolver = modelResolver;
     }
 
+    /**
+     * 创建create。
+     * @param request 请求体
+     * @param task 要处理的任务对象
+     * @return 处理结果
+     */
     public GenerationRequestSnapshot create(CreateGenerationTaskRequest request, TaskRecord task) {
         return new GenerationRequestSnapshot(
             "generation",
@@ -45,6 +55,11 @@ public class TaskRequestSnapshotFactory {
         );
     }
 
+    /**
+     * 规范化输出数量。
+     * @param outputCount 输出数量值
+     * @return 处理结果
+     */
     private Object normalizeOutputCount(Object outputCount) {
         if (outputCount == null) {
             return "auto";
@@ -64,6 +79,11 @@ public class TaskRequestSnapshotFactory {
         }
     }
 
+    /**
+     * 处理首个非空白。
+     * @param values 值
+     * @return 处理结果
+     */
     private String firstNonBlank(String... values) {
         for (String value : values) {
             if (value != null && !value.isBlank()) {
@@ -73,6 +93,12 @@ public class TaskRequestSnapshotFactory {
         return "";
     }
 
+    /**
+     * 处理trimmed。
+     * @param value 待处理的值
+     * @param fallback 兜底值
+     * @return 处理结果
+     */
     private String trimmed(String value, String fallback) {
         if (value == null) {
             return fallback;

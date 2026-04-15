@@ -1,12 +1,22 @@
+/**
+ * 任务进度组件逻辑。
+ */
 import { onUnmounted, ref } from "vue";
 import { fetchTask, fetchTaskTrace } from "@/api/tasks";
 import type { TaskDetail, TaskTraceEvent, TaskStatus } from "@/types";
 import type { TaskProgressState } from "./types";
 
+/**
+ * 处理当前标签。
+ */
 function nowLabel() {
   return new Date().toLocaleTimeString("zh-CN", { hour12: false });
 }
 
+/**
+ * 构建初始状态。
+ * @return 处理结果
+ */
 function buildInitialState(): TaskProgressState {
   return {
     status: "idle",
@@ -17,6 +27,11 @@ function buildInitialState(): TaskProgressState {
   };
 }
 
+/**
+ * 规范化进度。
+ * @param value 待处理的值
+ * @param fallback 兜底值
+ */
 function normalizeProgress(value: number | null | undefined, fallback: number) {
   if (typeof value !== "number" || !Number.isFinite(value)) {
     return fallback;
@@ -24,6 +39,11 @@ function normalizeProgress(value: number | null | undefined, fallback: number) {
   return Math.max(0, Math.min(100, Math.round(value)));
 }
 
+/**
+ * 映射任务状态。
+ * @param status 状态值
+ * @param rawProgress 原始进度值
+ */
 function mapTaskStatus(status: TaskStatus, rawProgress: number | null | undefined) {
   const progress = normalizeProgress(rawProgress, 0);
   switch (status) {
@@ -46,6 +66,9 @@ function mapTaskStatus(status: TaskStatus, rawProgress: number | null | undefine
   }
 }
 
+/**
+ * 处理use任务进度。
+ */
 export function useTaskProgress() {
   const state = ref<TaskProgressState>(buildInitialState());
   const traceEvents = ref<TaskTraceEvent[]>([]);
@@ -55,6 +78,9 @@ export function useTaskProgress() {
   let optimisticTimer: number | null = null;
   let pollTimer: number | null = null;
 
+  /**
+   * 处理清空OptimisticTimer。
+   */
   function clearOptimisticTimer() {
     if (optimisticTimer !== null) {
       window.clearInterval(optimisticTimer);
@@ -62,6 +88,9 @@ export function useTaskProgress() {
     }
   }
 
+  /**
+   * 处理清空PollTimer。
+   */
   function clearPollTimer() {
     if (pollTimer !== null) {
       window.clearInterval(pollTimer);
@@ -69,6 +98,10 @@ export function useTaskProgress() {
     }
   }
 
+  /**
+   * 处理更新状态。
+   * @param next next值
+   */
   function patchState(next: Partial<TaskProgressState>) {
     state.value = {
       ...state.value,
@@ -77,6 +110,9 @@ export function useTaskProgress() {
     };
   }
 
+  /**
+   * 重置状态。
+   */
   function reset() {
     clearOptimisticTimer();
     clearPollTimer();
@@ -86,9 +122,13 @@ export function useTaskProgress() {
     state.value = buildInitialState();
   }
 
+  /**
+   * 启动乐观进度。
+   */
   function startOptimisticProgress() {
     clearOptimisticTimer();
     optimisticTimer = window.setInterval(() => {
+      // 后端任务 ID 返回前先给出乐观进度，避免创建请求期间界面完全静止。
       if (taskId.value || state.value.status !== "running") {
         return;
       }
@@ -107,6 +147,7 @@ export function useTaskProgress() {
     try {
       const [task, trace] = await Promise.all([
         fetchTask(runTaskId),
+        // trace 只用于增强展示，失败时降级为空列表，不阻塞主状态刷新。
         fetchTaskTrace(runTaskId, 30).catch(() => []),
       ]);
       const mapped = mapTaskStatus(task.status, task.progress);
@@ -129,6 +170,10 @@ export function useTaskProgress() {
     }
   }
 
+  /**
+   * 启动进度流程。
+   * @param initial 初始值
+   */
   function start(initial?: Partial<TaskProgressState>) {
     reset();
     patchState({
@@ -141,8 +186,13 @@ export function useTaskProgress() {
     startOptimisticProgress();
   }
 
+  /**
+   * 绑定任务。
+   * @param runTaskId 运行任务标识值
+   */
   function attachTask(runTaskId: string) {
     taskId.value = runTaskId;
+    // 一旦拿到真实任务 ID，就切换到服务端轮询并停止本地乐观进度。
     clearOptimisticTimer();
     patchState({
       status: "running",
@@ -157,6 +207,10 @@ export function useTaskProgress() {
     }, 2000);
   }
 
+  /**
+   * 将完成标记为完成。
+   * @param message 消息文本
+   */
   function complete(message = "视频已生成完成。") {
     clearOptimisticTimer();
     clearPollTimer();
@@ -168,6 +222,10 @@ export function useTaskProgress() {
     });
   }
 
+  /**
+   * 将失败标记为失败。
+   * @param message 消息文本
+   */
   function fail(message: string) {
     clearOptimisticTimer();
     clearPollTimer();

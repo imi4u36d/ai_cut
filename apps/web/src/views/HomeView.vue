@@ -15,9 +15,13 @@
 </template>
 
 <script setup lang="ts">
+/**
+ * 首页页面组件。
+ */
 import HomeCapabilityHighlights from "@/components/home/HomeCapabilityHighlights.vue";
 import HomeHero from "@/components/home/HomeHero.vue";
 import HomeVideoShowcase from "@/components/home/HomeVideoShowcase.vue";
+
 </script>
 
 <style scoped>

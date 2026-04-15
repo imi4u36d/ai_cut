@@ -23,6 +23,11 @@ class TaskViewMapper {
         this.storageRoot = Paths.get(storageRoot).toAbsolutePath().normalize();
     }
 
+    /**
+     * 处理转为列表Item。
+     * @param task 要处理的任务对象
+     * @return 处理结果
+     */
     Map<String, Object> toListItem(TaskRecord task) {
         TaskMonitoringSnapshot monitoring = monitoringSummary(task);
         TaskDiagnosisSummary diagnosis = diagnosisSummary(task, monitoring);
@@ -97,6 +102,12 @@ class TaskViewMapper {
         return row;
     }
 
+    /**
+     * 处理诊断摘要。
+     * @param task 要处理的任务对象
+     * @param monitoring 监控值
+     * @return 处理结果
+     */
     private TaskDiagnosisSummary diagnosisSummary(TaskRecord task, TaskMonitoringSnapshot monitoring) {
         int plannedClipCount = monitoring.plannedClipCount();
         int renderedClipCount = monitoring.renderedClipCount();
@@ -128,6 +139,14 @@ class TaskViewMapper {
         return diagnosis("info", "healthy", "当前未发现明显阻塞。", "继续观察");
     }
 
+    /**
+     * 处理诊断。
+     * @param severity severity值
+     * @param code code值
+     * @param hint 提示值
+     * @param recommendedAction recommendedAction值
+     * @return 处理结果
+     */
     private TaskDiagnosisSummary diagnosis(String severity, String code, String hint, String recommendedAction) {
         return new TaskDiagnosisSummary(severity, code, hint, recommendedAction);
     }
@@ -185,6 +204,11 @@ class TaskViewMapper {
         );
     }
 
+    /**
+     * 处理产物Directories。
+     * @param task 要处理的任务对象
+     * @return 处理结果
+     */
     private TaskArtifactDirectories artifactDirectories(TaskRecord task) {
         return new TaskArtifactDirectories(
             storageRoot.resolve(TaskArtifactNaming.taskBaseRelativeDir(task)).toString(),
@@ -193,6 +217,11 @@ class TaskViewMapper {
         );
     }
 
+    /**
+     * 处理active尝试。
+     * @param task 要处理的任务对象
+     * @return 处理结果
+     */
     private Map<String, Object> activeAttempt(TaskRecord task) {
         if (task.activeAttemptId == null || task.activeAttemptId.isBlank()) {
             return latestAttempt(task);
@@ -205,18 +234,34 @@ class TaskViewMapper {
         return latestAttempt(task);
     }
 
+    /**
+     * 处理latestBy时间戳。
+     * @param rows 行值
+     * @param fieldName fieldName值
+     * @return 处理结果
+     */
     private Map<String, Object> latestByTimestamp(List<Map<String, Object>> rows, String fieldName) {
         return rows.stream()
             .max(Comparator.comparing(item -> stringValue(item.get(fieldName))))
             .orElse(Map.of());
     }
 
+    /**
+     * 处理latest尝试。
+     * @param task 要处理的任务对象
+     * @return 处理结果
+     */
     private Map<String, Object> latestAttempt(TaskRecord task) {
         return task.attemptsView().stream()
             .max(Comparator.comparing(this::attemptSortKey))
             .orElse(Map.of());
     }
 
+    /**
+     * 处理尝试SortKey。
+     * @param item item值
+     * @return 处理结果
+     */
     private String attemptSortKey(Map<String, Object> item) {
         return firstNonBlank(
             stringValue(item.get("finishedAt")),
@@ -226,12 +271,22 @@ class TaskViewMapper {
         );
     }
 
+    /**
+     * 处理latest阶段运行。
+     * @param task 要处理的任务对象
+     * @return 处理结果
+     */
     private Map<String, Object> latestStageRun(TaskRecord task) {
         return task.stageRunsView().stream()
             .max(Comparator.comparing(this::stageRunSortKey))
             .orElse(Map.of());
     }
 
+    /**
+     * 处理阶段运行SortKey。
+     * @param stageRun 阶段运行值
+     * @return 处理结果
+     */
     private String stageRunSortKey(Map<String, Object> stageRun) {
         return firstNonBlank(
             stringValue(stageRun.get("finishedAt")),
@@ -241,6 +296,11 @@ class TaskViewMapper {
         );
     }
 
+    /**
+     * 处理latest视频输出。
+     * @param task 要处理的任务对象
+     * @return 处理结果
+     */
     private Map<String, Object> latestVideoOutput(TaskRecord task) {
         return task.outputsView().stream()
             .filter(item -> isVideoResultType(item.get("resultType")))
@@ -248,6 +308,11 @@ class TaskViewMapper {
             .orElse(Map.of());
     }
 
+    /**
+     * 处理latest拼接输出。
+     * @param task 要处理的任务对象
+     * @return 处理结果
+     */
     private Map<String, Object> latestJoinOutput(TaskRecord task) {
         return task.outputsView().stream()
             .filter(item -> isJoinResultType(item.get("resultType")))
@@ -255,6 +320,14 @@ class TaskViewMapper {
             .orElse(Map.of());
     }
 
+    /**
+     * 处理current阶段。
+     * @param task 要处理的任务对象
+     * @param activeAttempt active尝试值
+     * @param latestStageRun latest阶段运行值
+     * @param latestTrace latest追踪值
+     * @return 处理结果
+     */
     private String currentStage(TaskRecord task, Map<String, Object> activeAttempt, Map<String, Object> latestStageRun, Map<String, Object> latestTrace) {
         String stage = firstNonBlank(
             stringValue(task.executionContext.get("currentStage")),
@@ -278,6 +351,11 @@ class TaskViewMapper {
         };
     }
 
+    /**
+     * 处理已渲染片段Indices。
+     * @param task 要处理的任务对象
+     * @return 处理结果
+     */
     private List<Integer> renderedClipIndices(TaskRecord task) {
         return task.outputsView().stream()
             .filter(item -> isVideoResultType(item.get("resultType")))
@@ -287,6 +365,11 @@ class TaskViewMapper {
             .toList();
     }
 
+    /**
+     * 处理contiguous片段数量。
+     * @param clipIndices 片段Indices值
+     * @return 处理结果
+     */
     private int contiguousClipCount(List<Integer> clipIndices) {
         int expected = 1;
         for (Integer clipIndex : clipIndices) {
@@ -298,6 +381,11 @@ class TaskViewMapper {
         return expected - 1;
     }
 
+    /**
+     * 处理时长Diagnostics。
+     * @param task 要处理的任务对象
+     * @return 处理结果
+     */
     private List<Map<String, Object>> durationDiagnostics(TaskRecord task) {
         List<Map<String, Object>> planRows = durationPlanRows(task);
         List<Map<String, Object>> diagnostics = new ArrayList<>();
@@ -400,6 +488,11 @@ class TaskViewMapper {
         return diagnostics;
     }
 
+    /**
+     * 处理时长规划行。
+     * @param task 要处理的任务对象
+     * @return 处理结果
+     */
     private List<Map<String, Object>> durationPlanRows(TaskRecord task) {
         List<Map<String, Object>> clipDurationPlan = listMapValue(task.executionContext.get("clipDurationPlan"));
         if (!clipDurationPlan.isEmpty()) {
@@ -420,6 +513,11 @@ class TaskViewMapper {
         return List.of();
     }
 
+    /**
+     * 处理with片段索引兜底。
+     * @param rows 行值
+     * @return 处理结果
+     */
     private List<Map<String, Object>> withClipIndexFallback(List<Map<String, Object>> rows) {
         List<Map<String, Object>> normalized = new ArrayList<>();
         int fallbackClipIndex = 1;
@@ -434,6 +532,11 @@ class TaskViewMapper {
         return normalized;
     }
 
+    /**
+     * 处理解析计划片段数量。
+     * @param task 要处理的任务对象
+     * @return 处理结果
+     */
     private int resolvePlannedClipCount(TaskRecord task) {
         int plannedClipCount = intValue(task.executionContext.get("plannedClipCount"), 0);
         if (plannedClipCount > 0) {
@@ -450,16 +553,31 @@ class TaskViewMapper {
         return renderedClipIndices(task).size();
     }
 
+    /**
+     * 检查是否视频结果类型。
+     * @param rawValue 原始值
+     * @return 是否满足条件
+     */
     private boolean isVideoResultType(Object rawValue) {
         String resultType = stringValue(rawValue).toLowerCase();
         return "video".equals(resultType) || "video_clip".equals(resultType);
     }
 
+    /**
+     * 检查是否拼接结果类型。
+     * @param rawValue 原始值
+     * @return 是否满足条件
+     */
     private boolean isJoinResultType(Object rawValue) {
         String resultType = stringValue(rawValue).toLowerCase();
         return "video_join".equals(resultType) || "join_video".equals(resultType) || "joined_video".equals(resultType);
     }
 
+    /**
+     * 处理正文Preview。
+     * @param transcriptText 正文文本值
+     * @return 处理结果
+     */
     private String transcriptPreview(String transcriptText) {
         String normalized = stringValue(transcriptText);
         if (normalized.isBlank()) {
@@ -468,6 +586,11 @@ class TaskViewMapper {
         return normalized.substring(0, Math.min(220, normalized.length()));
     }
 
+    /**
+     * 处理首个Present。
+     * @param values 值
+     * @return 处理结果
+     */
     private Object firstPresent(Object... values) {
         for (Object value : values) {
             if (value == null) {
@@ -481,6 +604,11 @@ class TaskViewMapper {
         return null;
     }
 
+    /**
+     * 映射值。
+     * @param value 待处理的值
+     * @return 处理结果
+     */
     @SuppressWarnings("unchecked")
     private Map<String, Object> mapValue(Object value) {
         if (value instanceof Map<?, ?> map) {
@@ -489,6 +617,11 @@ class TaskViewMapper {
         return Map.of();
     }
 
+    /**
+     * 列出值。
+     * @param value 待处理的值
+     * @return 处理结果
+     */
     @SuppressWarnings("unchecked")
     private List<Object> listValue(Object value) {
         if (value instanceof List<?> list) {
@@ -497,6 +630,11 @@ class TaskViewMapper {
         return List.of();
     }
 
+    /**
+     * 列出Map值。
+     * @param value 待处理的值
+     * @return 处理结果
+     */
     @SuppressWarnings("unchecked")
     private List<Map<String, Object>> listMapValue(Object value) {
         if (!(value instanceof List<?> list)) {
@@ -511,6 +649,11 @@ class TaskViewMapper {
         return rows;
     }
 
+    /**
+     * 处理首个非空白。
+     * @param values 值
+     * @return 处理结果
+     */
     private String firstNonBlank(String... values) {
         for (String value : values) {
             if (value != null && !value.isBlank()) {
@@ -520,6 +663,11 @@ class TaskViewMapper {
         return "";
     }
 
+    /**
+     * 检查是否布尔值。
+     * @param value 待处理的值
+     * @return 是否满足条件
+     */
     private boolean boolValue(Object value) {
         if (value instanceof Boolean bool) {
             return bool;
@@ -527,6 +675,12 @@ class TaskViewMapper {
         return value != null && Boolean.parseBoolean(String.valueOf(value));
     }
 
+    /**
+     * 处理int值。
+     * @param value 待处理的值
+     * @param fallback 兜底值
+     * @return 处理结果
+     */
     private int intValue(Object value, int fallback) {
         if (value instanceof Number number) {
             return number.intValue();
@@ -540,6 +694,11 @@ class TaskViewMapper {
         return fallback;
     }
 
+    /**
+     * 处理nullableInt。
+     * @param value 待处理的值
+     * @return 处理结果
+     */
     private Integer nullableInt(Object value) {
         if (value == null) {
             return null;
@@ -547,6 +706,11 @@ class TaskViewMapper {
         return intValue(value, 0);
     }
 
+    /**
+     * 处理nullableDouble。
+     * @param value 待处理的值
+     * @return 处理结果
+     */
     private Double nullableDouble(Object value) {
         if (value instanceof Number number) {
             return number.doubleValue();
@@ -560,14 +724,38 @@ class TaskViewMapper {
         return null;
     }
 
+    /**
+     * 处理string值。
+     * @param value 待处理的值
+     * @return 处理结果
+     */
     private String stringValue(Object value) {
         return value == null ? "" : String.valueOf(value).trim();
     }
 
+    /**
+     * 处理任务诊断摘要。
+     * @param severity severity值
+     * @param code code值
+     * @param hint 提示值
+     * @param recommendedAction recommendedAction值
+     * @return 处理结果
+     */
     private record TaskDiagnosisSummary(String severity, String code, String hint, String recommendedAction) {}
 
+    /**
+     * 处理任务产物Directories。
+     * @param baseDir baseDir值
+     * @param runningDir runningDir值
+     * @param joinedDir joinedDir值
+     * @return 处理结果
+     */
     private record TaskArtifactDirectories(String baseDir, String runningDir, String joinedDir) {
 
+        /**
+         * 处理转为Map。
+         * @return 处理结果
+         */
         Map<String, Object> toMap() {
             return Map.of(
                 "baseDir", baseDir,
@@ -577,6 +765,31 @@ class TaskViewMapper {
         }
     }
 
+    /**
+     * 处理任务监控快照。
+     * @param currentStage current阶段值
+     * @param activeAttemptStatus active尝试状态值
+     * @param activeWorkerInstanceId active工作节点Instance标识值
+     * @param resumeFromStage resumeFrom阶段值
+     * @param resumeFromClipIndex resumeFrom片段索引值
+     * @param plannedClipCount 计划片段数量值
+     * @param renderedClipCount 已渲染片段数量值
+     * @param contiguousRenderedClipCount contiguous已渲染片段数量值
+     * @param latestRenderedClipIndex latest已渲染片段索引值
+     * @param latestVideoOutputUrl latest视频输出URL值
+     * @param latestJoinName latest拼接Name值
+     * @param latestJoinOutputUrl latest拼接输出URL值
+     * @param latestJoinClipIndex latest拼接片段索引值
+     * @param latestJoinClipIndices latest拼接片段Indices值
+     * @param storyboardFileUrl 分镜文件URL值
+     * @param artifactDirectories 产物Directories值
+     * @param latestTrace latest追踪值
+     * @param latestStageRun latest阶段运行值
+     * @param latestVideoOutput latest视频输出值
+     * @param latestJoinOutput latest拼接输出值
+     * @param renderedClipIndices 已渲染片段Indices值
+     * @return 处理结果
+     */
     private record TaskMonitoringSnapshot(
         String currentStage,
         String activeAttemptStatus,
@@ -601,6 +814,11 @@ class TaskViewMapper {
         List<Integer> renderedClipIndices
     ) {
 
+        /**
+         * 处理转为Map。
+         * @param includeVerbose includeVerbose值
+         * @return 处理结果
+         */
         Map<String, Object> toMap(boolean includeVerbose) {
             Map<String, Object> monitoring = new LinkedHashMap<>();
             monitoring.put("currentStage", currentStage);

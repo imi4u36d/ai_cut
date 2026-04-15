@@ -6,8 +6,14 @@ import com.jiandou.api.task.domain.GenerationRequestSnapshot;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 
+/**
+ * 生成请求快照Compatibility相关测试。
+ */
 class GenerationRequestSnapshotCompatibilityTest {
 
+    /**
+     * 处理转为MapRetainsLegacy负载Shape。
+     */
     @Test
     void toMapRetainsLegacyPayloadShape() {
         GenerationRequestSnapshot snapshot = GenerationRequestSnapshot.fromMap(Map.of(
@@ -32,6 +38,9 @@ class GenerationRequestSnapshotCompatibilityTest {
         assertEquals(true, map.get("stopBeforeVideoGeneration"));
     }
 
+    /**
+     * 处理fromMapAnd转为MapRemainBackwardCompatibleFor时长And输出数量。
+     */
     @Test
     void fromMapAndToMapRemainBackwardCompatibleForDurationAndOutputCount() {
         GenerationRequestSnapshot snapshot = GenerationRequestSnapshot.fromMap(Map.of(

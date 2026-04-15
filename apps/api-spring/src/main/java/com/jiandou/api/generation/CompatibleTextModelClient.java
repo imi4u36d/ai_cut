@@ -31,12 +31,26 @@ public class CompatibleTextModelClient {
     private final HttpClient httpClient;
     private final List<TextModelInvocationStrategy> invocationStrategies;
 
+    /**
+     * 创建新的Compatible文本模型客户端。
+     * @param objectMapper object映射器值
+     * @param invocationStrategies 调用Strategies值
+     */
     public CompatibleTextModelClient(ObjectMapper objectMapper, List<TextModelInvocationStrategy> invocationStrategies) {
         this.objectMapper = objectMapper;
         this.httpClient = HttpClient.newBuilder().build();
         this.invocationStrategies = List.copyOf(invocationStrategies);
     }
 
+    /**
+     * 生成文本。
+     * @param profile profile值
+     * @param systemPrompt 系统提示词值
+     * @param userPrompt user提示词值
+     * @param temperature temperature值
+     * @param maxTokens 最大Tokens值
+     * @return 处理结果
+     */
     public TextModelResponse generateText(
         ModelRuntimeProfile profile,
         String systemPrompt,
@@ -50,6 +64,17 @@ public class CompatibleTextModelClient {
         return execute(profile, new TextCompletionInvocation(systemPrompt, userPrompt, temperature, maxTokens));
     }
 
+    /**
+     * 生成视觉文本。
+     * @param profile profile值
+     * @param systemPrompt 系统提示词值
+     * @param userPrompt user提示词值
+     * @param imageUrls 图像Urls值
+     * @param temperature temperature值
+     * @param maxTokens 最大Tokens值
+     * @param seed 种子值
+     * @return 处理结果
+     */
     public TextModelResponse generateVisionText(
         ModelRuntimeProfile profile,
         String systemPrompt,
@@ -75,6 +100,12 @@ public class CompatibleTextModelClient {
         );
     }
 
+    /**
+     * 处理execute。
+     * @param profile profile值
+     * @param invocation 调用值
+     * @return 处理结果
+     */
     private TextModelResponse execute(ModelRuntimeProfile profile, TextModelInvocation invocation) {
         PreparedTextModelRequest prepared = prepare(profile, invocation);
         String payload = encode(prepared.body());
@@ -106,6 +137,12 @@ public class CompatibleTextModelClient {
                     + " model request failed: http "
                     + response.statusCode()
                     + " "
+                    /**
+                     * 处理truncate。
+                     * @param response.body( response.body(值
+                     * @param 320 320值
+                     * @return 处理结果
+                     */
                     + truncate(response.body(), 320)
             );
         }
@@ -130,6 +167,12 @@ public class CompatibleTextModelClient {
         );
     }
 
+    /**
+     * 处理prepare。
+     * @param profile profile值
+     * @param invocation 调用值
+     * @return 处理结果
+     */
     private PreparedTextModelRequest prepare(ModelRuntimeProfile profile, TextModelInvocation invocation) {
         List<String> triedStrategies = new ArrayList<>();
         for (TextModelInvocationStrategy strategy : invocationStrategies) {
@@ -141,6 +184,11 @@ public class CompatibleTextModelClient {
         throw new GenerationProviderException("no text model invocation strategy matched: " + String.join(", ", triedStrategies));
     }
 
+    /**
+     * 处理encode。
+     * @param body body值
+     * @return 处理结果
+     */
     private String encode(Map<String, Object> body) {
         try {
             return objectMapper.writeValueAsString(body);
@@ -149,6 +197,11 @@ public class CompatibleTextModelClient {
         }
     }
 
+    /**
+     * 处理decode。
+     * @param raw 原始值
+     * @return 处理结果
+     */
     private Map<String, Object> decode(String raw) {
         try {
             return objectMapper.readValue(raw, MAP_TYPE);
@@ -157,6 +210,11 @@ public class CompatibleTextModelClient {
         }
     }
 
+    /**
+     * 处理extract文本。
+     * @param responseMap 响应Map值
+     * @return 处理结果
+     */
     private String extractText(Map<String, Object> responseMap) {
         String outputText = stringValue(responseMap.get("output_text"));
         if (!outputText.isBlank()) {
@@ -173,6 +231,11 @@ public class CompatibleTextModelClient {
         return stringValue(responseMap.get("text"));
     }
 
+    /**
+     * 处理extractFrom输出。
+     * @param raw 原始值
+     * @return 处理结果
+     */
     private String extractFromOutput(Object raw) {
         if (!(raw instanceof List<?> items)) {
             return "";
@@ -187,6 +250,11 @@ public class CompatibleTextModelClient {
         return builder.toString().trim();
     }
 
+    /**
+     * 处理extractFromChoices。
+     * @param raw 原始值
+     * @return 处理结果
+     */
     private String extractFromChoices(Object raw) {
         if (!(raw instanceof List<?> choices) || choices.isEmpty()) {
             return "";
@@ -208,6 +276,11 @@ public class CompatibleTextModelClient {
         return "";
     }
 
+    /**
+     * 处理appendContent。
+     * @param builder builder值
+     * @param raw 原始值
+     */
     private void appendContent(StringBuilder builder, Object raw) {
         if (raw instanceof String str) {
             appendText(builder, str);
@@ -233,6 +306,11 @@ public class CompatibleTextModelClient {
         }
     }
 
+    /**
+     * 处理append文本。
+     * @param builder builder值
+     * @param text 文本值
+     */
     private void appendText(StringBuilder builder, String text) {
         if (text == null || text.isBlank()) {
             return;
@@ -243,10 +321,21 @@ public class CompatibleTextModelClient {
         builder.append(text.trim());
     }
 
+    /**
+     * 处理string值。
+     * @param value 待处理的值
+     * @return 处理结果
+     */
     private String stringValue(Object value) {
         return value == null ? "" : String.valueOf(value).trim();
     }
 
+    /**
+     * 处理truncate。
+     * @param value 待处理的值
+     * @param limit 返回的最大条目数
+     * @return 处理结果
+     */
     private String truncate(String value, int limit) {
         if (value == null) {
             return "";

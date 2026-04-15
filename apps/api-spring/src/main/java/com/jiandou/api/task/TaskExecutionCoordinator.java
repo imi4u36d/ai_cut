@@ -12,17 +12,32 @@ import java.util.UUID;
 import java.util.function.Consumer;
 import org.springframework.stereotype.Component;
 
+/**
+ * 任务执行协调器。
+ */
 @Component
 public class TaskExecutionCoordinator {
 
     private final TaskQueuePort taskQueuePort;
     private final TaskRepository taskRepository;
 
+    /**
+     * 创建新的任务执行协调器。
+     * @param taskQueuePort 任务队列端口值
+     * @param taskRepository 任务仓储值
+     */
     public TaskExecutionCoordinator(TaskQueuePort taskQueuePort, TaskRepository taskRepository) {
         this.taskQueuePort = taskQueuePort;
         this.taskRepository = taskRepository;
     }
 
+    /**
+     * 将enqueue加入队列。
+     * @param task 要处理的任务对象
+     * @param stage 阶段名称
+     * @param event 事件名称
+     * @param message 消息文本
+     */
     public void enqueue(TaskRecord task, String stage, String event, String message) {
         String previousStatus = task.status;
         taskQueuePort.remove(task.id);
@@ -51,6 +66,10 @@ public class TaskExecutionCoordinator {
         taskRepository.saveMutation(mutation);
     }
 
+    /**
+     * 将dequeue移出队列。
+     * @param task 要处理的任务对象
+     */
     public void dequeue(TaskRecord task) {
         boolean wasQueued = task.isQueued || task.queuePosition != null;
         taskQueuePort.remove(task.id);
@@ -64,6 +83,10 @@ public class TaskExecutionCoordinator {
         taskRepository.saveMutation(mutation);
     }
 
+    /**
+     * 重新计算队列Positions。
+     * @param tasks 任务值
+     */
     public void recomputeQueuePositions(Collection<TaskRecord> tasks) {
         Map<String, Integer> positions = new LinkedHashMap<>();
         List<String> snapshot = queueSnapshot();
@@ -77,10 +100,21 @@ public class TaskExecutionCoordinator {
         }
     }
 
+    /**
+     * 处理队列快照。
+     * @return 处理结果
+     */
     public List<String> queueSnapshot() {
         return new ArrayList<>(taskQueuePort.snapshot());
     }
 
+    /**
+     * 创建尝试。
+     * @param task 要处理的任务对象
+     * @param triggerType trigger类型值
+     * @param payload 附加负载数据
+     * @return 处理结果
+     */
     public Map<String, Object> createAttempt(TaskRecord task, String triggerType, Map<String, Object> payload) {
         Map<String, Object> row = new LinkedHashMap<>();
         task.currentAttemptNo += 1;
@@ -110,6 +144,10 @@ public class TaskExecutionCoordinator {
         return row;
     }
 
+    /**
+     * 标记Active尝试Queued。
+     * @param task 要处理的任务对象
+     */
     public void markActiveAttemptQueued(TaskRecord task) {
         Map<String, Object> attempt = markActiveAttemptQueuedInMemory(task);
         if (attempt == null) {
@@ -118,6 +156,11 @@ public class TaskExecutionCoordinator {
         taskRepository.saveMutation(new TaskPersistenceMutation().taskId(task.id).addAttempt(attempt));
     }
 
+    /**
+     * 标记Active尝试Running。
+     * @param task 要处理的任务对象
+     * @param workerInstanceId 工作节点实例标识
+     */
     public void markActiveAttemptRunning(TaskRecord task, String workerInstanceId) {
         Map<String, Object> attempt = activeAttempt(task);
         if (attempt == null) {
@@ -136,6 +179,12 @@ public class TaskExecutionCoordinator {
             .addQueueEvent(queueEvent));
     }
 
+    /**
+     * 标记Active尝试Finished。
+     * @param task 要处理的任务对象
+     * @param status 状态值
+     * @param errorMessage errorMessage值
+     */
     public void markActiveAttemptFinished(TaskRecord task, String status, String errorMessage) {
         Map<String, Object> attempt = activeAttempt(task);
         if (attempt == null) {
@@ -157,15 +206,27 @@ public class TaskExecutionCoordinator {
             .addQueueEvent(queueEvent));
     }
 
+    /**
+     * 执行任务流转。
+     * @param task 要处理的任务对象
+     * @param transition transition值
+     */
     public void transitionTask(TaskRecord task, TaskStateTransition transition) {
         transitionTask(task, transition, null);
     }
 
+    /**
+     * 执行任务流转。
+     * @param task 要处理的任务对象
+     * @param transition transition值
+     * @param taskMutator 任务Mutator值
+     */
     public void transitionTask(TaskRecord task, TaskStateTransition transition, Consumer<TaskRecord> taskMutator) {
         if (task == null || transition == null) {
             return;
         }
         String previousStatus = task.status;
+        // 先执行外部变更，再统一落状态、trace 和队列事件，避免同一次转移拆成多次持久化。
         if (taskMutator != null) {
             taskMutator.accept(task);
         }
@@ -194,6 +255,7 @@ public class TaskExecutionCoordinator {
             .task(task)
             .addTrace(trace)
             .addStatusHistory(statusHistory);
+        // attempt 的状态变更必须和任务主状态放在同一个 mutation 中，避免前端看到短暂不一致。
         Map<String, Object> attempt = applyAttemptTransition(task, transition);
         if (attempt != null) {
             mutation
@@ -206,6 +268,15 @@ public class TaskExecutionCoordinator {
         taskRepository.saveMutation(mutation);
     }
 
+    /**
+     * 记录追踪。
+     * @param task 要处理的任务对象
+     * @param stage 阶段名称
+     * @param event 事件名称
+     * @param message 消息文本
+     * @param level level值
+     * @param payload 附加负载数据
+     */
     public void recordTrace(TaskRecord task, String stage, String event, String message, String level, Map<String, Object> payload) {
         Map<String, Object> row = newTraceRow(stage, event, message, level, payload);
         task.trace.add(row);
@@ -213,6 +284,15 @@ public class TaskExecutionCoordinator {
         taskRepository.saveMutation(new TaskPersistenceMutation().task(task).addTrace(row));
     }
 
+    /**
+     * 记录状态History。
+     * @param task 要处理的任务对象
+     * @param previousStatus previous状态值
+     * @param nextStatus next状态值
+     * @param stage 阶段名称
+     * @param event 事件名称
+     * @param reason reason值
+     */
     public void recordStatusHistory(TaskRecord task, String previousStatus, String nextStatus, String stage, String event, String reason) {
         Map<String, Object> row = newStatusHistoryRow(task, previousStatus, nextStatus, stage, event, reason);
         task.statusHistory.add(row);
@@ -220,35 +300,68 @@ public class TaskExecutionCoordinator {
         taskRepository.saveMutation(new TaskPersistenceMutation().task(task).addStatusHistory(row));
     }
 
+    /**
+     * 记录阶段运行。
+     * @param task 要处理的任务对象
+     * @param stageRun 阶段运行值
+     */
     public void recordStageRun(TaskRecord task, Map<String, Object> stageRun) {
         task.stageRuns.add(stageRun);
         touch(task);
         taskRepository.saveMutation(new TaskPersistenceMutation().task(task).addStageRun(stageRun));
     }
 
+    /**
+     * 记录模型调用。
+     * @param task 要处理的任务对象
+     * @param modelCall 模型调用值
+     */
     public void recordModelCall(TaskRecord task, Map<String, Object> modelCall) {
         task.modelCalls.add(modelCall);
         touch(task);
         taskRepository.saveMutation(new TaskPersistenceMutation().task(task).addModelCall(modelCall));
     }
 
+    /**
+     * 记录素材。
+     * @param task 要处理的任务对象
+     * @param material 素材值
+     */
     public void recordMaterial(TaskRecord task, Map<String, Object> material) {
         task.materials.add(material);
         touch(task);
         taskRepository.saveMutation(new TaskPersistenceMutation().task(task).addMaterial(material));
     }
 
+    /**
+     * 记录结果。
+     * @param task 要处理的任务对象
+     * @param result 结果值
+     */
     public void recordResult(TaskRecord task, Map<String, Object> result) {
         task.outputs.add(result);
         touch(task);
         taskRepository.saveMutation(new TaskPersistenceMutation().task(task).addResult(result));
     }
 
+    /**
+     * 记录队列事件。
+     * @param task 要处理的任务对象
+     * @param eventType 事件类型值
+     * @param payload 附加负载数据
+     */
     public void recordQueueEvent(TaskRecord task, String eventType, Map<String, Object> payload) {
         Map<String, Object> row = newQueueEventRow(task, eventType, payload);
         taskRepository.saveMutation(new TaskPersistenceMutation().taskId(task.id).addQueueEvent(row));
     }
 
+    /**
+     * 处理upsert工作节点Instance。
+     * @param workerInstanceId 工作节点实例标识
+     * @param workerType 工作节点类型值
+     * @param status 状态值
+     * @param metadata metadata值
+     */
     public void upsertWorkerInstance(String workerInstanceId, String workerType, String status, Map<String, Object> metadata) {
         String now = nowIso();
         Map<String, Object> row = new LinkedHashMap<>();
@@ -265,6 +378,13 @@ public class TaskExecutionCoordinator {
         taskRepository.saveMutation(new TaskPersistenceMutation().addWorkerInstance(row));
     }
 
+    /**
+     * 刷新工作节点Instance。
+     * @param workerInstanceId 工作节点实例标识
+     * @param workerType 工作节点类型值
+     * @param status 状态值
+     * @param metadata metadata值
+     */
     public void touchWorkerInstance(String workerInstanceId, String workerType, String status, Map<String, Object> metadata) {
         Map<String, Object> existing = taskRepository.findWorkerInstance(workerInstanceId);
         String startedAt = existing == null ? nowIso() : String.valueOf(existing.getOrDefault("startedAt", nowIso()));
@@ -282,6 +402,12 @@ public class TaskExecutionCoordinator {
         taskRepository.saveMutation(new TaskPersistenceMutation().addWorkerInstance(row));
     }
 
+    /**
+     * 处理recoverStaleClaims。
+     * @param staleBefore staleBefore值
+     * @param limit 返回的最大条目数
+     * @return 处理结果
+     */
     public int recoverStaleClaims(OffsetDateTime staleBefore, int limit) {
         int recovered = 0;
         for (String workerInstanceId : taskRepository.listStaleWorkerInstanceIds(staleBefore, Math.max(1, limit))) {
@@ -349,14 +475,29 @@ public class TaskExecutionCoordinator {
         return recovered;
     }
 
+    /**
+     * 刷新touch。
+     * @param task 要处理的任务对象
+     */
     private void touch(TaskRecord task) {
         task.updatedAt = nowIso();
     }
 
+    /**
+     * 处理string值。
+     * @param value 待处理的值
+     * @return 处理结果
+     */
     private String stringValue(Object value) {
         return value == null ? "" : String.valueOf(value).trim();
     }
 
+    /**
+     * 处理int值。
+     * @param value 待处理的值
+     * @param fallback 兜底值
+     * @return 处理结果
+     */
     private int intValue(Object value, int fallback) {
         if (value instanceof Number number) {
             return number.intValue();
@@ -370,6 +511,11 @@ public class TaskExecutionCoordinator {
         return fallback;
     }
 
+    /**
+     * 处理active尝试。
+     * @param task 要处理的任务对象
+     * @return 处理结果
+     */
     private Map<String, Object> activeAttempt(TaskRecord task) {
         if (task.activeAttemptId == null || task.activeAttemptId.isBlank()) {
             return null;
@@ -382,10 +528,19 @@ public class TaskExecutionCoordinator {
         return null;
     }
 
+    /**
+     * 处理当前Iso。
+     * @return 处理结果
+     */
     private String nowIso() {
         return OffsetDateTime.now(ZoneOffset.UTC).toString();
     }
 
+    /**
+     * 处理active尝试工作节点标识。
+     * @param task 要处理的任务对象
+     * @return 处理结果
+     */
     private String activeAttemptWorkerId(TaskRecord task) {
         Map<String, Object> attempt = activeAttempt(task);
         if (attempt == null) {
@@ -395,6 +550,10 @@ public class TaskExecutionCoordinator {
         return value == null ? "" : String.valueOf(value);
     }
 
+    /**
+     * 标记工作节点InstanceStale。
+     * @param workerInstanceId 工作节点实例标识
+     */
     private void markWorkerInstanceStale(String workerInstanceId) {
         if (workerInstanceId == null || workerInstanceId.isBlank()) {
             return;
@@ -412,6 +571,11 @@ public class TaskExecutionCoordinator {
         taskRepository.saveMutation(new TaskPersistenceMutation().addWorkerInstance(row));
     }
 
+    /**
+     * 标记Active尝试QueuedInMemory。
+     * @param task 要处理的任务对象
+     * @return 处理结果
+     */
     private Map<String, Object> markActiveAttemptQueuedInMemory(TaskRecord task) {
         Map<String, Object> attempt = activeAttempt(task);
         if (attempt == null) {
@@ -429,6 +593,12 @@ public class TaskExecutionCoordinator {
         return attempt;
     }
 
+    /**
+     * 应用尝试Transition。
+     * @param task 要处理的任务对象
+     * @param transition transition值
+     * @return 处理结果
+     */
     private Map<String, Object> applyAttemptTransition(TaskRecord task, TaskStateTransition transition) {
         if (task == null || transition == null || !transition.updatesAttempt()) {
             return null;
@@ -463,6 +633,15 @@ public class TaskExecutionCoordinator {
         return attempt;
     }
 
+    /**
+     * 处理new追踪行。
+     * @param stage 阶段名称
+     * @param event 事件名称
+     * @param message 消息文本
+     * @param level level值
+     * @param payload 附加负载数据
+     * @return 处理结果
+     */
     private Map<String, Object> newTraceRow(String stage, String event, String message, String level, Map<String, Object> payload) {
         Map<String, Object> row = new LinkedHashMap<>();
         row.put("traceId", "trace_" + UUID.randomUUID().toString().replace("-", ""));
@@ -475,6 +654,16 @@ public class TaskExecutionCoordinator {
         return row;
     }
 
+    /**
+     * 处理new状态History行。
+     * @param task 要处理的任务对象
+     * @param previousStatus previous状态值
+     * @param nextStatus next状态值
+     * @param stage 阶段名称
+     * @param event 事件名称
+     * @param reason reason值
+     * @return 处理结果
+     */
     private Map<String, Object> newStatusHistoryRow(
         TaskRecord task,
         String previousStatus,
@@ -498,6 +687,13 @@ public class TaskExecutionCoordinator {
         return row;
     }
 
+    /**
+     * 处理new队列事件行。
+     * @param task 要处理的任务对象
+     * @param eventType 事件类型值
+     * @param payload 附加负载数据
+     * @return 处理结果
+     */
     private Map<String, Object> newQueueEventRow(TaskRecord task, String eventType, Map<String, Object> payload) {
         Map<String, Object> row = new LinkedHashMap<>();
         row.put("taskQueueEventId", "queueevt_" + UUID.randomUUID().toString().replace("-", ""));

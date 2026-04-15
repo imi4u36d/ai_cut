@@ -17,6 +17,9 @@ import java.util.Locale;
 import java.util.Map;
 import org.springframework.stereotype.Service;
 
+/**
+ * 远程媒体生成客户端。
+ */
 @Service
 public class RemoteMediaGenerationClient {
 
@@ -38,11 +41,25 @@ public class RemoteMediaGenerationClient {
     private final ObjectMapper objectMapper;
     private final HttpClient httpClient;
 
+    /**
+     * 创建新的远程媒体生成客户端。
+     * @param objectMapper object映射器值
+     */
     public RemoteMediaGenerationClient(ObjectMapper objectMapper) {
         this.objectMapper = objectMapper;
         this.httpClient = HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NORMAL).build();
     }
 
+    /**
+     * 生成Seedream图像。
+     * @param profile profile值
+     * @param requestedModel requested模型值
+     * @param prompt 提示词值
+     * @param width width值
+     * @param height height值
+     * @param seed 种子值
+     * @return 处理结果
+     */
     public RemoteImageGenerationResult generateSeedreamImage(
         MediaProviderProfile profile,
         String requestedModel,
@@ -98,6 +115,14 @@ public class RemoteMediaGenerationClient {
         );
     }
 
+    /**
+     * 构建Seedream图像请求Body。
+     * @param modelName 模型Name值
+     * @param prompt 提示词值
+     * @param size size值
+     * @param seed 种子值
+     * @return 处理结果
+     */
     Map<String, Object> buildSeedreamImageRequestBody(String modelName, String prompt, String size, Integer seed) {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("model", modelName);
@@ -113,6 +138,17 @@ public class RemoteMediaGenerationClient {
         return body;
     }
 
+    /**
+     * 处理submitDashscope视频任务。
+     * @param profile profile值
+     * @param requestedModel requested模型值
+     * @param prompt 提示词值
+     * @param width width值
+     * @param height height值
+     * @param durationSeconds 时长Seconds值
+     * @param seed 种子值
+     * @return 处理结果
+     */
     public RemoteVideoTaskSubmission submitDashscopeVideoTask(
         MediaProviderProfile profile,
         String requestedModel,
@@ -155,6 +191,17 @@ public class RemoteMediaGenerationClient {
         );
     }
 
+    /**
+     * 构建Dashscope视频请求Body。
+     * @param providerModel provider模型值
+     * @param prompt 提示词值
+     * @param width width值
+     * @param height height值
+     * @param durationSeconds 时长Seconds值
+     * @param promptExtend 提示词Extend值
+     * @param seed 种子值
+     * @return 处理结果
+     */
     Map<String, Object> buildDashscopeVideoRequestBody(
         String providerModel,
         String prompt,
@@ -179,6 +226,23 @@ public class RemoteMediaGenerationClient {
         return body;
     }
 
+    /**
+     * 处理submitSeedance视频任务。
+     * @param profile profile值
+     * @param requestedModel requested模型值
+     * @param prompt 提示词值
+     * @param width width值
+     * @param height height值
+     * @param durationSeconds 时长Seconds值
+     * @param firstFrameUrl 首个FrameURL值
+     * @param lastFrameUrl lastFrameURL值
+     * @param seed 种子值
+     * @param cameraFixed cameraFixed值
+     * @param watermark watermark值
+     * @param returnLastFrame returnLastFrame值
+     * @param generateAudio generateAudio值
+     * @return 处理结果
+     */
     public RemoteVideoTaskSubmission submitSeedanceVideoTask(
         MediaProviderProfile profile,
         String requestedModel,
@@ -243,6 +307,22 @@ public class RemoteMediaGenerationClient {
         );
     }
 
+    /**
+     * 构建Seedance视频请求Body。
+     * @param providerModel provider模型值
+     * @param prompt 提示词值
+     * @param width width值
+     * @param height height值
+     * @param durationSeconds 时长Seconds值
+     * @param firstFrameUrl 首个FrameURL值
+     * @param lastFrameUrl lastFrameURL值
+     * @param seed 种子值
+     * @param cameraFixed cameraFixed值
+     * @param watermark watermark值
+     * @param returnLastFrame returnLastFrame值
+     * @param generateAudio generateAudio值
+     * @return 处理结果
+     */
     Map<String, Object> buildSeedanceVideoRequestBody(
         String providerModel,
         String prompt,
@@ -287,6 +367,17 @@ public class RemoteMediaGenerationClient {
         return body;
     }
 
+    /**
+     * 生成Dashscope视频。
+     * @param profile profile值
+     * @param requestedModel requested模型值
+     * @param prompt 提示词值
+     * @param width width值
+     * @param height height值
+     * @param durationSeconds 时长Seconds值
+     * @param seed 种子值
+     * @return 处理结果
+     */
     public RemoteVideoGenerationResult generateDashscopeVideo(
         MediaProviderProfile profile,
         String requestedModel,
@@ -341,6 +432,23 @@ public class RemoteMediaGenerationClient {
         );
     }
 
+    /**
+     * 生成Seedance视频。
+     * @param profile profile值
+     * @param requestedModel requested模型值
+     * @param prompt 提示词值
+     * @param width width值
+     * @param height height值
+     * @param durationSeconds 时长Seconds值
+     * @param firstFrameUrl 首个FrameURL值
+     * @param lastFrameUrl lastFrameURL值
+     * @param seed 种子值
+     * @param cameraFixed cameraFixed值
+     * @param watermark watermark值
+     * @param returnLastFrame returnLastFrame值
+     * @param generateAudio generateAudio值
+     * @return 处理结果
+     */
     public RemoteVideoGenerationResult generateSeedanceVideo(
         MediaProviderProfile profile,
         String requestedModel,
@@ -402,6 +510,12 @@ public class RemoteMediaGenerationClient {
         );
     }
 
+    /**
+     * 处理查询Dashscope任务。
+     * @param profile profile值
+     * @param remoteTaskId 远程任务标识值
+     * @return 处理结果
+     */
     public RemoteTaskQueryResult queryDashscopeTask(MediaProviderProfile profile, String remoteTaskId) {
         String normalizedTaskId = stringValue(remoteTaskId);
         if (normalizedTaskId.isBlank()) {
@@ -428,6 +542,12 @@ public class RemoteMediaGenerationClient {
         );
     }
 
+    /**
+     * 处理查询Seedance任务。
+     * @param profile profile值
+     * @param remoteTaskId 远程任务标识值
+     * @return 处理结果
+     */
     public RemoteTaskQueryResult querySeedanceTask(MediaProviderProfile profile, String remoteTaskId) {
         String normalizedTaskId = stringValue(remoteTaskId);
         if (normalizedTaskId.isBlank()) {
@@ -455,6 +575,15 @@ public class RemoteMediaGenerationClient {
         );
     }
 
+    /**
+     * 处理sendJson。
+     * @param endpoint endpoint值
+     * @param apiKey APIKey值
+     * @param body body值
+     * @param timeoutSeconds timeoutSeconds值
+     * @param extraHeaders extraHeaders值
+     * @return 处理结果
+     */
     private HttpResponse<String> sendJson(
         String endpoint,
         String apiKey,
@@ -474,6 +603,12 @@ public class RemoteMediaGenerationClient {
         return send(builder.build(), "provider request failed");
     }
 
+    /**
+     * 处理waitForDashscope任务。
+     * @param profile profile值
+     * @param taskId 任务标识
+     * @return 处理结果
+     */
     private Map<String, Object> waitForDashscopeTask(MediaProviderProfile profile, String taskId) {
         long deadline = System.currentTimeMillis() + Math.max(30, profile.pollTimeoutSeconds()) * 1000L;
         while (System.currentTimeMillis() < deadline) {
@@ -490,6 +625,12 @@ public class RemoteMediaGenerationClient {
         throw new GenerationProviderException("dashscope task poll timeout");
     }
 
+    /**
+     * 处理waitForSeedance任务。
+     * @param profile profile值
+     * @param taskId 任务标识
+     * @return 处理结果
+     */
     private Map<String, Object> waitForSeedanceTask(MediaProviderProfile profile, String taskId) {
         long deadline = System.currentTimeMillis() + Math.max(30, profile.pollTimeoutSeconds()) * 1000L;
         while (System.currentTimeMillis() < deadline) {
@@ -506,18 +647,39 @@ public class RemoteMediaGenerationClient {
         throw new GenerationProviderException("seedance task poll timeout");
     }
 
+    /**
+     * 检查是否Success状态。
+     * @param status 状态值
+     * @return 是否满足条件
+     */
     private boolean isSuccessStatus(String status) {
         return List.of("SUCCEEDED", "SUCCESS", "DONE", "COMPLETED", "FINISHED").contains(normalizeStatus(status));
     }
 
+    /**
+     * 检查是否失败状态。
+     * @param status 状态值
+     * @return 是否满足条件
+     */
     private boolean isFailureStatus(String status) {
         return List.of("FAILED", "FAIL", "CANCELED", "CANCELLED", "ERROR").contains(normalizeStatus(status));
     }
 
+    /**
+     * 规范化状态。
+     * @param status 状态值
+     * @return 处理结果
+     */
     private String normalizeStatus(String status) {
         return stringValue(status).toUpperCase(Locale.ROOT);
     }
 
+    /**
+     * 处理downloadBinary。
+     * @param url URL值
+     * @param timeoutSeconds timeoutSeconds值
+     * @return 处理结果
+     */
     private DownloadedBinary downloadBinary(String url, int timeoutSeconds) {
         HttpRequest request = HttpRequest.newBuilder(URI.create(url))
             .header("User-Agent", "jiandou-spring/0.1")
@@ -540,6 +702,12 @@ public class RemoteMediaGenerationClient {
         }
     }
 
+    /**
+     * 处理send。
+     * @param request 请求体
+     * @param errorPrefix errorPrefix值
+     * @return 处理结果
+     */
     private HttpResponse<String> send(HttpRequest request, String errorPrefix) {
         try {
             HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
@@ -557,6 +725,11 @@ public class RemoteMediaGenerationClient {
         }
     }
 
+    /**
+     * 处理encode。
+     * @param body body值
+     * @return 处理结果
+     */
     private String encode(Map<String, Object> body) {
         try {
             return objectMapper.writeValueAsString(body);
@@ -565,6 +738,11 @@ public class RemoteMediaGenerationClient {
         }
     }
 
+    /**
+     * 处理decode。
+     * @param raw 原始值
+     * @return 处理结果
+     */
     private Map<String, Object> decode(String raw) {
         try {
             return objectMapper.readValue(raw, MAP_TYPE);
@@ -573,6 +751,11 @@ public class RemoteMediaGenerationClient {
         }
     }
 
+    /**
+     * 处理extract任务标识。
+     * @param payload 附加负载数据
+     * @return 处理结果
+     */
     private String extractTaskId(Map<String, Object> payload) {
         return firstNonBlank(
             stringValue(payload.get("task_id")),
@@ -585,10 +768,20 @@ public class RemoteMediaGenerationClient {
         );
     }
 
+    /**
+     * 处理extract视频URL。
+     * @param payload 附加负载数据
+     * @return 处理结果
+     */
     private String extractVideoUrl(Map<String, Object> payload) {
         return extractFirstString(payload, "video_url", "videoUrl", "url", "file_url", "fileUrl", "media_url", "mediaUrl");
     }
 
+    /**
+     * 处理extract任务状态。
+     * @param payload 附加负载数据
+     * @return 处理结果
+     */
     private String extractTaskStatus(Map<String, Object> payload) {
         return firstNonBlank(
             extractFirstString(payload, "task_status", "taskStatus", "status", "state"),
@@ -598,6 +791,11 @@ public class RemoteMediaGenerationClient {
         ).toUpperCase(Locale.ROOT);
     }
 
+    /**
+     * 处理extract任务Message。
+     * @param payload 附加负载数据
+     * @return 处理结果
+     */
     private String extractTaskMessage(Map<String, Object> payload) {
         return firstNonBlank(
             extractFirstString(payload, "message", "error"),
@@ -606,6 +804,12 @@ public class RemoteMediaGenerationClient {
         );
     }
 
+    /**
+     * 处理extract首个String。
+     * @param raw 原始值
+     * @param keys keys值
+     * @return 处理结果
+     */
     @SuppressWarnings("unchecked")
     private String extractFirstString(Object raw, String... keys) {
         if (raw instanceof Map<?, ?> map) {
@@ -645,6 +849,11 @@ public class RemoteMediaGenerationClient {
         return "";
     }
 
+    /**
+     * 映射值。
+     * @param value 待处理的值
+     * @return 处理结果
+     */
     private Map<String, Object> mapValue(Object value) {
         if (!(value instanceof Map<?, ?> map)) {
             return Map.of();
@@ -656,16 +865,32 @@ public class RemoteMediaGenerationClient {
         return normalized;
     }
 
+    /**
+     * 规范化Seedream模型Name。
+     * @param raw 原始值
+     * @return 处理结果
+     */
     private String normalizeSeedreamModelName(String raw) {
         String normalized = raw == null ? "" : raw.trim().toLowerCase(Locale.ROOT);
         return SEEDREAM_MODEL_ALIASES.getOrDefault(normalized, raw);
     }
 
+    /**
+     * 规范化Seedance模型Name。
+     * @param raw 原始值
+     * @return 处理结果
+     */
     private String normalizeSeedanceModelName(String raw) {
         String normalized = raw == null ? "" : raw.trim().toLowerCase(Locale.ROOT);
         return SEEDANCE_MODEL_ALIASES.getOrDefault(normalized, raw);
     }
 
+    /**
+     * 处理aspectRatio。
+     * @param width width值
+     * @param height height值
+     * @return 处理结果
+     */
     private String aspectRatio(int width, int height) {
         if (width == height) {
             return "1:1";
@@ -673,6 +898,12 @@ public class RemoteMediaGenerationClient {
         return width > height ? "16:9" : "9:16";
     }
 
+    /**
+     * 处理SeedanceResolution。
+     * @param width width值
+     * @param height height值
+     * @return 处理结果
+     */
     private String seedanceResolution(int width, int height) {
         int longestEdge = Math.max(width, height);
         if (longestEdge >= 1920) {
@@ -684,6 +915,13 @@ public class RemoteMediaGenerationClient {
         return "480p";
     }
 
+    /**
+     * 处理seedreamSize。
+     * @param modelName 模型Name值
+     * @param width width值
+     * @param height height值
+     * @return 处理结果
+     */
     String seedreamSize(String modelName, int width, int height) {
         String normalizedModel = normalizeSeedreamModelName(modelName);
         if ("doubao-seedream-4-5-251128".equals(normalizedModel)) {
@@ -692,6 +930,10 @@ public class RemoteMediaGenerationClient {
         return "1K";
     }
 
+    /**
+     * 处理sleepSeconds。
+     * @param seconds seconds值
+     */
     private void sleepSeconds(int seconds) {
         try {
             Thread.sleep(Math.max(1, seconds) * 1000L);
@@ -701,18 +943,39 @@ public class RemoteMediaGenerationClient {
         }
     }
 
+    /**
+     * 处理空白转为。
+     * @param primary primary值
+     * @param fallback 兜底值
+     * @return 处理结果
+     */
     private String blankTo(String primary, String fallback) {
         return primary == null || primary.isBlank() ? fallback : primary;
     }
 
+    /**
+     * 处理encode路径Segment。
+     * @param value 待处理的值
+     * @return 处理结果
+     */
     private String encodePathSegment(String value) {
         return URLEncoder.encode(value, java.nio.charset.StandardCharsets.UTF_8).replace("+", "%20");
     }
 
+    /**
+     * 处理string值。
+     * @param value 待处理的值
+     * @return 处理结果
+     */
     private String stringValue(Object value) {
         return value == null ? "" : String.valueOf(value).trim();
     }
 
+    /**
+     * 处理首个非空白。
+     * @param values 值
+     * @return 处理结果
+     */
     private String firstNonBlank(String... values) {
         for (String value : values) {
             if (value != null && !value.isBlank()) {
@@ -722,6 +985,12 @@ public class RemoteMediaGenerationClient {
         return "";
     }
 
+    /**
+     * 处理truncate。
+     * @param value 待处理的值
+     * @param limit 返回的最大条目数
+     * @return 处理结果
+     */
     private String truncate(String value, int limit) {
         if (value == null) {
             return "";
@@ -729,6 +998,12 @@ public class RemoteMediaGenerationClient {
         return value.length() <= limit ? value : value.substring(0, limit);
     }
 
+    /**
+     * 处理DownloadedBinary。
+     * @param data data值
+     * @param mimeType mime类型值
+     * @return 处理结果
+     */
     private record DownloadedBinary(byte[] data, String mimeType) {
     }
 }

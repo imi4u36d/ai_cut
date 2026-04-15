@@ -8,6 +8,9 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import org.springframework.stereotype.Service;
 
+/**
+ * 默认生成应用服务。
+ */
 @Service
 public class DefaultGenerationApplicationService implements GenerationApplicationService {
 
@@ -18,6 +21,14 @@ public class DefaultGenerationApplicationService implements GenerationApplicatio
     private final GenerationRunFactory generationRunFactory;
     private final GenerationRunSupport support;
 
+    /**
+     * 创建新的默认生成应用服务。
+     * @param generationRunStore 生成运行存储值
+     * @param modelResolver 模型解析器值
+     * @param catalogService 目录服务值
+     * @param generationRunFactory 生成运行工厂值
+     * @param support 支持值
+     */
     public DefaultGenerationApplicationService(
         LocalGenerationRunStore generationRunStore,
         ModelRuntimePropertiesResolver modelResolver,
@@ -32,11 +43,20 @@ public class DefaultGenerationApplicationService implements GenerationApplicatio
         this.support = support;
     }
 
+    /**
+     * 处理目录。
+     * @return 处理结果
+     */
     @Override
     public Map<String, Object> catalog() {
         return catalogService.catalog();
     }
 
+    /**
+     * 创建运行。
+     * @param request 请求体
+     * @return 处理结果
+     */
     @Override
     public Map<String, Object> createRun(Map<String, Object> request) {
         String runId = "run_" + UUID.randomUUID().toString().replace("-", "");
@@ -46,6 +66,11 @@ public class DefaultGenerationApplicationService implements GenerationApplicatio
             case "script" -> generationRunFactory.createScriptRun(runId, request);
             case "image" -> generationRunFactory.createImageRun(runId, request);
             case "video" -> generationRunFactory.createVideoRun(runId, request);
+            /**
+             * 处理Unsupported生成类型异常。
+             * @param kind 类型值
+             * @return 处理结果
+             */
             default -> throw new UnsupportedGenerationKindException(kind);
         };
         runs.put(runId, run);
@@ -53,11 +78,21 @@ public class DefaultGenerationApplicationService implements GenerationApplicatio
         return run;
     }
 
+    /**
+     * 列出Runs。
+     * @param limit 返回的最大条目数
+     * @return 处理结果
+     */
     @Override
     public List<Map<String, Object>> listRuns(int limit) {
         return generationRunStore.listRuns(limit);
     }
 
+    /**
+     * 返回运行。
+     * @param runId 运行标识值
+     * @return 处理结果
+     */
     @Override
     public Map<String, Object> getRun(String runId) {
         Map<String, Object> run = runs.get(runId);
@@ -73,6 +108,10 @@ public class DefaultGenerationApplicationService implements GenerationApplicatio
         return refreshed;
     }
 
+    /**
+     * 处理usage。
+     * @return 处理结果
+     */
     @Override
     public Map<String, Object> usage() {
         List<Map<String, Object>> items = modelResolver.listModelsByKind("text").stream()
@@ -96,6 +135,11 @@ public class DefaultGenerationApplicationService implements GenerationApplicatio
         );
     }
 
+    /**
+     * 处理persist运行。
+     * @param runId 运行标识值
+     * @param run 运行值
+     */
     private void persistRun(String runId, Map<String, Object> run) {
         generationRunStore.persistRun(runId, run);
     }

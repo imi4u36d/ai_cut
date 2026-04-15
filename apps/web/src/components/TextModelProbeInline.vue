@@ -1,8 +1,15 @@
 <script lang="ts">
+/**
+ * 文本模型探测内联Expose接口定义。
+ */
+/**
+ * 文本模型探测内联组件。
+ */
 export interface TextModelProbeInlineExpose {
   ensureReady: (force?: boolean) => Promise<boolean>;
   reset: () => void;
 }
+
 </script>
 
 <template>

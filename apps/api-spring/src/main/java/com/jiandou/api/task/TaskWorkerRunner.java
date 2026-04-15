@@ -13,6 +13,9 @@ import org.springframework.context.SmartLifecycle;
 import org.springframework.context.annotation.DependsOn;
 import org.springframework.stereotype.Component;
 
+/**
+ * 任务工作节点运行器。
+ */
 @Component
 @DependsOn("databaseSchemaReady")
 public class TaskWorkerRunner implements SmartLifecycle {
@@ -30,6 +33,9 @@ public class TaskWorkerRunner implements SmartLifecycle {
     private ScheduledExecutorService maintenanceExecutor;
     private volatile boolean running;
 
+    /**
+     * 创建新的任务工作节点Runner。
+     */
     public TaskWorkerRunner(
         TaskQueuePort taskQueuePort,
         TaskExecutionCoordinator executionCoordinator,
@@ -44,6 +50,9 @@ public class TaskWorkerRunner implements SmartLifecycle {
         this.staleWorkerTimeoutSeconds = Math.max(10, staleWorkerTimeoutSeconds);
     }
 
+    /**
+     * 启动进度流程。
+     */
     @Override
     public void start() {
         if (running || !"queue".equals(executionMode)) {
@@ -65,6 +74,9 @@ public class TaskWorkerRunner implements SmartLifecycle {
         maintenanceExecutor.scheduleWithFixedDelay(this::maintenanceTick, 500, 2000, TimeUnit.MILLISECONDS);
     }
 
+    /**
+     * 停止stop。
+     */
     @Override
     public void stop() {
         running = false;
@@ -79,21 +91,36 @@ public class TaskWorkerRunner implements SmartLifecycle {
         }
     }
 
+    /**
+     * 检查是否Running。
+     * @return 是否满足条件
+     */
     @Override
     public boolean isRunning() {
         return running;
     }
 
+    /**
+     * 检查是否AutoStartup。
+     * @return 是否满足条件
+     */
     @Override
     public boolean isAutoStartup() {
         return true;
     }
 
+    /**
+     * 返回Phase。
+     * @return 处理结果
+     */
     @Override
     public int getPhase() {
         return Integer.MAX_VALUE;
     }
 
+    /**
+     * 处理pollOnce。
+     */
     private void pollOnce() {
         try {
             String claimedTaskId = taskQueuePort.claimNext(workerInstanceId);
@@ -106,6 +133,9 @@ public class TaskWorkerRunner implements SmartLifecycle {
         }
     }
 
+    /**
+     * 处理maintenanceTick。
+     */
     private void maintenanceTick() {
         try {
             executionCoordinator.touchWorkerInstance(workerInstanceId, workerType, "RUNNING", Map.of("executionMode", executionMode));

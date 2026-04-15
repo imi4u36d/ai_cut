@@ -61,30 +61,59 @@ public final class TaskRecord {
         return attempts;
     }
 
+    /**
+     * 处理阶段Runs视图。
+     * @return 处理结果
+     */
     public List<Map<String, Object>> stageRunsView() {
         return stageRuns;
     }
 
+    /**
+     * 处理追踪视图。
+     * @return 处理结果
+     */
     public List<Map<String, Object>> traceView() {
         return trace;
     }
 
+    /**
+     * 处理模型Calls视图。
+     * @return 处理结果
+     */
     public List<Map<String, Object>> modelCallsView() {
         return modelCalls;
     }
 
+    /**
+     * 处理素材视图。
+     * @return 处理结果
+     */
     public List<Map<String, Object>> materialsView() {
         return materials;
     }
 
+    /**
+     * 处理outputs视图。
+     * @return 处理结果
+     */
     public List<Map<String, Object>> outputsView() {
         return outputs;
     }
 
+    /**
+     * 处理来源Assets视图。
+     * @return 处理结果
+     */
     public List<Map<String, Object>> sourceAssetsView() {
         return sourceAssets;
     }
 
+    /**
+     * 处理setActive尝试。
+     * @param attemptId 尝试标识值
+     * @param attemptNo 尝试No值
+     */
     public void setActiveAttempt(String attemptId, int attemptNo) {
         this.activeAttemptId = attemptId;
         this.currentAttemptNo = attemptNo;

@@ -14,10 +14,18 @@ public class HealthController {
 
     private final RuntimeDescriptorService runtimeDescriptorService;
 
+    /**
+     * 创建新的健康检查控制器。
+     * @param runtimeDescriptorService 运行时描述服务值
+     */
     public HealthController(RuntimeDescriptorService runtimeDescriptorService) {
         this.runtimeDescriptorService = runtimeDescriptorService;
     }
 
+    /**
+     * 处理健康检查。
+     * @return 处理结果
+     */
     @GetMapping("/health")
     public RuntimeDescriptorResponse health() {
         return runtimeDescriptorService.describeRuntime();

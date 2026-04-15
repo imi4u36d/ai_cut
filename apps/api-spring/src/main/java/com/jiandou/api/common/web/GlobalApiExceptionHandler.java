@@ -8,6 +8,9 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
+/**
+ * 全局API异常处理器。
+ */
 @RestControllerAdvice
 public class GlobalApiExceptionHandler {
 

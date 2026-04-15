@@ -13,6 +13,9 @@ import java.util.stream.Stream;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
+/**
+ * 本地生成运行存储。
+ */
 @Component
 public final class LocalGenerationRunStore {
 
@@ -21,6 +24,9 @@ public final class LocalGenerationRunStore {
     private final Path generationRunsDir;
     private final ObjectMapper objectMapper;
 
+    /**
+     * 创建新的本地生成运行存储。
+     */
     public LocalGenerationRunStore(
         @Value("${JIANDOU_STORAGE_ROOT:../../storage}") String storageRoot,
         ObjectMapper objectMapper
@@ -29,6 +35,11 @@ public final class LocalGenerationRunStore {
         this.objectMapper = objectMapper;
     }
 
+    /**
+     * 处理persist运行。
+     * @param runId 运行标识值
+     * @param run 运行值
+     */
     public void persistRun(String runId, Map<String, Object> run) {
         try {
             Files.createDirectories(generationRunsDir.resolve(runId));
@@ -39,6 +50,11 @@ public final class LocalGenerationRunStore {
         }
     }
 
+    /**
+     * 列出Runs。
+     * @param limit 返回的最大条目数
+     * @return 处理结果
+     */
     public List<Map<String, Object>> listRuns(int limit) {
         int resolvedLimit = Math.max(1, limit);
         try {
@@ -60,6 +76,11 @@ public final class LocalGenerationRunStore {
         }
     }
 
+    /**
+     * 加载运行。
+     * @param runId 运行标识值
+     * @return 处理结果
+     */
     public Map<String, Object> loadRun(String runId) {
         try {
             Path input = generationRunsDir.resolve(runId).resolve("run.json");

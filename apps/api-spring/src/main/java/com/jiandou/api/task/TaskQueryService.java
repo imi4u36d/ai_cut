@@ -23,6 +23,13 @@ public class TaskQueryService {
     private final TaskExecutionCoordinator executionCoordinator;
     private final TaskDiagnosisService taskDiagnosisService;
 
+    /**
+     * 创建新的任务查询服务。
+     * @param taskRepository 任务仓储值
+     * @param taskViewMapper 任务视图映射器值
+     * @param executionCoordinator 执行协调器值
+     * @param taskDiagnosisService 任务诊断服务值
+     */
     public TaskQueryService(
         TaskRepository taskRepository,
         TaskViewMapper taskViewMapper,
@@ -35,6 +42,13 @@ public class TaskQueryService {
         this.taskDiagnosisService = taskDiagnosisService;
     }
 
+    /**
+     * 列出任务。
+     * @param q 查询文本
+     * @param status 状态值
+     * @param sort 排序方式
+     * @return 处理结果
+     */
     public List<Map<String, Object>> listTasks(String q, String status, String sort) {
         List<TaskRecord> tasks = new ArrayList<>(taskRepository.findAll());
         executionCoordinator.recomputeQueuePositions(tasks);
@@ -46,36 +60,79 @@ public class TaskQueryService {
             .collect(Collectors.toList());
     }
 
+    /**
+     * 返回任务。
+     * @param taskId 任务标识
+     * @return 处理结果
+     */
     public Map<String, Object> getTask(String taskId) {
         TaskRecord task = requireTask(taskId);
         executionCoordinator.recomputeQueuePositions(List.of(task));
         return taskViewMapper.toDetail(task);
     }
 
+    /**
+     * 返回追踪。
+     * @param taskId 任务标识
+     * @param limit 返回的最大条目数
+     * @return 处理结果
+     */
     public List<Map<String, Object>> getTrace(String taskId, int limit) {
         return tail(requireTask(taskId).trace, limit);
     }
 
+    /**
+     * 返回Logs。
+     * @param taskId 任务标识
+     * @param limit 返回的最大条目数
+     * @return 处理结果
+     */
     public List<Map<String, Object>> getLogs(String taskId, int limit) {
         return getTrace(taskId, limit);
     }
 
+    /**
+     * 返回状态History。
+     * @param taskId 任务标识
+     * @param limit 返回的最大条目数
+     * @return 处理结果
+     */
     public List<Map<String, Object>> getStatusHistory(String taskId, int limit) {
         return tail(requireTask(taskId).statusHistory, limit);
     }
 
+    /**
+     * 返回模型Calls。
+     * @param taskId 任务标识
+     * @param limit 返回的最大条目数
+     * @return 处理结果
+     */
     public List<Map<String, Object>> getModelCalls(String taskId, int limit) {
         return tail(requireTask(taskId).modelCalls, limit);
     }
 
+    /**
+     * 返回Results。
+     * @param taskId 任务标识
+     * @return 处理结果
+     */
     public List<Map<String, Object>> getResults(String taskId) {
         return new ArrayList<>(requireTask(taskId).outputs);
     }
 
+    /**
+     * 返回素材。
+     * @param taskId 任务标识
+     * @return 处理结果
+     */
     public List<Map<String, Object>> getMaterials(String taskId) {
         return new ArrayList<>(requireTask(taskId).materials);
     }
 
+    /**
+     * 处理管理概览。
+     * @return 处理结果
+     */
     public Map<String, Object> adminOverview() {
         List<String> queueSnapshot = executionCoordinator.queueSnapshot();
         List<TaskRecord> values = new ArrayList<>(taskRepository.findAll());
@@ -113,6 +170,11 @@ public class TaskQueryService {
         ));
         payload.put("queue", adminQueueOverview(50));
         payload.put("workers", Map.of(
+            /**
+             * 处理管理Workers。
+             * @param 20 20值
+             * @return 处理结果
+             */
             "items", adminWorkers(20),
             "onlineCount", taskRepository.listWorkerInstances(200).stream()
                 .map(item -> String.valueOf(item.getOrDefault("status", "")))
@@ -126,6 +188,15 @@ public class TaskQueryService {
         return payload;
     }
 
+    /**
+     * 处理管理Traces。
+     * @param taskId 任务标识
+     * @param stage 阶段名称
+     * @param level level值
+     * @param q 查询文本
+     * @param limit 返回的最大条目数
+     * @return 处理结果
+     */
     public List<Map<String, Object>> adminTraces(String taskId, String stage, String level, String q, int limit) {
         int resolvedLimit = Math.max(1, limit);
         Map<String, TaskRecord> tasks = taskRepository.findAll().stream()
@@ -141,11 +212,21 @@ public class TaskQueryService {
             .toList();
     }
 
+    /**
+     * 处理管理Workers。
+     * @param limit 返回的最大条目数
+     * @return 处理结果
+     */
     public List<Map<String, Object>> adminWorkers(int limit) {
         int resolvedLimit = Math.max(1, limit);
         return taskRepository.listWorkerInstances(resolvedLimit);
     }
 
+    /**
+     * 处理管理工作节点。
+     * @param workerInstanceId 工作节点实例标识
+     * @return 处理结果
+     */
     public Map<String, Object> adminWorker(String workerInstanceId) {
         Map<String, Object> item = taskRepository.findWorkerInstance(workerInstanceId);
         if (item == null || item.isEmpty()) {
@@ -154,11 +235,22 @@ public class TaskQueryService {
         return item;
     }
 
+    /**
+     * 处理管理队列Events。
+     * @param taskId 任务标识
+     * @param limit 返回的最大条目数
+     * @return 处理结果
+     */
     public List<Map<String, Object>> adminQueueEvents(String taskId, int limit) {
         int resolvedLimit = Math.max(1, limit);
         return taskRepository.listQueueEvents(taskId, resolvedLimit);
     }
 
+    /**
+     * 处理管理队列概览。
+     * @param limit 返回的最大条目数
+     * @return 处理结果
+     */
     public Map<String, Object> adminQueueOverview(int limit) {
         int resolvedLimit = Math.max(1, limit);
         List<String> snapshot = executionCoordinator.queueSnapshot();
@@ -183,10 +275,20 @@ public class TaskQueryService {
         return payload;
     }
 
+    /**
+     * 处理管理任务诊断。
+     * @param taskId 任务标识
+     * @return 处理结果
+     */
     public Map<String, Object> adminTaskDiagnosis(String taskId) {
         return taskDiagnosisService.diagnose(requireTask(taskId));
     }
 
+    /**
+     * 处理require任务。
+     * @param taskId 任务标识
+     * @return 处理结果
+     */
     public TaskRecord requireTask(String taskId) {
         TaskRecord task = taskRepository.findById(taskId);
         if (task == null) {
@@ -195,6 +297,11 @@ public class TaskQueryService {
         return task;
     }
 
+    /**
+     * 处理任务Comparator。
+     * @param sort 排序方式
+     * @return 处理结果
+     */
     private Comparator<TaskRecord> taskComparator(String sort) {
         String normalizedSort = trimmed(sort, "updated_desc").toLowerCase();
         Comparator<TaskRecord> updatedDesc = Comparator.comparing(
@@ -220,6 +327,12 @@ public class TaskQueryService {
         };
     }
 
+    /**
+     * 处理tail。
+     * @param items items值
+     * @param limit 返回的最大条目数
+     * @return 处理结果
+     */
     private List<Map<String, Object>> tail(List<Map<String, Object>> items, int limit) {
         if (limit <= 0 || items.isEmpty()) {
             return List.of();
@@ -228,14 +341,31 @@ public class TaskQueryService {
         return new ArrayList<>(items.subList(fromIndex, items.size()));
     }
 
+    /**
+     * 处理string值。
+     * @param value 待处理的值
+     * @return 处理结果
+     */
     private String stringValue(Object value) {
         return value == null ? "" : String.valueOf(value).trim();
     }
 
+    /**
+     * 检查是否containsIgnoreCase。
+     * @param source 来源值
+     * @param query 查询值
+     * @return 是否满足条件
+     */
     private boolean containsIgnoreCase(String source, String query) {
         return source != null && source.toLowerCase().contains(query.toLowerCase());
     }
 
+    /**
+     * 检查是否matches状态。
+     * @param task 要处理的任务对象
+     * @param statusFilter 状态筛选值
+     * @return 是否满足条件
+     */
     private boolean matchesStatus(TaskRecord task, String statusFilter) {
         String normalizedFilter = normalizeStatus(statusFilter);
         if (normalizedFilter.isBlank()) {
@@ -250,6 +380,11 @@ public class TaskQueryService {
         return Objects.equals(normalizeStatus(task.status), normalizedFilter);
     }
 
+    /**
+     * 检查是否Running状态。
+     * @param status 状态值
+     * @return 是否满足条件
+     */
     private boolean isRunningStatus(String status) {
         return switch (normalizeStatus(status)) {
             case "ANALYZING", "PLANNING", "RENDERING", "RUNNING", "DISPATCHING", "PROCESSING", "JOINING" -> true;
@@ -257,6 +392,11 @@ public class TaskQueryService {
         };
     }
 
+    /**
+     * 规范化状态。
+     * @param status 状态值
+     * @return 处理结果
+     */
     private String normalizeStatus(String status) {
         if (status == null) {
             return "";
@@ -264,6 +404,12 @@ public class TaskQueryService {
         return status.trim().toUpperCase();
     }
 
+    /**
+     * 处理trimmed。
+     * @param value 待处理的值
+     * @param fallback 兜底值
+     * @return 处理结果
+     */
     private String trimmed(String value, String fallback) {
         if (value == null) {
             return fallback;
@@ -272,6 +418,10 @@ public class TaskQueryService {
         return normalized.isEmpty() ? fallback : normalized;
     }
 
+    /**
+     * 处理当前Iso。
+     * @return 处理结果
+     */
     private String nowIso() {
         return OffsetDateTime.now(ZoneOffset.UTC).toString();
     }

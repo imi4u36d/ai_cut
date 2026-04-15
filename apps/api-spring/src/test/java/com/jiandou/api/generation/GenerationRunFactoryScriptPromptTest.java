@@ -13,6 +13,9 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.mock.env.MockEnvironment;
 
+/**
+ * 生成运行工厂脚本提示词相关测试。
+ */
 class GenerationRunFactoryScriptPromptTest {
 
     @TempDir
@@ -27,6 +30,9 @@ class GenerationRunFactoryScriptPromptTest {
         | 镜号 | 景别/运镜 | 剧情画面与声音描述（长段） | 时长 |
         """;
 
+    /**
+     * 创建脚本运行UsesRefactored分镜提示词Contract。
+     */
     @Test
     void createScriptRunUsesRefactoredStoryboardPromptContract() {
         List<String> promptRows = List.of(
@@ -40,6 +46,15 @@ class GenerationRunFactoryScriptPromptTest {
         String[] capturedSystemPrompt = new String[1];
         String[] capturedUserPrompt = new String[1];
         CompatibleTextModelClient textModelClient = new CompatibleTextModelClient(new ObjectMapper(), java.util.List.of()) {
+            /**
+             * 生成文本。
+             * @param profile profile值
+             * @param systemPrompt 系统提示词值
+             * @param userPrompt user提示词值
+             * @param temperature temperature值
+             * @param maxTokens 最大Tokens值
+             * @return 处理结果
+             */
             @Override
             public TextModelResponse generateText(
                 ModelRuntimeProfile profile,
@@ -76,6 +91,9 @@ class GenerationRunFactoryScriptPromptTest {
         assertTrue(capturedUserPrompt[0].contains("请严格遵循 system prompt 的输出格式与规则"));
     }
 
+    /**
+     * 创建脚本运行ThrowsWhen输入Missing文本。
+     */
     @Test
     void createScriptRunThrowsWhenInputMissingText() {
         CompatibleTextModelClient textModelClient = new CompatibleTextModelClient(new ObjectMapper(), java.util.List.of());
@@ -88,6 +106,9 @@ class GenerationRunFactoryScriptPromptTest {
         assertThrows(IllegalArgumentException.class, () -> factory.createScriptRun("run_script_prompt_2", request));
     }
 
+    /**
+     * 创建脚本运行ThrowsWhen输入文本空白。
+     */
     @Test
     void createScriptRunThrowsWhenInputTextBlank() {
         CompatibleTextModelClient textModelClient = new CompatibleTextModelClient(new ObjectMapper(), java.util.List.of());
@@ -101,6 +122,11 @@ class GenerationRunFactoryScriptPromptTest {
         assertThrows(IllegalArgumentException.class, () -> factory.createScriptRun("run_script_prompt_3", request));
     }
 
+    /**
+     * 创建工厂。
+     * @param textModelClient 文本模型客户端值
+     * @return 处理结果
+     */
     private GenerationRunFactory createFactory(CompatibleTextModelClient textModelClient) {
         ModelRuntimeProfile textProfile = new ModelRuntimeProfile(
             "openai",
@@ -114,11 +140,23 @@ class GenerationRunFactoryScriptPromptTest {
             "test"
         );
         ModelRuntimePropertiesResolver modelResolver = new ModelRuntimePropertiesResolver(new MockEnvironment()) {
+            /**
+             * 处理解析文本Profile。
+             * @param requestedModel requested模型值
+             * @return 处理结果
+             */
             @Override
             public ModelRuntimeProfile resolveTextProfile(String requestedModel) {
                 return textProfile;
             }
 
+            /**
+             * 处理值。
+             * @param section section值
+             * @param key key值
+             * @param fallback 兜底值
+             * @return 处理结果
+             */
             @Override
             public String value(String section, String key, String fallback) {
                 return fallback;
@@ -129,6 +167,12 @@ class GenerationRunFactoryScriptPromptTest {
             modelResolver,
             new GenerationConfigPathLocator(new MockEnvironment())
         ) {
+            /**
+             * 处理系统提示词。
+             * @param promptName 提示词Name值
+             * @param key key值
+             * @return 处理结果
+             */
             @Override
             public String systemPrompt(String promptName, String key) {
                 return SCRIPT_SYSTEM_PROMPT;

@@ -1,3 +1,6 @@
+/**
+ * Markdown相关工具方法。
+ */
 const HTML_ESCAPE_MAP: Record<string, string> = {
   "&": "&amp;",
   "<": "&lt;",
@@ -6,10 +9,18 @@ const HTML_ESCAPE_MAP: Record<string, string> = {
   "'": "&#39;",
 };
 
+/**
+ * 处理escapeHtml。
+ * @param value 待处理的值
+ */
 function escapeHtml(value: string) {
   return value.replace(/[&<>"']/g, (char) => HTML_ESCAPE_MAP[char] || char);
 }
 
+/**
+ * 格式化内联。
+ * @param value 待处理的值
+ */
 function formatInline(value: string) {
   const escaped = escapeHtml(value);
   return escaped
@@ -19,10 +30,19 @@ function formatInline(value: string) {
     .replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noreferrer noopener">$1</a>');
 }
 
+/**
+ * 检查是否TableSeparator。
+ * @param line line值
+ */
 function isTableSeparator(line: string) {
   return /^\s*\|?(\s*:?-{3,}:?\s*\|)+\s*$/.test(line.trim());
 }
 
+/**
+ * 解析Table。
+ * @param lines lines值
+ * @param startIndex start索引值
+ */
 function parseTable(lines: string[], startIndex: number) {
   const rows: string[][] = [];
   let index = startIndex;
@@ -46,6 +66,10 @@ function parseTable(lines: string[], startIndex: number) {
   };
 }
 
+/**
+ * 渲染Markdown转为Html。
+ * @param markdown Markdown值
+ */
 export function renderMarkdownToHtml(markdown: string) {
   const lines = markdown.replace(/\r\n/g, "\n").split("\n");
   const blocks: string[] = [];
@@ -138,6 +162,12 @@ export function renderMarkdownToHtml(markdown: string) {
   return blocks.join("");
 }
 
+/**
+ * 处理download文本文件。
+ * @param fileName 文件Name值
+ * @param content content值
+ * @param mimeType mime类型值
+ */
 export function downloadTextFile(fileName: string, content: string, mimeType = "text/plain;charset=utf-8") {
   const blob = new Blob([content], { type: mimeType });
   const url = URL.createObjectURL(blob);

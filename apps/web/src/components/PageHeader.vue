@@ -12,11 +12,15 @@
 </template>
 
 <script setup lang="ts">
+/**
+ * 页面Header组件。
+ */
 defineProps<{
   eyebrow: string;
   title: string;
   description: string;
 }>();
+
 </script>
 
 <style scoped>

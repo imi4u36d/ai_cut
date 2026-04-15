@@ -8,6 +8,9 @@ import java.util.Locale;
 import java.util.Map;
 import org.springframework.stereotype.Component;
 
+/**
+ * 生成运行工厂。
+ */
 @Component
 public class GenerationRunFactory {
 
@@ -20,6 +23,14 @@ public class GenerationRunFactory {
     private final RemoteMediaGenerationClient remoteMediaGenerationClient;
     private final GenerationRunSupport support;
 
+    /**
+     * 创建新的生成运行工厂。
+     * @param modelResolver 模型解析器值
+     * @param promptTemplateResolver 提示词模板解析器值
+     * @param textModelClient 文本模型客户端值
+     * @param remoteMediaGenerationClient 远程媒体生成客户端值
+     * @param support 支持值
+     */
     public GenerationRunFactory(
         ModelRuntimePropertiesResolver modelResolver,
         PromptTemplateResolver promptTemplateResolver,
@@ -34,6 +45,12 @@ public class GenerationRunFactory {
         this.support = support;
     }
 
+    /**
+     * 创建探测运行。
+     * @param runId 运行标识值
+     * @param request 请求体
+     * @return 处理结果
+     */
     public Map<String, Object> createProbeRun(String runId, Map<String, Object> request) {
         String requestedModel = support.requiredModel(support.nestedValue(request, "model", "textAnalysisModel", ""), "textAnalysisModel", "文本模型");
         ModelRuntimeProfile profile = modelResolver.resolveTextProfile(requestedModel);
@@ -98,6 +115,12 @@ public class GenerationRunFactory {
         }
     }
 
+    /**
+     * 创建脚本运行。
+     * @param runId 运行标识值
+     * @param request 请求体
+     * @return 处理结果
+     */
     public Map<String, Object> createScriptRun(String runId, Map<String, Object> request) {
         String sourceText = support.nestedValue(request, "input", "text", "");
         String visualStyle = support.nestedValue(request, "options", "visualStyle", "AI 自动决策");
@@ -159,6 +182,12 @@ public class GenerationRunFactory {
         return support.runEnvelope(runId, "script", request, result, "resultScript");
     }
 
+    /**
+     * 创建图像运行。
+     * @param runId 运行标识值
+     * @param request 请求体
+     * @return 处理结果
+     */
     public Map<String, Object> createImageRun(String runId, Map<String, Object> request) {
         String prompt = support.nestedValue(request, "input", "prompt", "");
         String referenceImageUrl = support.nestedValue(request, "input", "referenceImageUrl", "");
@@ -252,6 +281,12 @@ public class GenerationRunFactory {
         return support.runEnvelope(runId, "image", request, result, "resultImage");
     }
 
+    /**
+     * 创建视频运行。
+     * @param runId 运行标识值
+     * @param request 请求体
+     * @return 处理结果
+     */
     public Map<String, Object> createVideoRun(String runId, Map<String, Object> request) {
         String prompt = support.nestedValue(request, "input", "prompt", "");
         int[] dimensions = support.parseDimensions(
@@ -416,6 +451,11 @@ public class GenerationRunFactory {
         return support.runEnvelope(runId, "video", request, result, "resultVideo", "running");
     }
 
+    /**
+     * 处理refresh视频运行。
+     * @param run 运行值
+     * @return 处理结果
+     */
     public Map<String, Object> refreshVideoRun(Map<String, Object> run) {
         if (!"video".equalsIgnoreCase(support.stringValue(run.get("kind")))) {
             return run;
@@ -532,6 +572,14 @@ public class GenerationRunFactory {
         return run;
     }
 
+    /**
+     * 规范化视频时长Seconds。
+     * @param requestedVideoModel requested视频模型值
+     * @param requestedDurationSeconds requested时长Seconds值
+     * @param requestedMinDurationSeconds requested最小时长Seconds值
+     * @param requestedMaxDurationSeconds requested最大时长Seconds值
+     * @return 处理结果
+     */
     private int normalizeVideoDurationSeconds(
         String requestedVideoModel,
         int requestedDurationSeconds,
@@ -555,6 +603,12 @@ public class GenerationRunFactory {
         return closestSupportedDuration(supportedDurations, normalizedRequested);
     }
 
+    /**
+     * 处理closestSupported时长。
+     * @param candidates candidates值
+     * @param requestedDurationSeconds requested时长Seconds值
+     * @return 处理结果
+     */
     private int closestSupportedDuration(List<Integer> candidates, int requestedDurationSeconds) {
         int resolved = candidates.get(0);
         int smallestDistance = Math.abs(resolved - requestedDurationSeconds);
@@ -568,6 +622,10 @@ public class GenerationRunFactory {
         return resolved;
     }
 
+    /**
+     * 构建脚本系统提示词。
+     * @return 处理结果
+     */
     private String buildScriptSystemPrompt() {
         String configuredPrompt = promptTemplateResolver.systemPrompt("script", "short_drama_script");
         if (configuredPrompt.isBlank()) {
@@ -576,6 +634,12 @@ public class GenerationRunFactory {
         return configuredPrompt;
     }
 
+    /**
+     * 构建脚本User提示词。
+     * @param sourceText 来源文本值
+     * @param visualStyle visual风格值
+     * @return 处理结果
+     */
     private String buildScriptUserPrompt(String sourceText, String visualStyle) {
         String styleLine = "AI 自动决策".equalsIgnoreCase(visualStyle) || visualStyle.isBlank()
             ? "请根据题材自动选择并保持统一风格。"
@@ -593,6 +657,11 @@ public class GenerationRunFactory {
             """.formatted(styleLine, sourceText);
     }
 
+    /**
+     * 构建视觉分析系统提示词。
+     * @param mediaKind 媒体类型值
+     * @return 处理结果
+     */
     private String buildVisionAnalysisSystemPrompt(String mediaKind) {
         return """
             你是影视连续性审校助手。结合用户剧情与图片输出两行内容：
@@ -601,6 +670,13 @@ public class GenerationRunFactory {
             """.formatted("video".equals(mediaKind) ? "视频" : "图片");
     }
 
+    /**
+     * 构建视觉分析User提示词。
+     * @param mediaKind 媒体类型值
+     * @param prompt 提示词值
+     * @param stylePreset 风格预设值
+     * @return 处理结果
+     */
     private String buildVisionAnalysisUserPrompt(String mediaKind, String prompt, String stylePreset) {
         return """
             请结合图片分析当前视觉内容，并为后续%s生成提炼约束。
@@ -610,6 +686,11 @@ public class GenerationRunFactory {
             """.formatted("video".equals(mediaKind) ? "视频" : "图片", stylePreset, prompt);
     }
 
+    /**
+     * 构建Negative提示词。
+     * @param mediaKind 媒体类型值
+     * @return 处理结果
+     */
     private String buildNegativePrompt(String mediaKind) {
         String videoOnly = "video".equals(mediaKind)
             ? "不要新增对白，不要口型和说话主体错位，不要在片段前0.5秒和后0.5秒安排人声对白或独白，不要出现违背基本物理规律的动作、重力、碰撞、液体、烟雾或光影表现。"
@@ -617,10 +698,20 @@ public class GenerationRunFactory {
         return "禁止字幕、水印、比例失调、手指异常、五官崩坏、角色互换、穿模、空间透视错乱。" + videoOnly;
     }
 
+    /**
+     * 检查是否SeedanceProvider。
+     * @param provider provider值
+     * @return 是否满足条件
+     */
     private boolean isSeedanceProvider(String provider) {
         return support.stringValue(provider).toLowerCase(Locale.ROOT).contains("seedance");
     }
 
+    /**
+     * 处理extractLastFrameURL。
+     * @param payload 附加负载数据
+     * @return 处理结果
+     */
     private String extractLastFrameUrl(Map<String, Object> payload) {
         String direct = findNestedString(payload, "last_frame_url", "lastFrameUrl");
         if (!direct.isBlank()) {
@@ -629,6 +720,12 @@ public class GenerationRunFactory {
         return findNestedRoleUrl(payload, "last_frame");
     }
 
+    /**
+     * 查找嵌套String。
+     * @param value 待处理的值
+     * @param keys keys值
+     * @return 处理结果
+     */
     @SuppressWarnings("unchecked")
     private String findNestedString(Object value, String... keys) {
         if (value instanceof Map<?, ?> rawMap) {
@@ -663,6 +760,12 @@ public class GenerationRunFactory {
         return "";
     }
 
+    /**
+     * 查找嵌套RoleURL。
+     * @param value 待处理的值
+     * @param role role值
+     * @return 处理结果
+     */
     @SuppressWarnings("unchecked")
     private String findNestedRoleUrl(Object value, String role) {
         if (value instanceof Map<?, ?> rawMap) {
@@ -696,6 +799,11 @@ public class GenerationRunFactory {
         return "";
     }
 
+    /**
+     * 处理mutable调用Chain。
+     * @param raw 原始值
+     * @return 处理结果
+     */
     @SuppressWarnings("unchecked")
     private List<Map<String, Object>> mutableCallChain(Object raw) {
         List<Map<String, Object>> items = new ArrayList<>();
@@ -714,6 +822,12 @@ public class GenerationRunFactory {
         return items;
     }
 
+    /**
+     * 处理long值。
+     * @param value 待处理的值
+     * @param fallback 兜底值
+     * @return 处理结果
+     */
     private long longValue(Object value, long fallback) {
         try {
             return Long.parseLong(String.valueOf(value).trim());

@@ -11,12 +11,18 @@ import org.springframework.web.servlet.config.annotation.CorsRegistry;
 import org.springframework.web.servlet.config.annotation.ResourceHandlerRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
+/**
+ * WebMvc配置。
+ */
 @Configuration
 public class WebMvcConfig implements WebMvcConfigurer {
 
     private final String webOrigin;
     private final String storageRoot;
 
+    /**
+     * 创建新的WebMvc配置。
+     */
     public WebMvcConfig(
         @Value("${JIANDOU_WEB_ORIGIN:http://127.0.0.1:5173,http://localhost:5173}") String webOrigin,
         @Value("${JIANDOU_STORAGE_ROOT:../../storage}") String storageRoot
@@ -25,6 +31,10 @@ public class WebMvcConfig implements WebMvcConfigurer {
         this.storageRoot = storageRoot;
     }
 
+    /**
+     * 处理addCorsMappings。
+     * @param registry registry值
+     */
     @Override
     public void addCorsMappings(CorsRegistry registry) {
         registry.addMapping("/api/v2/**")
@@ -39,6 +49,10 @@ public class WebMvcConfig implements WebMvcConfigurer {
             .allowCredentials(true);
     }
 
+    /**
+     * 处理addResourceHandlers。
+     * @param registry registry值
+     */
     @Override
     public void addResourceHandlers(ResourceHandlerRegistry registry) {
         Path root = Paths.get(storageRoot).toAbsolutePath().normalize();
@@ -50,6 +64,10 @@ public class WebMvcConfig implements WebMvcConfigurer {
             .addResourceLocations(root.toUri().toString() + "/");
     }
 
+    /**
+     * 处理解析AllowedOrigins。
+     * @return 处理结果
+     */
     private List<String> resolveAllowedOrigins() {
         String[] rawValues = webOrigin.split(",");
         List<String> values = new ArrayList<>();

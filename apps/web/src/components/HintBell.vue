@@ -28,6 +28,9 @@
 </template>
 
 <script setup lang="ts">
+/**
+ * 提示组件。
+ */
 import { computed, onBeforeUnmount, ref, watch } from "vue";
 
 const props = withDefaults(
@@ -52,18 +55,31 @@ const visible = computed(() => pinned.value || hovering.value);
 
 const alignClass = computed(() => (props.align === "left" ? "left-0 origin-top-left" : "right-0 origin-top-right"));
 
+/**
+ * 处理切换。
+ */
 function toggle() {
   pinned.value = !pinned.value;
 }
 
+/**
+ * 处理处理Enter。
+ */
 function handleEnter() {
   hovering.value = true;
 }
 
+/**
+ * 处理处理Leave。
+ */
 function handleLeave() {
   hovering.value = false;
 }
 
+/**
+ * 处理处理Pointer。
+ * @param event 事件名称
+ */
 function handlePointer(event: MouseEvent) {
   if (!root.value || root.value.contains(event.target as Node)) {
     return;
@@ -72,6 +88,10 @@ function handlePointer(event: MouseEvent) {
   hovering.value = false;
 }
 
+/**
+ * 处理处理Escape。
+ * @param event 事件名称
+ */
 function handleEscape(event: KeyboardEvent) {
   if (event.key === "Escape") {
     pinned.value = false;
@@ -79,11 +99,17 @@ function handleEscape(event: KeyboardEvent) {
   }
 }
 
+/**
+ * 处理bindDocumentListeners。
+ */
 function bindDocumentListeners() {
   document.addEventListener("mousedown", handlePointer);
   document.addEventListener("keydown", handleEscape);
 }
 
+/**
+ * 处理unbindDocumentListeners。
+ */
 function unbindDocumentListeners() {
   document.removeEventListener("mousedown", handlePointer);
   document.removeEventListener("keydown", handleEscape);
@@ -104,6 +130,7 @@ watch(
 onBeforeUnmount(() => {
   unbindDocumentListeners();
 });
+
 </script>
 
 <style scoped>

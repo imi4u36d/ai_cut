@@ -36,14 +36,30 @@ public class TaskStoryboardPlanner {
 
     private final ModelRuntimePropertiesResolver modelResolver;
 
+    /**
+     * 创建新的任务分镜规划器。
+     * @param modelResolver 模型解析器值
+     */
     public TaskStoryboardPlanner(ModelRuntimePropertiesResolver modelResolver) {
         this.modelResolver = modelResolver;
     }
 
+    /**
+     * 构建Sequential片段Prompts。
+     * @param task 要处理的任务对象
+     * @param storyboardMarkdown 分镜Markdown值
+     * @return 处理结果
+     */
     public List<String> buildSequentialClipPrompts(TaskRecord task, String storyboardMarkdown) {
         return buildStoryboardShotPlans(task, storyboardMarkdown).stream().map(StoryboardShotPlan::videoPrompt).toList();
     }
 
+    /**
+     * 构建分镜ShotPlans。
+     * @param task 要处理的任务对象
+     * @param storyboardMarkdown 分镜Markdown值
+     * @return 处理结果
+     */
     public List<StoryboardShotPlan> buildStoryboardShotPlans(TaskRecord task, String storyboardMarkdown) {
         List<StoryboardShotPlan> shotPlans = extractStoryboardShotPlans(storyboardMarkdown);
         if (!shotPlans.isEmpty()) {
@@ -52,6 +68,11 @@ public class TaskStoryboardPlanner {
         throw new IllegalStateException("分镜解析失败，未识别到有效镜头。");
     }
 
+    /**
+     * 构建分镜视频Prompts。
+     * @param storyboardMarkdown 分镜Markdown值
+     * @return 处理结果
+     */
     public List<String> buildStoryboardVideoPrompts(String storyboardMarkdown) {
         List<StoryboardShotPlan> shotPlans = extractStoryboardShotPlans(storyboardMarkdown);
         if (shotPlans.isEmpty()) {
@@ -60,6 +81,12 @@ public class TaskStoryboardPlanner {
         return shotPlans.stream().map(StoryboardShotPlan::videoPrompt).toList();
     }
 
+    /**
+     * 处理解析Requested输出数量。
+     * @param task 要处理的任务对象
+     * @param storyboardClipCount 分镜片段数量值
+     * @return 处理结果
+     */
     public int resolveRequestedOutputCount(TaskRecord task, int storyboardClipCount) {
         int availableClipCount = Math.max(1, storyboardClipCount);
         if (task.requestSnapshot == null || task.requestSnapshot.outputCount().auto()) {
@@ -72,6 +99,11 @@ public class TaskStoryboardPlanner {
         return Math.max(1, Math.min(requested, availableClipCount));
     }
 
+    /**
+     * 处理请求快照输出数量。
+     * @param task 要处理的任务对象
+     * @return 处理结果
+     */
     public Object requestSnapshotOutputCount(TaskRecord task) {
         if (task.requestSnapshot == null) {
             return "auto";
@@ -79,6 +111,12 @@ public class TaskStoryboardPlanner {
         return task.requestSnapshot.outputCount().toValue();
     }
 
+    /**
+     * 构建片段时长规划Context。
+     * @param clipDurationPlan 片段时长规划值
+     * @param storyboardDurationRanges 分镜时长Ranges值
+     * @return 处理结果
+     */
     public List<Map<String, Object>> buildClipDurationPlanContext(List<int[]> clipDurationPlan, List<int[]> storyboardDurationRanges) {
         List<Map<String, Object>> rows = new ArrayList<>();
         for (int index = 0; index < clipDurationPlan.size(); index++) {
@@ -101,6 +139,14 @@ public class TaskStoryboardPlanner {
         return rows;
     }
 
+    /**
+     * 构建片段时长规划。
+     * @param task 要处理的任务对象
+     * @param defaultDurationSeconds 默认时长Seconds值
+     * @param clipCount 片段数量值
+     * @param storyboardMarkdown 分镜Markdown值
+     * @return 处理结果
+     */
     public List<int[]> buildClipDurationPlan(TaskRecord task, int defaultDurationSeconds, int clipCount, String storyboardMarkdown) {
         int normalizedClipCount = Math.max(1, clipCount);
         int totalMin = Math.max(1, task.minDurationSeconds > 0 ? task.minDurationSeconds : defaultDurationSeconds);
@@ -139,6 +185,12 @@ public class TaskStoryboardPlanner {
         return plan;
     }
 
+    /**
+     * 规范化片段时长规划。
+     * @param requestedVideoModel requested视频模型值
+     * @param clipDurationPlan 片段时长规划值
+     * @return 处理结果
+     */
     public List<int[]> normalizeClipDurationPlan(String requestedVideoModel, List<int[]> clipDurationPlan) {
         if (clipDurationPlan == null || clipDurationPlan.isEmpty()) {
             return List.of();
@@ -157,6 +209,11 @@ public class TaskStoryboardPlanner {
         return normalizedPlan;
     }
 
+    /**
+     * 处理extract分镜Shot时长Ranges。
+     * @param storyboardMarkdown 分镜Markdown值
+     * @return 处理结果
+     */
     public List<int[]> extractStoryboardShotDurationRanges(String storyboardMarkdown) {
         String normalized = stringValue(storyboardMarkdown);
         if (normalized.isBlank()) {
@@ -198,6 +255,11 @@ public class TaskStoryboardPlanner {
         return ranges;
     }
 
+    /**
+     * 处理extract分镜ShotPlans。
+     * @param storyboardMarkdown 分镜Markdown值
+     * @return 处理结果
+     */
     private List<StoryboardShotPlan> extractStoryboardShotPlans(String storyboardMarkdown) {
         String normalized = stringValue(storyboardMarkdown);
         if (normalized.isBlank()) {
@@ -294,6 +356,14 @@ public class TaskStoryboardPlanner {
         return List.of();
     }
 
+    /**
+     * 规范化片段时长范围。
+     * @param supportedDurations supportedDurations值
+     * @param targetDurationSeconds target时长Seconds值
+     * @param minDurationSeconds 最小时长Seconds值
+     * @param maxDurationSeconds 最大时长Seconds值
+     * @return 处理结果
+     */
     private int[] normalizeClipDurationRange(
         List<Integer> supportedDurations,
         int targetDurationSeconds,
@@ -317,6 +387,11 @@ public class TaskStoryboardPlanner {
         return new int[] {resolved, resolved, resolved};
     }
 
+    /**
+     * 处理supported视频Durations。
+     * @param requestedVideoModel requested视频模型值
+     * @return 处理结果
+     */
     private List<Integer> supportedVideoDurations(String requestedVideoModel) {
         String normalizedModel = stringValue(requestedVideoModel);
         if (normalizedModel.isBlank()) {
@@ -341,6 +416,12 @@ public class TaskStoryboardPlanner {
         return values;
     }
 
+    /**
+     * 处理closestSupported时长。
+     * @param candidates candidates值
+     * @param requestedDurationSeconds requested时长Seconds值
+     * @return 处理结果
+     */
     private int closestSupportedDuration(List<Integer> candidates, int requestedDurationSeconds) {
         int resolved = candidates.get(0);
         int smallestDistance = Math.abs(resolved - requestedDurationSeconds);
@@ -354,6 +435,11 @@ public class TaskStoryboardPlanner {
         return resolved;
     }
 
+    /**
+     * 解析时长范围提示。
+     * @param text 文本值
+     * @return 处理结果
+     */
     private int[] parseDurationRangeHint(String text) {
         String normalized = stringValue(text);
         if (normalized.isBlank()) {
@@ -388,6 +474,11 @@ public class TaskStoryboardPlanner {
         return null;
     }
 
+    /**
+     * 处理safeRoundedSeconds。
+     * @param value 待处理的值
+     * @return 处理结果
+     */
     private int safeRoundedSeconds(String value) {
         try {
             return Math.max(1, Math.min(120, (int) Math.round(Double.parseDouble(stringValue(value)))));
@@ -396,10 +487,22 @@ public class TaskStoryboardPlanner {
         }
     }
 
+    /**
+     * 处理clamp。
+     * @param value 待处理的值
+     * @param min 最小值
+     * @param max 最大值
+     * @return 处理结果
+     */
     private int clamp(int value, int min, int max) {
         return Math.max(min, Math.min(max, value));
     }
 
+    /**
+     * 处理splitTable行。
+     * @param row 行值
+     * @return 处理结果
+     */
     private List<String> splitTableRow(String row) {
         String trimmed = row.trim();
         if (!trimmed.startsWith("|")) {
@@ -413,6 +516,11 @@ public class TaskStoryboardPlanner {
         return cells;
     }
 
+    /**
+     * 处理detect分镜TableSchema。
+     * @param lines lines值
+     * @return 处理结果
+     */
     private StoryboardTableSchema detectStoryboardTableSchema(List<String> lines) {
         for (String rawLine : lines) {
             String stripped = rawLine.trim();
@@ -430,6 +538,11 @@ public class TaskStoryboardPlanner {
         return StoryboardTableSchema.empty();
     }
 
+    /**
+     * 检查是否looksLikeHeader行。
+     * @param cells cells值
+     * @return 是否满足条件
+     */
     private boolean looksLikeHeaderRow(List<String> cells) {
         for (String cell : cells) {
             String normalized = normalizeStoryboardHeader(cell);
@@ -447,6 +560,11 @@ public class TaskStoryboardPlanner {
         return false;
     }
 
+    /**
+     * 规范化分镜Header。
+     * @param text 文本值
+     * @return 处理结果
+     */
     private String normalizeStoryboardHeader(String text) {
         return stringValue(text)
             .trim()
@@ -454,6 +572,11 @@ public class TaskStoryboardPlanner {
             .replaceAll("[\\s_\\-()（）/\\\\+:：·,.，]", "");
     }
 
+    /**
+     * 规范化分镜提示词值。
+     * @param value 待处理的值
+     * @return 处理结果
+     */
     private String normalizeStoryboardPromptValue(String value) {
         return stringValue(value)
             .replace("<br>", " ")
@@ -463,6 +586,15 @@ public class TaskStoryboardPlanner {
             .trim();
     }
 
+    /**
+     * 构建Continuous片段提示词。
+     * @param lastFramePrompt lastFrame提示词值
+     * @param motion motion值
+     * @param cameraMovement cameraMovement值
+     * @param dialogue dialogue值
+     * @param audio audio值
+     * @return 处理结果
+     */
     private String buildContinuousClipPrompt(String lastFramePrompt, String motion, String cameraMovement, String dialogue, String audio) {
         List<String> parts = new ArrayList<>();
         if (!lastFramePrompt.isBlank()) {
@@ -484,6 +616,11 @@ public class TaskStoryboardPlanner {
         return truncateText(String.join("；", parts), 1400);
     }
 
+    /**
+     * 处理dialogueInstruction。
+     * @param dialogue dialogue值
+     * @return 处理结果
+     */
     private String dialogueInstruction(String dialogue) {
         String normalized = normalizeStoryboardPromptValue(dialogue);
         if (normalized.isBlank()) {
@@ -504,6 +641,12 @@ public class TaskStoryboardPlanner {
         return "可听见的人声独白：独白：" + normalized + "；独白放在镜头中段，前0.5秒与后0.5秒保持无人声，仅保留动作或环境声缓冲。";
     }
 
+    /**
+     * 处理inferCameraMovement。
+     * @param shotSpec shotSpec值
+     * @param motion motion值
+     * @return 处理结果
+     */
     private String inferCameraMovement(String shotSpec, String motion) {
         String normalizedShotSpec = normalizeStoryboardPromptValue(shotSpec);
         String normalizedMotion = normalizeStoryboardPromptValue(motion);
@@ -516,6 +659,11 @@ public class TaskStoryboardPlanner {
         return "";
     }
 
+    /**
+     * 处理extractCameraMovement。
+     * @param value 待处理的值
+     * @return 处理结果
+     */
     private String extractCameraMovement(String value) {
         String normalized = normalizeStoryboardPromptValue(value);
         if (normalized.isBlank()) {
@@ -530,6 +678,11 @@ public class TaskStoryboardPlanner {
         return looksLikeCameraMovement(normalized) ? normalized : "";
     }
 
+    /**
+     * 检查是否looksLikeCameraMovement。
+     * @param value 待处理的值
+     * @return 是否满足条件
+     */
     private boolean looksLikeCameraMovement(String value) {
         String normalized = normalizeStoryboardPromptValue(value).toLowerCase();
         if (normalized.isBlank()) {
@@ -558,6 +711,11 @@ public class TaskStoryboardPlanner {
             || normalized.contains("whip");
     }
 
+    /**
+     * 处理首个非空白。
+     * @param values 值
+     * @return 处理结果
+     */
     private String firstNonBlank(String... values) {
         for (String value : values) {
             String normalized = stringValue(value);
@@ -568,6 +726,11 @@ public class TaskStoryboardPlanner {
         return "";
     }
 
+    /**
+     * 检查是否Divider行。
+     * @param cells cells值
+     * @return 是否满足条件
+     */
     private boolean isDividerRow(List<String> cells) {
         for (String cell : cells) {
             if (!cell.matches("[:\\-\\s]*")) {
@@ -577,6 +740,12 @@ public class TaskStoryboardPlanner {
         return true;
     }
 
+    /**
+     * 处理truncate文本。
+     * @param value 待处理的值
+     * @param maxLength 最大Length值
+     * @return 处理结果
+     */
     private String truncateText(String value, int maxLength) {
         String normalized = stringValue(value);
         if (normalized.length() <= maxLength) {
@@ -585,10 +754,40 @@ public class TaskStoryboardPlanner {
         return normalized.substring(0, Math.max(0, maxLength - 1)).trim() + "…";
     }
 
+    /**
+     * 处理string值。
+     * @param value 待处理的值
+     * @return 处理结果
+     */
     private String stringValue(Object value) {
         return value == null ? "" : String.valueOf(value).trim();
     }
 
+    /**
+     * 处理分镜TableSchema。
+     * @param headerCells headerCells值
+     * @param shotNoIndex shotNo索引值
+     * @param sceneIndex scene索引值
+     * @param timeIndex 时间索引值
+     * @param shotSpecIndex shotSpec索引值
+     * @param movementIndex movement索引值
+     * @param firstFramePromptIndex 首个Frame提示词索引值
+     * @param lastFramePromptIndex lastFrame提示词索引值
+     * @param motionIndex motion索引值
+     * @param cameraMovementIndex cameraMovement索引值
+     * @param visualIndex visual索引值
+     * @param dynamicIndex dynamic索引值
+     * @param storyDescriptionIndex storyDescription索引值
+     * @param characterAppearanceIndex characterAppearance索引值
+     * @param actionIndex action索引值
+     * @param emotionIndex emotion索引值
+     * @param lightingIndex lighting索引值
+     * @param atmosphereIndex atmosphere索引值
+     * @param dialogueIndex dialogue索引值
+     * @param audioIndex audio索引值
+     * @param durationIndex 时长索引值
+     * @return 处理结果
+     */
     private record StoryboardTableSchema(
         List<String> headerCells,
         Integer shotNoIndex,
@@ -612,6 +811,10 @@ public class TaskStoryboardPlanner {
         Integer audioIndex,
         Integer durationIndex
     ) {
+        /**
+         * 处理empty。
+         * @return 处理结果
+         */
         static StoryboardTableSchema empty() {
             return new StoryboardTableSchema(
                 List.of(),
@@ -638,6 +841,11 @@ public class TaskStoryboardPlanner {
             );
         }
 
+        /**
+         * 处理fromHeader。
+         * @param headers headers值
+         * @return 处理结果
+         */
         static StoryboardTableSchema fromHeader(List<String> headers) {
             return new StoryboardTableSchema(
                 List.copyOf(headers),
@@ -681,6 +889,12 @@ public class TaskStoryboardPlanner {
             );
         }
 
+        /**
+         * 处理解析。
+         * @param headers headers值
+         * @param aliases aliases值
+         * @return 处理结果
+         */
         private static Integer resolve(List<String> headers, String... aliases) {
             for (int index = 0; index < headers.size(); index++) {
                 String header = headers.get(index)
@@ -696,6 +910,11 @@ public class TaskStoryboardPlanner {
             return null;
         }
 
+        /**
+         * 检查是否Header行。
+         * @param cells cells值
+         * @return 是否满足条件
+         */
         boolean isHeaderRow(List<String> cells) {
             if (headerCells.isEmpty() || cells.size() != headerCells.size()) {
                 return false;
@@ -710,6 +929,13 @@ public class TaskStoryboardPlanner {
             return true;
         }
 
+        /**
+         * 处理cell。
+         * @param cells cells值
+         * @param index 索引值
+         * @param fallbackIndex 兜底索引值
+         * @return 处理结果
+         */
         String cell(List<String> cells, Integer index, int fallbackIndex) {
             int resolvedIndex = index != null ? index : fallbackIndex;
             if (resolvedIndex < 0 || resolvedIndex >= cells.size()) {
@@ -720,6 +946,20 @@ public class TaskStoryboardPlanner {
         }
     }
 
+    /**
+     * 处理分镜Shot规划。
+     * @param sequentialIndex sequential索引值
+     * @param shotLabel shot标签值
+     * @param scene scene值
+     * @param firstFramePrompt 首个Frame提示词值
+     * @param lastFramePrompt lastFrame提示词值
+     * @param motion motion值
+     * @param cameraMovement cameraMovement值
+     * @param durationHint 时长提示值
+     * @param imagePrompt 图像提示词值
+     * @param videoPrompt 视频提示词值
+     * @return 处理结果
+     */
     public record StoryboardShotPlan(
         int sequentialIndex,
         String shotLabel,

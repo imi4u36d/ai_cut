@@ -121,6 +121,9 @@
 </template>
 
 <script setup lang="ts">
+/**
+ * 任务组件。
+ */
 import { computed } from "vue";
 import type { TaskListItem } from "@/types";
 import StatusBadge from "./StatusBadge.vue";
@@ -199,12 +202,16 @@ const selected = computed(() => Boolean(props.selected));
 const showRetryAction = computed(() => props.showRetryAction !== false);
 const showDeleteAction = computed(() => props.showDeleteAction !== false);
 
+/**
+ * 处理处理Select。
+ */
 function handleSelect() {
   if (!selectable.value) {
     return;
   }
   emit("select", props.task);
 }
+
 </script>
 
 <style scoped>

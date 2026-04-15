@@ -10,12 +10,18 @@ import com.jiandou.api.task.domain.GenerationRequestSnapshot;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 
+/**
+ * 任务执行运行时相关测试。
+ */
 class TaskExecutionRuntimeSupportTest {
 
     private final TaskRepository taskRepository = mock(TaskRepository.class);
     private final ModelRuntimePropertiesResolver modelResolver = mock(ModelRuntimePropertiesResolver.class);
     private final TaskExecutionRuntimeSupport runtimeSupport = new TaskExecutionRuntimeSupport(taskRepository, modelResolver);
 
+    /**
+     * 处理解析时长SecondsDefaults转为TenSeconds。
+     */
     @Test
     void resolveDurationSecondsDefaultsToTenSeconds() {
         TaskRecord task = new TaskRecord();
@@ -23,6 +29,9 @@ class TaskExecutionRuntimeSupportTest {
         assertEquals(10, runtimeSupport.resolveDurationSeconds(task));
     }
 
+    /**
+     * 构建视频运行请求EnablesGenerateAudioBy默认。
+     */
     @Test
     void buildVideoRunRequestEnablesGenerateAudioByDefault() {
         TaskRecord task = new TaskRecord();

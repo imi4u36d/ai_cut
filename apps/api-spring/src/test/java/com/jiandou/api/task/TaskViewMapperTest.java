@@ -7,8 +7,14 @@ import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 
+/**
+ * 任务视图相关测试。
+ */
 class TaskViewMapperTest {
 
+    /**
+     * 处理转为详情UsesPending时长DiagnosticsWhen规划HasNo已渲染输出。
+     */
     @Test
     void toDetailUsesPendingDurationDiagnosticsWhenPlanHasNoRenderedOutput() {
         TaskRecord task = new TaskRecord();
@@ -41,6 +47,9 @@ class TaskViewMapperTest {
         assertEquals(6, firstRow.get("plannedTargetDurationSeconds"));
     }
 
+    /**
+     * 处理转为详情Uses时长兜底From已渲染输出When规划Missing。
+     */
     @Test
     void toDetailUsesDurationFallbackFromRenderedOutputWhenPlanMissing() {
         TaskRecord task = new TaskRecord();
@@ -74,6 +83,9 @@ class TaskViewMapperTest {
         assertEquals("rendered", firstRow.get("status"));
     }
 
+    /**
+     * 处理转为列表ItemFallsBack转为执行Context工作节点And阶段ForRunning状态。
+     */
     @Test
     void toListItemFallsBackToExecutionContextWorkerAndStageForRunningStatus() {
         TaskRecord task = new TaskRecord();

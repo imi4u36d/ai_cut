@@ -178,6 +178,9 @@
 </template>
 
 <script setup lang="ts">
+/**
+ * 管理看板页面组件。
+ */
 import { computed, onMounted, ref, watch } from "vue";
 import { fetchAdminOverview, fetchAdminTraces } from "@/api/admin";
 import { usePolling } from "@/composables/usePolling";
@@ -206,10 +209,18 @@ const metricCards = computed(() => {
   ];
 });
 
+/**
+ * 格式化时间。
+ * @param value 待处理的值
+ */
 function formatTime(value: string) {
   return new Date(value).toLocaleString();
 }
 
+/**
+ * 处理日志Level样式类。
+ * @param level level值
+ */
 function logLevelClass(level: string) {
   if (level === "ERROR") {
     return "bg-rose-100 text-rose-700";
@@ -220,6 +231,10 @@ function logLevelClass(level: string) {
   return "bg-slate-100 text-slate-700";
 }
 
+/**
+ * 处理诊断标签。
+ * @param severity severity值
+ */
 function diagnosisLabel(severity?: string | null) {
   switch (severity) {
     case "high":
@@ -233,6 +248,10 @@ function diagnosisLabel(severity?: string | null) {
   }
 }
 
+/**
+ * 处理诊断Pill样式类。
+ * @param severity severity值
+ */
 function diagnosisPillClass(severity?: string | null) {
   switch (severity) {
     case "high":
@@ -279,6 +298,7 @@ watch([levelFilter, stageFilter], () => {
 onMounted(async () => {
   await start();
 });
+
 </script>
 
 <style scoped>

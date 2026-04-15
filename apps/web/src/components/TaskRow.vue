@@ -116,6 +116,9 @@
 </template>
 
 <script setup lang="ts">
+/**
+ * 任务组件。
+ */
 import { computed } from "vue";
 import type { TaskListItem } from "@/types";
 import StatusBadge from "./StatusBadge.vue";
@@ -189,12 +192,16 @@ const emit = defineEmits<{
   (event: "select", task: TaskListItem): void;
 }>();
 
+/**
+ * 处理处理Select。
+ */
 function handleSelect() {
   if (!selectable.value) {
     return;
   }
   emit("select", props.task);
 }
+
 </script>
 
 <style scoped>

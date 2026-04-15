@@ -21,22 +21,36 @@ public class DefaultUploadApplicationService implements UploadApplicationService
 
     private final Path uploadsDir;
 
+    /**
+     * 创建新的默认上传应用服务。
+     * @param storageRoot storageRoot值
+     */
     public DefaultUploadApplicationService(@Value("${JIANDOU_STORAGE_ROOT:../../storage}") String storageRoot) {
         this.uploadsDir = Paths.get(storageRoot).toAbsolutePath().normalize().resolve("uploads");
     }
 
+    /**
+     * 上传文本。
+     * @param file 待上传的文件
+     * @return 处理结果
+     */
     @Override
     public UploadAssetResponse uploadText(MultipartFile file) {
         return saveFile(file);
     }
 
+    /**
+     * 上传视频。
+     * @param file 待上传的文件
+     * @return 处理结果
+     */
     @Override
     public UploadAssetResponse uploadVideo(MultipartFile file) {
         return saveFile(file);
     }
 
     /**
-     * 上传接口统一通过该方法生成资产 ID、清洗文件名并写入磁盘。
+     * 上传接口统一通过该方法生成资产标识、清洗文件名并写入磁盘。
      */
     private UploadAssetResponse saveFile(MultipartFile file) {
         try {

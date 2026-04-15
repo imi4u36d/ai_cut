@@ -21,10 +21,18 @@ public class AdminController {
 
     private final TaskApplicationService taskService;
 
+    /**
+     * 创建新的管理控制器。
+     * @param taskService 任务服务值
+     */
     public AdminController(TaskApplicationService taskService) {
         this.taskService = taskService;
     }
 
+    /**
+     * 获取概览。
+     * @return 处理结果
+     */
     @GetMapping("/overview")
     public Map<String, Object> overview() {
         return taskService.adminOverview();
@@ -39,6 +47,11 @@ public class AdminController {
         return taskService.listTasks(q, status, sort);
     }
 
+    /**
+     * 返回任务。
+     * @param taskId 任务标识
+     * @return 处理结果
+     */
     @GetMapping("/tasks/{taskId}")
     public Map<String, Object> getTask(@PathVariable String taskId) {
         return taskService.getTask(taskId);
@@ -65,6 +78,11 @@ public class AdminController {
         return taskService.adminWorkers(limit == null ? 100 : limit);
     }
 
+    /**
+     * 返回工作节点。
+     * @param workerInstanceId 工作节点实例标识
+     * @return 处理结果
+     */
     @GetMapping("/workers/{workerInstanceId}")
     public Map<String, Object> getWorker(@PathVariable String workerInstanceId) {
         return taskService.adminWorker(workerInstanceId);
@@ -91,21 +109,42 @@ public class AdminController {
         return taskService.adminQueueEvents(taskId, limit == null ? 200 : limit);
     }
 
+    /**
+     * 返回任务诊断。
+     * @param taskId 任务标识
+     * @return 处理结果
+     */
     @GetMapping("/tasks/{taskId}/diagnosis")
     public Map<String, Object> getTaskDiagnosis(@PathVariable String taskId) {
         return taskService.adminTaskDiagnosis(taskId);
     }
 
+    /**
+     * 重试重试。
+     * @param taskId 任务标识
+     * @return 处理结果
+     */
     @PostMapping("/tasks/{taskId}/retry")
     public Map<String, Object> retry(@PathVariable String taskId) {
         return taskService.retryTask(taskId);
     }
 
+    /**
+     * 终止terminate。
+     * @param taskId 任务标识
+     * @return 处理结果
+     */
     @PostMapping("/tasks/{taskId}/terminate")
     public Map<String, Object> terminate(@PathVariable String taskId) {
         return taskService.terminateTask(taskId);
     }
 
+    /**
+     * 处理评分效果。
+     * @param taskId 任务标识
+     * @param request 请求体
+     * @return 处理结果
+     */
     @PostMapping("/tasks/{taskId}/effect-rating")
     public Map<String, Object> rateEffect(
         @PathVariable String taskId,
@@ -114,11 +153,21 @@ public class AdminController {
         return taskService.rateTaskEffect(taskId, request);
     }
 
+    /**
+     * 删除删除。
+     * @param taskId 任务标识
+     * @return 处理结果
+     */
     @DeleteMapping("/tasks/{taskId}")
     public Map<String, Object> delete(@PathVariable String taskId) {
         return taskService.deleteTask(taskId);
     }
 
+    /**
+     * 处理批量删除。
+     * @param request 请求体
+     * @return 处理结果
+     */
     @PostMapping("/tasks/bulk-delete")
     public Map<String, Object> bulkDelete(@org.springframework.web.bind.annotation.RequestBody TaskIdsRequest request) {
         List<String> taskIds = request.taskIds() == null ? List.of() : request.taskIds();
@@ -131,6 +180,11 @@ public class AdminController {
         );
     }
 
+    /**
+     * 处理批量重试。
+     * @param request 请求体
+     * @return 处理结果
+     */
     @PostMapping("/tasks/bulk-retry")
     public Map<String, Object> bulkRetry(@org.springframework.web.bind.annotation.RequestBody TaskIdsRequest request) {
         List<String> taskIds = request.taskIds() == null ? List.of() : request.taskIds();
@@ -143,5 +197,10 @@ public class AdminController {
         );
     }
 
+    /**
+     * 任务标识批量请求体。
+     * @param taskIds 任务标识列表值
+     * @return 处理结果
+     */
     public record TaskIdsRequest(List<String> taskIds) {}
 }

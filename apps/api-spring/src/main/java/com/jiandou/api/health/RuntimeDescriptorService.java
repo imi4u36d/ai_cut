@@ -23,6 +23,9 @@ public class RuntimeDescriptorService {
     private final String executionMode;
     private final String storageRoot;
 
+    /**
+     * 创建新的运行时描述服务。
+     */
     public RuntimeDescriptorService(
         ModelRuntimePropertiesResolver modelResolver,
         @Value("${spring.application.name:JianDou Spring API}") String appName,
@@ -37,6 +40,10 @@ public class RuntimeDescriptorService {
         this.storageRoot = storageRoot;
     }
 
+    /**
+     * 处理describe运行时。
+     * @return 处理结果
+     */
     public RuntimeDescriptorResponse describeRuntime() {
         List<ModelCatalogItem> textModels = toCatalogItems(modelResolver.listModelsByKind("text"));
         List<ModelCatalogItem> visionModels = toCatalogItems(modelResolver.listModelsByKind("vision"));
@@ -129,6 +136,12 @@ public class RuntimeDescriptorService {
         return ready;
     }
 
+    /**
+     * 检查是否Ready图像模型。
+     * @param imageModels 图像Models值
+     * @param errors errors值
+     * @return 是否满足条件
+     */
     private boolean hasReadyImageModel(List<ModelCatalogItem> imageModels, List<String> errors) {
         boolean ready = false;
         for (ModelCatalogItem model : imageModels) {
@@ -146,6 +159,12 @@ public class RuntimeDescriptorService {
         return ready;
     }
 
+    /**
+     * 检查是否Ready视频模型。
+     * @param videoModels 视频Models值
+     * @param errors errors值
+     * @return 是否满足条件
+     */
     private boolean hasReadyVideoModel(List<ModelCatalogItem> videoModels, List<String> errors) {
         boolean ready = false;
         for (ModelCatalogItem model : videoModels) {
@@ -163,6 +182,12 @@ public class RuntimeDescriptorService {
         return ready;
     }
 
+    /**
+     * 处理int值。
+     * @param raw 原始值
+     * @param fallback 兜底值
+     * @return 处理结果
+     */
     private int intValue(String raw, int fallback) {
         try {
             int value = Integer.parseInt(String.valueOf(raw).trim());
@@ -172,6 +197,12 @@ public class RuntimeDescriptorService {
         }
     }
 
+    /**
+     * 处理double值。
+     * @param raw 原始值
+     * @param fallback 兜底值
+     * @return 处理结果
+     */
     private double doubleValue(String raw, double fallback) {
         try {
             return Double.parseDouble(String.valueOf(raw).trim());
@@ -180,11 +211,22 @@ public class RuntimeDescriptorService {
         }
     }
 
+    /**
+     * 处理property。
+     * @param key key值
+     * @param defaultValue 默认值
+     * @return 处理结果
+     */
     private String property(String key, String defaultValue) {
         String value = System.getenv(key);
         return value == null ? defaultValue : value.trim();
     }
 
+    /**
+     * 处理转为目录Items。
+     * @param rows 行值
+     * @return 处理结果
+     */
     private List<ModelCatalogItem> toCatalogItems(List<Map<String, Object>> rows) {
         if (rows == null || rows.isEmpty()) {
             return List.of();
@@ -210,6 +252,11 @@ public class RuntimeDescriptorService {
         boolean supportsSeed
     ) {
 
+        /**
+         * 处理from。
+         * @param row 行值
+         * @return 处理结果
+         */
         private static ModelCatalogItem from(Map<String, Object> row) {
             if (row == null || row.isEmpty()) {
                 return new ModelCatalogItem("", "", "", "", "", "", "", false);
@@ -226,10 +273,20 @@ public class RuntimeDescriptorService {
             );
         }
 
+        /**
+         * 处理string值。
+         * @param raw 原始值
+         * @return 处理结果
+         */
         private static String stringValue(Object raw) {
             return raw == null ? "" : String.valueOf(raw).trim();
         }
 
+        /**
+         * 检查是否boolean值。
+         * @param raw 原始值
+         * @return 是否满足条件
+         */
         private static boolean booleanValue(Object raw) {
             if (raw instanceof Boolean value) {
                 return value;

@@ -10,8 +10,14 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.env.MockEnvironment;
 
+/**
+ * 任务分镜规划器Parsing相关测试。
+ */
 class TaskStoryboardPlannerParsingTest {
 
+    /**
+     * 处理parsesStrictMergedNarrative分镜Table。
+     */
     @Test
     void parsesStrictMergedNarrativeStoryboardTable() {
         TaskStoryboardPlanner planner = new TaskStoryboardPlanner(new ModelRuntimePropertiesResolver(new MockEnvironment()));
@@ -38,6 +44,9 @@ class TaskStoryboardPlannerParsingTest {
         assertArrayEquals(new int[] {10, 10}, ranges.get(1));
     }
 
+    /**
+     * 处理supportsMergedDescriptionAliasColumn。
+     */
     @Test
     void supportsMergedDescriptionAliasColumn() {
         TaskStoryboardPlanner planner = new TaskStoryboardPlanner(new ModelRuntimePropertiesResolver(new MockEnvironment()));
@@ -56,6 +65,9 @@ class TaskStoryboardPlannerParsingTest {
         assertTrue(shotPlans.get(0).videoPrompt().contains("破旧仓库"));
     }
 
+    /**
+     * 处理throwsWhenMergedNarrativeColumnMissing。
+     */
     @Test
     void throwsWhenMergedNarrativeColumnMissing() {
         TaskStoryboardPlanner planner = new TaskStoryboardPlanner(new ModelRuntimePropertiesResolver(new MockEnvironment()));
@@ -73,6 +85,9 @@ class TaskStoryboardPlannerParsingTest {
         assertThrows(IllegalStateException.class, () -> planner.buildStoryboardVideoPrompts(storyboardMarkdown));
     }
 
+    /**
+     * 规范化时长规划KeepsSupportedTenSecondClips。
+     */
     @Test
     void normalizeDurationPlanKeepsSupportedTenSecondClips() {
         MockEnvironment environment = new MockEnvironment()
@@ -101,6 +116,9 @@ class TaskStoryboardPlannerParsingTest {
         assertArrayEquals(new int[] {10, 10, 10}, normalized.get(0));
     }
 
+    /**
+     * 处理clamps分镜Durations转为Five转为FifteenSeconds。
+     */
     @Test
     void clampsStoryboardDurationsToFiveToFifteenSeconds() {
         MockEnvironment environment = new MockEnvironment()

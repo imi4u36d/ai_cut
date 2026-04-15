@@ -22,9 +22,16 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
+/**
+ * MyBatisPlus配置。
+ */
 @Configuration
 public class MybatisPlusConfig {
 
+    /**
+     * 处理data来源。
+     * @return 处理结果
+     */
     @Bean
     public DataSource dataSource(
         @Value("${spring.datasource.url}") String url,
@@ -43,6 +50,11 @@ public class MybatisPlusConfig {
         return dataSource;
     }
 
+    /**
+     * 处理sqlSession工厂。
+     * @param dataSource data来源值
+     * @return 处理结果
+     */
     @Bean
     public SqlSessionFactory sqlSessionFactory(DataSource dataSource) {
         MybatisConfiguration configuration = new MybatisConfiguration();
@@ -64,6 +76,10 @@ public class MybatisPlusConfig {
         return new MybatisSqlSessionFactoryBuilder().build(configuration);
     }
 
+    /**
+     * 处理全局配置。
+     * @return 处理结果
+     */
     @Bean
     public GlobalConfig globalConfig() {
         GlobalConfig config = new GlobalConfig();

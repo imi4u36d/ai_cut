@@ -13,6 +13,9 @@ import org.slf4j.LoggerFactory;
 import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Service;
 
+/**
+ * 生成配置路径Locator。
+ */
 @Service
 public class GenerationConfigPathLocator {
 
@@ -20,15 +23,41 @@ public class GenerationConfigPathLocator {
 
     private final Environment environment;
 
+    /**
+     * 创建新的生成配置路径Locator。
+     * @param environment environment值
+     */
     public GenerationConfigPathLocator(Environment environment) {
         this.environment = environment;
     }
 
+    /**
+     * 处理locateApp配置。
+     * @return 处理结果
+     */
     public LocatedConfig locateAppConfig() {
         List<Path> checkedCandidates = new ArrayList<>();
         boolean explicitConfigRequested = hasConfiguredValue("JIANDOU_CONFIG_FILE", "jiandou.config.file", "JIANDOU_CONFIG_PATH", "jiandou.config.path")
+            /**
+             * 检查是否Configured值。
+             * @param "JIANDOU_CONFIG_DIR" "JIANDOU配置DIR"值
+             * @param "jiandou.config.dir" "jiandou.config.dir"值
+             * @return 是否满足条件
+             */
             || hasConfiguredValue("JIANDOU_CONFIG_DIR", "jiandou.config.dir")
+            /**
+             * 检查是否Configured值。
+             * @param "spring.config.additional-location" "spring.config.additionallocation"值
+             * @param "SPRING_CONFIG_ADDITIONAL_LOCATION" "SPRING配置ADDITIONALLOCATION"值
+             * @return 是否满足条件
+             */
             || hasConfiguredValue("spring.config.additional-location", "SPRING_CONFIG_ADDITIONAL_LOCATION")
+            /**
+             * 检查是否Configured值。
+             * @param "spring.config.location" "spring.config.location"值
+             * @param "SPRING_CONFIG_LOCATION" "SPRING配置LOCATION"值
+             * @return 是否满足条件
+             */
             || hasConfiguredValue("spring.config.location", "SPRING_CONFIG_LOCATION");
         Path explicitFile = resolveExplicitConfigFile(checkedCandidates);
         if (explicitFile != null) {
@@ -73,6 +102,11 @@ public class GenerationConfigPathLocator {
         return new LocatedConfig(null, null, null, "missing", detail);
     }
 
+    /**
+     * 处理解析路径。
+     * @param configuredPath configured路径值
+     * @return 处理结果
+     */
     public Path resolvePath(String configuredPath) {
         String normalized = trimToEmpty(configuredPath);
         if (normalized.isBlank()) {
@@ -96,6 +130,11 @@ public class GenerationConfigPathLocator {
         return Paths.get("").toAbsolutePath().normalize().resolve(path).normalize();
     }
 
+    /**
+     * 处理解析Explicit配置文件。
+     * @param checkedCandidates checkedCandidates值
+     * @return 处理结果
+     */
     private Path resolveExplicitConfigFile(List<Path> checkedCandidates) {
         for (String key : List.of("JIANDOU_CONFIG_FILE", "jiandou.config.file", "JIANDOU_CONFIG_PATH", "jiandou.config.path")) {
             String value = property(key);
@@ -112,6 +151,11 @@ public class GenerationConfigPathLocator {
         return null;
     }
 
+    /**
+     * 处理解析配置FromExplicitDir。
+     * @param checkedCandidates checkedCandidates值
+     * @return 处理结果
+     */
     private Path resolveConfigFromExplicitDir(List<Path> checkedCandidates) {
         for (String key : List.of("JIANDOU_CONFIG_DIR", "jiandou.config.dir")) {
             String value = property(key);
@@ -130,6 +174,13 @@ public class GenerationConfigPathLocator {
         return null;
     }
 
+    /**
+     * 处理解析FromSpringLocation。
+     * @param location location值
+     * @param sourceKey 来源Key值
+     * @param checkedCandidates checkedCandidates值
+     * @return 处理结果
+     */
     private Path resolveFromSpringLocation(String location, String sourceKey, List<Path> checkedCandidates) {
         if (trimToEmpty(location).isBlank()) {
             return null;
@@ -163,6 +214,10 @@ public class GenerationConfigPathLocator {
         return null;
     }
 
+    /**
+     * 处理spring默认ExternalCandidates。
+     * @return 处理结果
+     */
     private List<Path> springDefaultExternalCandidates() {
         Path cwd = currentWorkingDirectory();
         List<Path> candidates = new ArrayList<>(configFileCandidates(cwd.resolve("config")));
@@ -170,6 +225,10 @@ public class GenerationConfigPathLocator {
         return candidates.stream().distinct().toList();
     }
 
+    /**
+     * 处理ancestorExternalCandidates。
+     * @return 处理结果
+     */
     private List<Path> ancestorExternalCandidates() {
         List<Path> candidates = new ArrayList<>();
         Path current = currentWorkingDirectory().getParent();
@@ -181,10 +240,19 @@ public class GenerationConfigPathLocator {
         return candidates.stream().distinct().toList();
     }
 
+    /**
+     * 处理currentWorkingDirectory。
+     * @return 处理结果
+     */
     private Path currentWorkingDirectory() {
         return Paths.get(firstNonBlank(System.getProperty("user.dir"), ".")).toAbsolutePath().normalize();
     }
 
+    /**
+     * 处理配置文件Candidates。
+     * @param directory directory值
+     * @return 处理结果
+     */
     private List<Path> configFileCandidates(Path directory) {
         Path normalizedDir = directory.toAbsolutePath().normalize();
         List<Path> candidates = new ArrayList<>();
@@ -193,6 +261,11 @@ public class GenerationConfigPathLocator {
         return candidates;
     }
 
+    /**
+     * 处理条带OptionalPrefix。
+     * @param value 待处理的值
+     * @return 处理结果
+     */
     private String stripOptionalPrefix(String value) {
         if (value.startsWith("optional:")) {
             return value.substring("optional:".length()).trim();
@@ -200,6 +273,11 @@ public class GenerationConfigPathLocator {
         return value;
     }
 
+    /**
+     * 处理describeCheckedCandidates。
+     * @param checkedCandidates checkedCandidates值
+     * @return 处理结果
+     */
     private String describeCheckedCandidates(List<Path> checkedCandidates) {
         if (checkedCandidates.isEmpty()) {
             return "no candidate config files were provided";
@@ -215,6 +293,12 @@ public class GenerationConfigPathLocator {
         return "checked config candidates: " + joined;
     }
 
+    /**
+     * 构建Located配置。
+     * @param configFile 配置文件值
+     * @param sourceTag 来源Tag值
+     * @return 处理结果
+     */
     private LocatedConfig buildLocatedConfig(Path configFile, String sourceTag) {
         Path normalizedFile = configFile.toAbsolutePath().normalize();
         Path configDir = normalizedFile.getParent();
@@ -234,20 +318,40 @@ public class GenerationConfigPathLocator {
         );
     }
 
+    /**
+     * 检查是否startsWith配置Prefix。
+     * @param value 待处理的值
+     * @return 是否满足条件
+     */
     private boolean startsWithConfigPrefix(String value) {
         String normalized = value.replace('\\', '/');
         return normalized.startsWith("config/");
     }
 
+    /**
+     * 检查是否Regular文件。
+     * @param path 路径值
+     * @return 是否满足条件
+     */
     private boolean isRegularFile(Path path) {
         return path != null && Files.isRegularFile(path.toAbsolutePath().normalize());
     }
 
+    /**
+     * 处理property。
+     * @param key key值
+     * @return 处理结果
+     */
     private String property(String key) {
         String value = environment.getProperty(key);
         return value == null ? "" : value.trim();
     }
 
+    /**
+     * 检查是否Configured值。
+     * @param keys keys值
+     * @return 是否满足条件
+     */
     private boolean hasConfiguredValue(String... keys) {
         for (String key : keys) {
             if (!property(key).isBlank()) {
@@ -257,6 +361,11 @@ public class GenerationConfigPathLocator {
         return false;
     }
 
+    /**
+     * 处理首个非空白。
+     * @param values 值
+     * @return 处理结果
+     */
     private String firstNonBlank(String... values) {
         for (String value : values) {
             if (value != null && !value.isBlank()) {
@@ -266,10 +375,24 @@ public class GenerationConfigPathLocator {
         return "";
     }
 
+    /**
+     * 处理trim转为Empty。
+     * @param value 待处理的值
+     * @return 处理结果
+     */
     private String trimToEmpty(String value) {
         return value == null ? "" : value.trim();
     }
 
+    /**
+     * 处理Located配置。
+     * @param configFile 配置文件值
+     * @param configDir 配置Dir值
+     * @param projectRoot projectRoot值
+     * @param source 来源值
+     * @param detail 详情值
+     * @return 处理结果
+     */
     public record LocatedConfig(
         Path configFile,
         Path configDir,

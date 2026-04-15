@@ -17,6 +17,9 @@ import org.springframework.core.env.Environment;
 import org.springframework.core.io.FileSystemResource;
 import org.springframework.stereotype.Service;
 
+/**
+ * 模型运行时Properties解析器。
+ */
 @Service
 public class ModelRuntimePropertiesResolver {
 
@@ -28,10 +31,19 @@ public class ModelRuntimePropertiesResolver {
     private final boolean failFastOnConfigError;
     private volatile CachedSnapshot cachedSnapshot;
 
+    /**
+     * 创建新的模型运行时Properties解析器。
+     * @param environment environment值
+     */
     public ModelRuntimePropertiesResolver(Environment environment) {
         this(environment, new GenerationConfigPathLocator(environment));
     }
 
+    /**
+     * 创建新的模型运行时Properties解析器。
+     * @param environment environment值
+     * @param configPathLocator 配置路径Locator值
+     */
     @Autowired
     public ModelRuntimePropertiesResolver(Environment environment, GenerationConfigPathLocator configPathLocator) {
         this.environment = environment;
@@ -40,6 +52,11 @@ public class ModelRuntimePropertiesResolver {
         this.failFastOnConfigError = resolveConfigFailFast();
     }
 
+    /**
+     * 处理解析文本Profile。
+     * @param requestedModel requested模型值
+     * @return 处理结果
+     */
     public ModelRuntimeProfile resolveTextProfile(String requestedModel) {
         ConfigSnapshot current = snapshot();
         String modelName = trimToEmpty(requestedModel);
@@ -126,28 +143,58 @@ public class ModelRuntimePropertiesResolver {
         );
     }
 
+    /**
+     * 处理配置来源。
+     * @return 处理结果
+     */
     public String configSource() {
         return snapshot().source();
     }
 
+    /**
+     * 处理配置Errors。
+     * @return 处理结果
+     */
     public List<String> configErrors() {
         return snapshot().errors();
     }
 
+    /**
+     * 处理refresh。
+     */
     public void refresh() {
         synchronized (this) {
             cachedSnapshot = null;
         }
     }
 
+    /**
+     * 处理值。
+     * @param section section值
+     * @param key key值
+     * @param fallback 兜底值
+     * @return 处理结果
+     */
     public String value(String section, String key, String fallback) {
         return firstNonBlank(snapshot().value(section, key), fallback);
     }
 
+    /**
+     * 处理int值。
+     * @param section section值
+     * @param key key值
+     * @param fallback 兜底值
+     * @return 处理结果
+     */
     public int intValue(String section, String key, int fallback) {
         return intValue(snapshot().value(section, key), fallback);
     }
 
+    /**
+     * 列出ModelsBy类型。
+     * @param kind 类型值
+     * @return 处理结果
+     */
     public List<Map<String, Object>> listModelsByKind(String kind) {
         String targetKind = trimToEmpty(kind).toLowerCase(Locale.ROOT);
         if (targetKind.isBlank()) {
@@ -183,6 +230,11 @@ public class ModelRuntimePropertiesResolver {
         return items;
     }
 
+    /**
+     * 检查是否supports种子。
+     * @param requestedModel requested模型值
+     * @return 是否满足条件
+     */
     public boolean supportsSeed(String requestedModel) {
         String modelName = trimToEmpty(requestedModel);
         if (modelName.isBlank()) {
@@ -192,14 +244,29 @@ public class ModelRuntimePropertiesResolver {
         return boolValue(snapshot().value(modelSection, "supports_seed"));
     }
 
+    /**
+     * 处理section。
+     * @param sectionName sectionName值
+     * @return 处理结果
+     */
     public Map<String, String> section(String sectionName) {
         return snapshot().section(sectionName);
     }
 
+    /**
+     * 列出Sections。
+     * @param prefix prefix值
+     * @return 处理结果
+     */
     public List<ConfigSection> listSections(String prefix) {
         return snapshot().listSections(prefix);
     }
 
+    /**
+     * 处理解析图像Profile。
+     * @param requestedModel requested模型值
+     * @return 处理结果
+     */
     public MediaProviderProfile resolveImageProfile(String requestedModel) {
         ConfigSnapshot current = snapshot();
         String modelName = trimToEmpty(requestedModel);
@@ -238,6 +305,11 @@ public class ModelRuntimePropertiesResolver {
         );
     }
 
+    /**
+     * 处理解析视频Profile。
+     * @param requestedModel requested模型值
+     * @return 处理结果
+     */
     public MediaProviderProfile resolveVideoProfile(String requestedModel) {
         ConfigSnapshot current = snapshot();
         String modelName = trimToEmpty(requestedModel);
@@ -277,12 +349,21 @@ public class ModelRuntimePropertiesResolver {
             boolValue(current.value(providerSection + ".extras", "prompt_extend")),
             boolValue(current.value(providerSection + ".extras", "camera_fixed")),
             !current.value(providerSection + ".extras", "watermark").isBlank()
+                /**
+                 * 处理布尔值。
+                 * @param "watermark" "watermark"值
+                 * @return 处理结果
+                 */
                 ? boolValue(current.value(providerSection + ".extras", "watermark"))
                 : true,
             current.source()
         );
     }
 
+    /**
+     * 处理快照。
+     * @return 处理结果
+     */
     private ConfigSnapshot snapshot() {
         long now = System.currentTimeMillis();
         CachedSnapshot current = cachedSnapshot;
@@ -296,7 +377,7 @@ public class ModelRuntimePropertiesResolver {
             }
             GenerationConfigPathLocator.LocatedConfig locatedConfig = configPathLocator.locateAppConfig();
             ConfigFileState fileState = ConfigFileState.from(locatedConfig.configFile());
-            // Cache invalidates on TTL expiry, config path change, or file fingerprint change.
+            // 缓存在 TTL 到期、配置路径变化或文件指纹变化时失效。
             if (cacheEnabled() && latest != null && latest.matches(fileState, locatedConfig.configFile())) {
                 cachedSnapshot = latest.refresh(now);
                 return latest.snapshot();
@@ -307,6 +388,11 @@ public class ModelRuntimePropertiesResolver {
         }
     }
 
+    /**
+     * 加载快照。
+     * @param locatedConfig located配置值
+     * @return 处理结果
+     */
     private ConfigSnapshot loadSnapshot(GenerationConfigPathLocator.LocatedConfig locatedConfig) {
         Path configPath = locatedConfig.configFile();
         if (configPath == null || !Files.exists(configPath)) {
@@ -327,6 +413,14 @@ public class ModelRuntimePropertiesResolver {
         }
     }
 
+    /**
+     * 将Or快照标记为失败。
+     * @param root root值
+     * @param source 来源值
+     * @param message 消息文本
+     * @param cause cause值
+     * @return 处理结果
+     */
     private ConfigSnapshot failOrSnapshot(
         Map<String, Object> root,
         String source,
@@ -342,6 +436,12 @@ public class ModelRuntimePropertiesResolver {
         return new ConfigSnapshot(root, source, List.of(message));
     }
 
+    /**
+     * 检查是否cacheStillValid。
+     * @param cached cached值
+     * @param now 当前值
+     * @return 是否满足条件
+     */
     private boolean cacheStillValid(CachedSnapshot cached, long now) {
         if (!cacheEnabled() || cached == null) {
             return false;
@@ -349,14 +449,28 @@ public class ModelRuntimePropertiesResolver {
         return now - cached.loadedAtMillis() < cacheTtlMillis;
     }
 
+    /**
+     * 检查是否cacheEnabled。
+     * @return 是否满足条件
+     */
     private boolean cacheEnabled() {
         return cacheTtlMillis > 0L;
     }
 
+    /**
+     * 加载配置Tree。
+     * @param configPath 配置路径值
+     * @return 处理结果
+     */
     private Map<String, Object> loadConfigTree(Path configPath) {
         return loadYamlTree(configPath);
     }
 
+    /**
+     * 加载YamlTree。
+     * @param configPath 配置路径值
+     * @return 处理结果
+     */
     private Map<String, Object> loadYamlTree(Path configPath) {
         YamlMapFactoryBean factory = new YamlMapFactoryBean();
         factory.setResources(new FileSystemResource(configPath.toFile()));
@@ -365,11 +479,21 @@ public class ModelRuntimePropertiesResolver {
         return loaded == null ? Map.of() : normalizeMap(loaded);
     }
 
+    /**
+     * 处理property。
+     * @param key key值
+     * @return 处理结果
+     */
     private String property(String key) {
         String value = environment.getProperty(key);
         return value == null ? "" : value.trim();
     }
 
+    /**
+     * 处理deriveBaseURLFromHost。
+     * @param host host值
+     * @return 处理结果
+     */
     private String deriveBaseUrlFromHost(String host) {
         String value = trimToEmpty(host);
         if (value.isBlank()) {
@@ -381,6 +505,11 @@ public class ModelRuntimePropertiesResolver {
         return "https://" + value + "/v1";
     }
 
+    /**
+     * 规范化BaseURL。
+     * @param raw 原始值
+     * @return 处理结果
+     */
     private String normalizeBaseUrl(String raw) {
         String value = trimToEmpty(raw);
         if (value.isBlank()) {
@@ -396,6 +525,11 @@ public class ModelRuntimePropertiesResolver {
         return normalized;
     }
 
+    /**
+     * 处理deriveDashscope任务BaseURL。
+     * @param rawBaseUrl 原始BaseURL值
+     * @return 处理结果
+     */
     private String deriveDashscopeTaskBaseUrl(String rawBaseUrl) {
         String normalized = normalizeBaseUrl(rawBaseUrl);
         if (normalized.isBlank()) {
@@ -411,6 +545,11 @@ public class ModelRuntimePropertiesResolver {
         return normalized;
     }
 
+    /**
+     * 处理首个非空白。
+     * @param values 值
+     * @return 处理结果
+     */
     private String firstNonBlank(String... values) {
         for (String value : values) {
             if (value != null && !value.isBlank()) {
@@ -420,10 +559,21 @@ public class ModelRuntimePropertiesResolver {
         return "";
     }
 
+    /**
+     * 处理trim转为Empty。
+     * @param value 待处理的值
+     * @return 处理结果
+     */
     private String trimToEmpty(String value) {
         return value == null ? "" : value.trim();
     }
 
+    /**
+     * 处理int值。
+     * @param raw 原始值
+     * @param fallback 兜底值
+     * @return 处理结果
+     */
     private int intValue(String raw, int fallback) {
         try {
             return Integer.parseInt(raw.trim());
@@ -432,6 +582,12 @@ public class ModelRuntimePropertiesResolver {
         }
     }
 
+    /**
+     * 处理double值。
+     * @param raw 原始值
+     * @param fallback 兜底值
+     * @return 处理结果
+     */
     private double doubleValue(String raw, double fallback) {
         try {
             return Double.parseDouble(raw.trim());
@@ -440,11 +596,20 @@ public class ModelRuntimePropertiesResolver {
         }
     }
 
+    /**
+     * 检查是否布尔值。
+     * @param raw 原始值
+     * @return 是否满足条件
+     */
     private boolean boolValue(String raw) {
         String normalized = trimToEmpty(raw).toLowerCase(Locale.ROOT);
         return "1".equals(normalized) || "true".equals(normalized) || "yes".equals(normalized) || "on".equals(normalized);
     }
 
+    /**
+     * 处理解析CacheTtlMillis。
+     * @return 处理结果
+     */
     private long resolveCacheTtlMillis() {
         int seconds = intValue(
             firstNonBlank(
@@ -465,6 +630,10 @@ public class ModelRuntimePropertiesResolver {
         return seconds * 1000L;
     }
 
+    /**
+     * 检查是否解析配置失败Fast。
+     * @return 是否满足条件
+     */
     private boolean resolveConfigFailFast() {
         String modelLevel = firstNonBlank(
             property("JIANDOU_MODEL_CONFIG_FAIL_FAST"),
@@ -480,6 +649,11 @@ public class ModelRuntimePropertiesResolver {
         ));
     }
 
+    /**
+     * 规范化Map。
+     * @param source 来源值
+     * @return 处理结果
+     */
     @SuppressWarnings("unchecked")
     private static Map<String, Object> normalizeMap(Map<?, ?> source) {
         Map<String, Object> normalized = new LinkedHashMap<>();
@@ -489,6 +663,11 @@ public class ModelRuntimePropertiesResolver {
         return normalized;
     }
 
+    /**
+     * 规范化值。
+     * @param value 待处理的值
+     * @return 处理结果
+     */
     @SuppressWarnings("unchecked")
     private static Object normalizeValue(Object value) {
         if (value instanceof Map<?, ?> mapValue) {
@@ -504,6 +683,11 @@ public class ModelRuntimePropertiesResolver {
         return value;
     }
 
+    /**
+     * 解析路径。
+     * @param rawPath 原始路径值
+     * @return 处理结果
+     */
     private static List<String> parsePath(String rawPath) {
         String value = rawPath == null ? "" : rawPath.trim();
         if (value.isBlank()) {
@@ -532,6 +716,11 @@ public class ModelRuntimePropertiesResolver {
         return tokens;
     }
 
+    /**
+     * 处理addToken。
+     * @param tokens tokens值
+     * @param current current值
+     */
     private static void addToken(List<String> tokens, StringBuilder current) {
         String token = current.toString().trim();
         current.setLength(0);
@@ -540,6 +729,11 @@ public class ModelRuntimePropertiesResolver {
         }
     }
 
+    /**
+     * 处理string值。
+     * @param value 待处理的值
+     * @return 处理结果
+     */
     private static String stringValue(Object value) {
         if (value == null) {
             return "";
@@ -553,13 +747,31 @@ public class ModelRuntimePropertiesResolver {
         return String.valueOf(value).trim();
     }
 
+    /**
+     * 处理配置快照。
+     * @param root root值
+     * @param source 来源值
+     * @param errors errors值
+     * @return 处理结果
+     */
     private record ConfigSnapshot(Map<String, Object> root, String source, List<String> errors) {
 
+        /**
+         * 处理值。
+         * @param sectionName sectionName值
+         * @param key key值
+         * @return 处理结果
+         */
         private String value(String sectionName, String key) {
             Object value = pathValue(sectionName + "." + key);
             return stringValue(value);
         }
 
+        /**
+         * 处理section。
+         * @param sectionName sectionName值
+         * @return 处理结果
+         */
         private Map<String, String> section(String sectionName) {
             Object value = pathValue(sectionName);
             if (!(value instanceof Map<?, ?> mapValue)) {
@@ -572,6 +784,11 @@ public class ModelRuntimePropertiesResolver {
             return section;
         }
 
+        /**
+         * 列出Sections。
+         * @param prefix prefix值
+         * @return 处理结果
+         */
         private List<ConfigSection> listSections(String prefix) {
             Object value = pathValue(prefix);
             if (!(value instanceof Map<?, ?> mapValue)) {
@@ -591,6 +808,11 @@ public class ModelRuntimePropertiesResolver {
             return sections;
         }
 
+        /**
+         * 映射map。
+         * @param path 路径值
+         * @return 处理结果
+         */
         private Map<String, Object> map(String path) {
             Object value = pathValue(path);
             if (value instanceof Map<?, ?> mapValue) {
@@ -599,6 +821,11 @@ public class ModelRuntimePropertiesResolver {
             return Map.of();
         }
 
+        /**
+         * 处理路径值。
+         * @param path 路径值
+         * @return 处理结果
+         */
         private Object pathValue(String path) {
             Object current = root;
             for (String token : parsePath(path)) {
@@ -614,6 +841,14 @@ public class ModelRuntimePropertiesResolver {
         }
     }
 
+    /**
+     * 处理Cached快照。
+     * @param snapshot 快照值
+     * @param configPath 配置路径值
+     * @param fileState 文件状态值
+     * @param loadedAtMillis loadedAtMillis值
+     * @return 处理结果
+     */
     private record CachedSnapshot(
         ConfigSnapshot snapshot,
         Path configPath,
@@ -621,17 +856,40 @@ public class ModelRuntimePropertiesResolver {
         long loadedAtMillis
     ) {
 
+        /**
+         * 处理refresh。
+         * @param now 当前值
+         * @return 处理结果
+         */
         private CachedSnapshot refresh(long now) {
             return new CachedSnapshot(snapshot, configPath, fileState, now);
         }
 
+        /**
+         * 检查是否matches。
+         * @param latestFileState latest文件状态值
+         * @param latestPath latest路径值
+         * @return 是否满足条件
+         */
         private boolean matches(ConfigFileState latestFileState, Path latestPath) {
             return Objects.equals(configPath, latestPath) && Objects.equals(fileState, latestFileState);
         }
     }
 
+    /**
+     * 处理配置文件状态。
+     * @param exists exists值
+     * @param modifiedTime modified时间值
+     * @param size size值
+     * @return 处理结果
+     */
     private record ConfigFileState(boolean exists, long modifiedTime, long size) {
 
+        /**
+         * 处理from。
+         * @param path 路径值
+         * @return 处理结果
+         */
         private static ConfigFileState from(Path path) {
             if (path == null || !Files.exists(path)) {
                 return new ConfigFileState(false, -1L, -1L);
@@ -648,5 +906,11 @@ public class ModelRuntimePropertiesResolver {
         }
     }
 
+    /**
+     * 处理配置Section。
+     * @param name name值
+     * @param values 值
+     * @return 处理结果
+     */
     public record ConfigSection(String name, Map<String, String> values) {}
 }

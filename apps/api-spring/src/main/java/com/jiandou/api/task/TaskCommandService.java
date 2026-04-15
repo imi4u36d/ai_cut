@@ -28,6 +28,9 @@ public class TaskCommandService {
     private final TaskRequestSnapshotFactory requestSnapshotFactory;
     private final Path storageRoot;
 
+    /**
+     * 创建新的任务Command服务。
+     */
     public TaskCommandService(
         TaskRepository taskRepository,
         TaskExecutionCoordinator executionCoordinator,
@@ -42,6 +45,11 @@ public class TaskCommandService {
         this.storageRoot = Paths.get(storageRoot).toAbsolutePath().normalize();
     }
 
+    /**
+     * 创建生成任务。
+     * @param request 请求体
+     * @return 处理结果
+     */
     public TaskRecord createGenerationTask(CreateGenerationTaskRequest request) {
         validateGenerationTaskRequest(request);
         int defaultDurationSeconds = modelResolver.intValue(
@@ -90,9 +98,33 @@ public class TaskCommandService {
         taskRepository.save(task);
 
         executionCoordinator.createAttempt(task, "create", Map.of(
+            /**
+             * 处理trimmed。
+             * @param request.videoModel( request.videoModel(值
+             * @param "" ""值
+             * @return 处理结果
+             */
             "videoModel", trimmed(request.videoModel(), ""),
+            /**
+             * 处理trimmed。
+             * @param request.imageModel( request.imageModel(值
+             * @param "" ""值
+             * @return 处理结果
+             */
             "imageModel", trimmed(request.imageModel(), ""),
+            /**
+             * 处理trimmed。
+             * @param request.textAnalysisModel( request.text分析Model(值
+             * @param "" ""值
+             * @return 处理结果
+             */
             "textAnalysisModel", trimmed(request.textAnalysisModel(), ""),
+            /**
+             * 处理trimmed。
+             * @param request.visionModel( request.visionModel(值
+             * @param "" ""值
+             * @return 处理结果
+             */
             "visionModel", trimmed(request.visionModel(), "")
         ));
         executionCoordinator.recordTrace(task, "api", "task.created", "生成任务已创建。", "INFO", Map.of(
@@ -109,6 +141,11 @@ public class TaskCommandService {
         return task;
     }
 
+    /**
+     * 重试重试。
+     * @param task 要处理的任务对象
+     * @return 处理结果
+     */
     public TaskRecord retry(TaskRecord task) {
         task.retryCount += 1;
         task.errorMessage = "";
@@ -118,6 +155,11 @@ public class TaskCommandService {
         return task;
     }
 
+    /**
+     * 暂停pause。
+     * @param task 要处理的任务对象
+     * @return 处理结果
+     */
     public TaskRecord pause(TaskRecord task) {
         executionCoordinator.dequeue(task);
         task.isQueued = false;
@@ -137,6 +179,11 @@ public class TaskCommandService {
         return task;
     }
 
+    /**
+     * 恢复resume。
+     * @param task 要处理的任务对象
+     * @return 处理结果
+     */
     public TaskRecord resume(TaskRecord task) {
         executionCoordinator.createAttempt(task, "continue", buildRetryPayload(task, "continue"));
         executionCoordinator.enqueue(task, "dispatch", "task.continue_requested", "任务已继续执行。");
@@ -144,6 +191,11 @@ public class TaskCommandService {
         return task;
     }
 
+    /**
+     * 终止terminate。
+     * @param task 要处理的任务对象
+     * @return 处理结果
+     */
     public TaskRecord terminate(TaskRecord task) {
         executionCoordinator.dequeue(task);
         task.isQueued = false;
@@ -168,6 +220,12 @@ public class TaskCommandService {
         return task;
     }
 
+    /**
+     * 处理评分效果。
+     * @param task 要处理的任务对象
+     * @param request 请求体
+     * @return 处理结果
+     */
     public TaskRecord rateEffect(TaskRecord task, RateTaskEffectRequest request) {
         int effectRating = normalizeEffectRating(request.effectRating());
         String effectRatingNote = normalizeEffectRatingNote(request.effectRatingNote());
@@ -189,6 +247,11 @@ public class TaskCommandService {
         return task;
     }
 
+    /**
+     * 删除删除。
+     * @param task 要处理的任务对象
+     * @return 处理结果
+     */
     public Map<String, Object> delete(TaskRecord task) {
         executionCoordinator.dequeue(task);
         executionCoordinator.recomputeQueuePositions(taskRepository.findAll());
@@ -217,8 +280,10 @@ public class TaskCommandService {
         payload.put("triggerType", triggerType);
         payload.put("retryCount", task.retryCount);
         List<Integer> clipIndices = existingVideoClipIndices(task);
+        // 只允许从连续成功的最后一个镜头后继续，避免跳过缺失片段直接向后恢复。
         int completedClipCount = lastContiguousCompletedClipIndex(clipIndices);
         if (task.storyboardScript != null && !task.storyboardScript.isBlank()) {
+            // 已经有分镜脚本时优先复用规划结果；只有至少完成一镜时才直接从 render 阶段继续。
             payload.put("resumeFromStage", completedClipCount > 0 ? "render" : "planning");
             payload.put("resumeFromClipIndex", Math.max(1, completedClipCount + 1));
             payload.put("completedClipCount", completedClipCount);
@@ -228,6 +293,11 @@ public class TaskCommandService {
         return payload;
     }
 
+    /**
+     * 处理existing视频片段Indices。
+     * @param task 要处理的任务对象
+     * @return 处理结果
+     */
     private List<Integer> existingVideoClipIndices(TaskRecord task) {
         LinkedHashSet<Integer> indices = new LinkedHashSet<>();
         for (Map<String, Object> output : task.outputsView()) {
@@ -242,6 +312,11 @@ public class TaskCommandService {
         return indices.stream().sorted().toList();
     }
 
+    /**
+     * 处理lastContiguousCompleted片段索引。
+     * @param clipIndices 片段Indices值
+     * @return 处理结果
+     */
     private int lastContiguousCompletedClipIndex(List<Integer> clipIndices) {
         int expected = 1;
         for (Integer clipIndex : clipIndices) {
@@ -253,6 +328,11 @@ public class TaskCommandService {
         return expected - 1;
     }
 
+    /**
+     * 处理integer值。
+     * @param value 待处理的值
+     * @return 处理结果
+     */
     private Integer integerValue(Object value) {
         if (value instanceof Number number) {
             return number.intValue();
@@ -267,6 +347,10 @@ public class TaskCommandService {
         }
     }
 
+    /**
+     * 处理validate生成任务请求。
+     * @param request 请求体
+     */
     private void validateGenerationTaskRequest(CreateGenerationTaskRequest request) {
         requireSelectedModel(request.textAnalysisModel(), "textAnalysisModel", "文本模型");
         requireSelectedModel(request.visionModel(), "visionModel", "视觉模型");
@@ -276,6 +360,11 @@ public class TaskCommandService {
         normalizeOutputCount(request.outputCount());
     }
 
+    /**
+     * 规范化Optional种子。
+     * @param seed 种子值
+     * @return 处理结果
+     */
     private Integer normalizeOptionalSeed(Integer seed) {
         if (seed == null) {
             return null;
@@ -286,6 +375,11 @@ public class TaskCommandService {
         return seed;
     }
 
+    /**
+     * 规范化输出数量。
+     * @param outputCount 输出数量值
+     * @return 处理结果
+     */
     private Object normalizeOutputCount(Object outputCount) {
         if (outputCount == null) {
             return "auto";
@@ -305,6 +399,11 @@ public class TaskCommandService {
         }
     }
 
+    /**
+     * 规范化效果评分。
+     * @param effectRating 效果评分值
+     * @return 处理结果
+     */
     private int normalizeEffectRating(Integer effectRating) {
         if (effectRating == null) {
             throw new IllegalArgumentException("effectRating 不能为空");
@@ -315,6 +414,11 @@ public class TaskCommandService {
         return effectRating;
     }
 
+    /**
+     * 规范化效果评分Note。
+     * @param note note值
+     * @return 处理结果
+     */
     private String normalizeEffectRatingNote(String note) {
         String normalized = trimmed(note, "");
         if (normalized.length() > 1000) {
@@ -323,6 +427,13 @@ public class TaskCommandService {
         return normalized;
     }
 
+    /**
+     * 处理requireSelected模型。
+     * @param value 待处理的值
+     * @param fieldName fieldName值
+     * @param label 标签值
+     * @return 处理结果
+     */
     private String requireSelectedModel(String value, String fieldName, String label) {
         String normalized = trimmed(value, "");
         if (!normalized.isBlank()) {
@@ -331,6 +442,12 @@ public class TaskCommandService {
         throw new IllegalArgumentException("请先选择" + label + "（" + fieldName + "）");
     }
 
+    /**
+     * 处理trimmed。
+     * @param value 待处理的值
+     * @param fallback 兜底值
+     * @return 处理结果
+     */
     private String trimmed(String value, String fallback) {
         if (value == null) {
             return fallback;

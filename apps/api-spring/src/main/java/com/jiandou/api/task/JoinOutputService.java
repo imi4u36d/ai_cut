@@ -19,6 +19,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
+/**
+ * 拼接输出服务。
+ */
 @Component
 public class JoinOutputService {
 
@@ -37,6 +40,12 @@ public class JoinOutputService {
     private final Set<String> runningTasks = ConcurrentHashMap.newKeySet();
     private final String joinWorkerInstanceId = "spring_join_worker_" + UUID.randomUUID().toString().replace("-", "");
 
+    /**
+     * 创建新的拼接输出服务。
+     * @param taskRepository 任务仓储值
+     * @param executionCoordinator 执行协调器值
+     * @param localMediaArtifactService 本地媒体产物服务值
+     */
     public JoinOutputService(
         TaskRepository taskRepository,
         TaskExecutionCoordinator executionCoordinator,
@@ -47,6 +56,11 @@ public class JoinOutputService {
         this.localMediaArtifactService = localMediaArtifactService;
     }
 
+    /**
+     * 处理调度拼接。
+     * @param taskId 任务标识
+     * @param endClipIndex end片段索引值
+     */
     public void scheduleJoin(String taskId, int endClipIndex) {
         if (taskId == null || taskId.isBlank() || endClipIndex < 2) {
             return;
@@ -57,11 +71,18 @@ public class JoinOutputService {
         }
     }
 
+    /**
+     * 处理shutdown。
+     */
     @PreDestroy
     public void shutdown() {
         executor.shutdownNow();
     }
 
+    /**
+     * 处理process任务。
+     * @param taskId 任务标识
+     */
     private void processTask(String taskId) {
         try {
             while (true) {
@@ -98,6 +119,11 @@ public class JoinOutputService {
         }
     }
 
+    /**
+     * 构建拼接输出。
+     * @param taskId 任务标识
+     * @param endClipIndex end片段索引值
+     */
     private void buildJoinOutput(String taskId, int endClipIndex) {
         TaskRecord task = taskRepository.findById(taskId);
         if (task == null || endClipIndex < 2) {
@@ -160,6 +186,11 @@ public class JoinOutputService {
         taskRepository.save(task);
     }
 
+    /**
+     * 判断是否Process拼接。
+     * @param task 要处理的任务对象
+     * @return 是否满足条件
+     */
     private boolean shouldProcessJoin(TaskRecord task) {
         if (task == null) {
             return false;
@@ -167,6 +198,12 @@ public class JoinOutputService {
         return "RENDERING".equals(task.status) || "COMPLETED".equals(task.status);
     }
 
+    /**
+     * 处理collect片段Results。
+     * @param task 要处理的任务对象
+     * @param endClipIndex end片段索引值
+     * @return 处理结果
+     */
     private List<Map<String, Object>> collectClipResults(TaskRecord task, int endClipIndex) {
         Map<Integer, Map<String, Object>> clipResults = new LinkedHashMap<>();
         for (Map<String, Object> output : task.outputsView()) {
@@ -192,6 +229,11 @@ public class JoinOutputService {
         return ordered;
     }
 
+    /**
+     * 处理结果输出URL。
+     * @param result 结果值
+     * @return 处理结果
+     */
     private String resultOutputUrl(Map<String, Object> result) {
         String downloadUrl = stringValue(result.get("downloadUrl"));
         if (!downloadUrl.isBlank()) {
@@ -200,6 +242,16 @@ public class JoinOutputService {
         return stringValue(result.get("previewUrl"));
     }
 
+    /**
+     * 创建拼接模型调用。
+     * @param task 要处理的任务对象
+     * @param joinName 拼接Name值
+     * @param endClipIndex end片段索引值
+     * @param clipIndices 片段Indices值
+     * @param segmentUrls segmentUrls值
+     * @param outputUrl 输出URL值
+     * @return 处理结果
+     */
     private Map<String, Object> createJoinModelCall(
         TaskRecord task,
         String joinName,
@@ -238,6 +290,19 @@ public class JoinOutputService {
         return row;
     }
 
+    /**
+     * 创建拼接素材。
+     * @param task 要处理的任务对象
+     * @param joinName 拼接Name值
+     * @param clipIndices 片段Indices值
+     * @param artifact 产物值
+     * @param segmentUrls segmentUrls值
+     * @param durationSeconds 时长Seconds值
+     * @param width width值
+     * @param height height值
+     * @param hasAudio hasAudio值
+     * @return 处理结果
+     */
     private Map<String, Object> createJoinMaterial(
         TaskRecord task,
         String joinName,
@@ -287,6 +352,22 @@ public class JoinOutputService {
         return row;
     }
 
+    /**
+     * 创建拼接结果。
+     * @param task 要处理的任务对象
+     * @param joinName 拼接Name值
+     * @param joinClipIndex 拼接片段索引值
+     * @param modelCall 模型调用值
+     * @param material 素材值
+     * @param artifact 产物值
+     * @param clipIndices 片段Indices值
+     * @param segmentUrls segmentUrls值
+     * @param durationSeconds 时长Seconds值
+     * @param width width值
+     * @param height height值
+     * @param hasAudio hasAudio值
+     * @return 处理结果
+     */
     private Map<String, Object> createJoinResult(
         TaskRecord task,
         String joinName,
@@ -333,6 +414,18 @@ public class JoinOutputService {
         return row;
     }
 
+    /**
+     * 创建拼接阶段运行。
+     * @param task 要处理的任务对象
+     * @param joinName 拼接Name值
+     * @param joinClipIndex 拼接片段索引值
+     * @param clipIndices 片段Indices值
+     * @param segmentUrls segmentUrls值
+     * @param outputUrl 输出URL值
+     * @param material 素材值
+     * @param result 结果值
+     * @return 处理结果
+     */
     private Map<String, Object> createJoinStageRun(
         TaskRecord task,
         String joinName,
@@ -359,7 +452,17 @@ public class JoinOutputService {
         row.put("inputSummary", Map.of("joinName", joinName, "clipIndices", clipIndices, "segmentUrls", segmentUrls));
         row.put("outputSummary", Map.of(
             "outputUrl", outputUrl,
+            /**
+             * 处理string值。
+             * @param material.get("id" material.get("标识"值
+             * @return 处理结果
+             */
             "materialAssetId", stringValue(material.get("id")),
+            /**
+             * 处理string值。
+             * @param result.get("id" result.get("标识"值
+             * @return 处理结果
+             */
             "resultId", stringValue(result.get("id"))
         ));
         row.put("errorCode", "");
@@ -367,10 +470,20 @@ public class JoinOutputService {
         return row;
     }
 
+    /**
+     * 拼接输出Name。
+     * @param endClipIndex end片段索引值
+     * @return 处理结果
+     */
     private String joinOutputName(int endClipIndex) {
         return TaskArtifactNaming.joinName(endClipIndex);
     }
 
+    /**
+     * 拼接片段End。
+     * @param joinName 拼接Name值
+     * @return 处理结果
+     */
     private int joinClipEnd(String joinName) {
         String[] parts = stringValue(joinName).split("-");
         if (parts.length < 2) {
@@ -379,11 +492,22 @@ public class JoinOutputService {
         return intValue(parts[parts.length - 1], 0);
     }
 
+    /**
+     * 处理stable拼接Suffix。
+     * @param taskId 任务标识
+     * @param endClipIndex end片段索引值
+     * @return 处理结果
+     */
     private String stableJoinSuffix(String taskId, int endClipIndex) {
         String shortTaskId = taskId == null ? "" : taskId.substring(Math.max(0, taskId.length() - 12));
         return shortTaskId + "_" + Math.max(2, endClipIndex);
     }
 
+    /**
+     * 处理unique片段Indices。
+     * @param clipResults 片段Results值
+     * @return 处理结果
+     */
     private List<Integer> uniqueClipIndices(List<Map<String, Object>> clipResults) {
         LinkedHashSet<Integer> indices = new LinkedHashSet<>();
         for (Map<String, Object> clipResult : clipResults) {
@@ -395,6 +519,11 @@ public class JoinOutputService {
         return new ArrayList<>(indices);
     }
 
+    /**
+     * 处理文件Ext。
+     * @param fileName 文件Name值
+     * @return 处理结果
+     */
     private String fileExt(String fileName) {
         String normalized = stringValue(fileName).replaceAll("[?#].*$", "");
         int index = normalized.lastIndexOf('.');
@@ -408,10 +537,20 @@ public class JoinOutputService {
         return candidate;
     }
 
+    /**
+     * 处理string值。
+     * @param value 待处理的值
+     * @return 处理结果
+     */
     private String stringValue(Object value) {
         return value == null ? "" : String.valueOf(value).trim();
     }
 
+    /**
+     * 映射值。
+     * @param value 待处理的值
+     * @return 处理结果
+     */
     @SuppressWarnings("unchecked")
     private Map<String, Object> mapValue(Object value) {
         if (value instanceof Map<?, ?> map) {
@@ -420,6 +559,12 @@ public class JoinOutputService {
         return Map.of();
     }
 
+    /**
+     * 处理int值。
+     * @param value 待处理的值
+     * @param fallback 兜底值
+     * @return 处理结果
+     */
     private int intValue(Object value, int fallback) {
         if (value instanceof Number number) {
             return number.intValue();
@@ -433,6 +578,12 @@ public class JoinOutputService {
         return fallback;
     }
 
+    /**
+     * 处理double值。
+     * @param value 待处理的值
+     * @param fallback 兜底值
+     * @return 处理结果
+     */
     private double doubleValue(Object value, double fallback) {
         if (value instanceof Number number) {
             return number.doubleValue();
@@ -446,6 +597,11 @@ public class JoinOutputService {
         return fallback;
     }
 
+    /**
+     * 检查是否布尔值。
+     * @param value 待处理的值
+     * @return 是否满足条件
+     */
     private boolean boolValue(Object value) {
         if (value instanceof Boolean bool) {
             return bool;
@@ -456,6 +612,10 @@ public class JoinOutputService {
         return "true".equalsIgnoreCase(stringValue(value));
     }
 
+    /**
+     * 处理当前Iso。
+     * @return 处理结果
+     */
     private String nowIso() {
         return OffsetDateTime.now(ZoneOffset.UTC).toString();
     }

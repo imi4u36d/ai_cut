@@ -14,6 +14,9 @@ import org.apache.ibatis.session.SqlSession;
 import org.apache.ibatis.session.SqlSessionFactory;
 import org.springframework.stereotype.Repository;
 
+/**
+ * MyBatis任务仓储契约。
+ */
 @Repository
 public class MybatisTaskRepository implements TaskRepository {
 
@@ -22,6 +25,11 @@ public class MybatisTaskRepository implements TaskRepository {
     private final TaskMybatisWriteMapper writeMapper;
     private final TaskMybatisReadMapper readMapper;
 
+    /**
+     * 创建新的MyBatis任务仓储。
+     * @param sqlSessionFactory sqlSession工厂值
+     * @param taskRecordAssembler 任务记录Assembler值
+     */
     public MybatisTaskRepository(
         SqlSessionFactory sqlSessionFactory,
         TaskRecordAssembler taskRecordAssembler
@@ -32,6 +40,10 @@ public class MybatisTaskRepository implements TaskRepository {
         this.readMapper = new TaskMybatisReadMapper();
     }
 
+    /**
+     * 保存save。
+     * @param task 要处理的任务对象
+     */
     @Override
     public void save(TaskRecord task) {
         TaskRecordAssembler.TaskWriteModel model = taskRecordAssembler.toWriteModel(task);
@@ -40,6 +52,10 @@ public class MybatisTaskRepository implements TaskRepository {
         }
     }
 
+    /**
+     * 保存变更。
+     * @param mutation 变更值
+     */
     @Override
     public void saveMutation(TaskPersistenceMutation mutation) {
         if (mutation == null) {
@@ -93,6 +109,11 @@ public class MybatisTaskRepository implements TaskRepository {
         }
     }
 
+    /**
+     * 查找工作节点Instance。
+     * @param workerInstanceId 工作节点实例标识
+     * @return 处理结果
+     */
     @Override
     public Map<String, Object> findWorkerInstance(String workerInstanceId) {
         try (SqlSession session = sqlSessionFactory.openSession()) {
@@ -107,6 +128,11 @@ public class MybatisTaskRepository implements TaskRepository {
         }
     }
 
+    /**
+     * 列出工作节点Instances。
+     * @param limit 返回的最大条目数
+     * @return 处理结果
+     */
     @Override
     public List<Map<String, Object>> listWorkerInstances(int limit) {
         try (SqlSession session = sqlSessionFactory.openSession()) {
@@ -120,6 +146,10 @@ public class MybatisTaskRepository implements TaskRepository {
         }
     }
 
+    /**
+     * 移除Queued任务。
+     * @param taskId 任务标识
+     */
     @Override
     public void removeQueuedTask(String taskId) {
         try (SqlSession session = sqlSessionFactory.openSession(true)) {
@@ -128,6 +158,11 @@ public class MybatisTaskRepository implements TaskRepository {
         }
     }
 
+    /**
+     * 领取NextQueued任务。
+     * @param workerInstanceId 工作节点实例标识
+     * @return 处理结果
+     */
     @Override
     public String claimNextQueuedTask(String workerInstanceId) {
         try (SqlSession session = sqlSessionFactory.openSession(false)) {
@@ -146,6 +181,11 @@ public class MybatisTaskRepository implements TaskRepository {
         }
     }
 
+    /**
+     * 列出Queued任务标识列表。
+     * @param limit 返回的最大条目数
+     * @return 处理结果
+     */
     @Override
     public List<String> listQueuedTaskIds(int limit) {
         try (SqlSession session = sqlSessionFactory.openSession()) {
@@ -154,6 +194,12 @@ public class MybatisTaskRepository implements TaskRepository {
         }
     }
 
+    /**
+     * 列出StaleRunningClaims。
+     * @param staleBefore staleBefore值
+     * @param limit 返回的最大条目数
+     * @return 处理结果
+     */
     @Override
     public List<Map<String, Object>> listStaleRunningClaims(OffsetDateTime staleBefore, int limit) {
         try (SqlSession session = sqlSessionFactory.openSession()) {
@@ -164,6 +210,12 @@ public class MybatisTaskRepository implements TaskRepository {
         }
     }
 
+    /**
+     * 列出Stale工作节点Instance标识列表。
+     * @param staleBefore staleBefore值
+     * @param limit 返回的最大条目数
+     * @return 处理结果
+     */
     @Override
     public List<String> listStaleWorkerInstanceIds(OffsetDateTime staleBefore, int limit) {
         try (SqlSession session = sqlSessionFactory.openSession()) {
@@ -172,6 +224,12 @@ public class MybatisTaskRepository implements TaskRepository {
         }
     }
 
+    /**
+     * 列出队列Events。
+     * @param taskId 任务标识
+     * @param limit 返回的最大条目数
+     * @return 处理结果
+     */
     @Override
     public List<Map<String, Object>> listQueueEvents(String taskId, int limit) {
         try (SqlSession session = sqlSessionFactory.openSession()) {
@@ -187,6 +245,15 @@ public class MybatisTaskRepository implements TaskRepository {
         }
     }
 
+    /**
+     * 列出Traces。
+     * @param taskId 任务标识
+     * @param stage 阶段名称
+     * @param level level值
+     * @param queryText 查询文本值
+     * @param limit 返回的最大条目数
+     * @return 处理结果
+     */
     @Override
     public List<Map<String, Object>> listTraces(String taskId, String stage, String level, String queryText, int limit) {
         try (SqlSession session = sqlSessionFactory.openSession()) {
@@ -218,6 +285,11 @@ public class MybatisTaskRepository implements TaskRepository {
         }
     }
 
+    /**
+     * 查找By标识。
+     * @param taskId 任务标识
+     * @return 处理结果
+     */
     @Override
     public TaskRecord findById(String taskId) {
         try (SqlSession session = sqlSessionFactory.openSession()) {
@@ -286,6 +358,10 @@ public class MybatisTaskRepository implements TaskRepository {
         }
     }
 
+    /**
+     * 查找All。
+     * @return 处理结果
+     */
     @Override
     public Collection<TaskRecord> findAll() {
         try (SqlSession session = sqlSessionFactory.openSession()) {
@@ -298,6 +374,10 @@ public class MybatisTaskRepository implements TaskRepository {
         }
     }
 
+    /**
+     * 删除删除。
+     * @param taskId 任务标识
+     */
     @Override
     public void delete(String taskId) {
         try (SqlSession session = sqlSessionFactory.openSession(true)) {
@@ -308,6 +388,11 @@ public class MybatisTaskRepository implements TaskRepository {
         }
     }
 
+    /**
+     * 保存任务。
+     * @param session session值
+     * @param task 要处理的任务对象
+     */
     private void saveTask(SqlSession session, TaskRecord task) {
         TaskMapper mapper = session.getMapper(TaskMapper.class);
         TaskRecordAssembler.TaskWriteModel model = taskRecordAssembler.toWriteModel(task);
@@ -323,6 +408,12 @@ public class MybatisTaskRepository implements TaskRepository {
         );
     }
 
+    /**
+     * 保存尝试。
+     * @param session session值
+     * @param taskId 任务标识
+     * @param attempt 尝试值
+     */
     private void saveAttempt(SqlSession session, String taskId, Map<String, Object> attempt) {
         TaskAttemptMapper mapper = session.getMapper(TaskAttemptMapper.class);
         TaskAttemptEntity entity = writeMapper.toAttemptEntity(taskId, attempt);
@@ -341,6 +432,12 @@ public class MybatisTaskRepository implements TaskRepository {
         );
     }
 
+    /**
+     * 保存状态History。
+     * @param session session值
+     * @param taskId 任务标识
+     * @param statusHistory 状态History值
+     */
     private void saveStatusHistory(SqlSession session, String taskId, Map<String, Object> statusHistory) {
         TaskStatusHistoryMapper mapper = session.getMapper(TaskStatusHistoryMapper.class);
         TaskStatusHistoryEntity entity = writeMapper.toStatusHistoryEntity(taskId, statusHistory);
@@ -359,6 +456,12 @@ public class MybatisTaskRepository implements TaskRepository {
         );
     }
 
+    /**
+     * 保存追踪。
+     * @param session session值
+     * @param taskId 任务标识
+     * @param trace 追踪值
+     */
     private void saveTrace(SqlSession session, String taskId, Map<String, Object> trace) {
         SystemLogMapper mapper = session.getMapper(SystemLogMapper.class);
         SystemLogEntity entity = writeMapper.toSystemLogEntity(taskId, trace);
@@ -377,6 +480,12 @@ public class MybatisTaskRepository implements TaskRepository {
         );
     }
 
+    /**
+     * 保存阶段运行。
+     * @param session session值
+     * @param taskId 任务标识
+     * @param stageRun 阶段运行值
+     */
     private void saveStageRun(SqlSession session, String taskId, Map<String, Object> stageRun) {
         TaskStageRunMapper mapper = session.getMapper(TaskStageRunMapper.class);
         TaskStageRunEntity entity = writeMapper.toStageRunEntity(taskId, stageRun);
@@ -395,6 +504,12 @@ public class MybatisTaskRepository implements TaskRepository {
         );
     }
 
+    /**
+     * 保存模型调用。
+     * @param session session值
+     * @param taskId 任务标识
+     * @param modelCall 模型调用值
+     */
     private void saveModelCall(SqlSession session, String taskId, Map<String, Object> modelCall) {
         TaskModelCallMapper mapper = session.getMapper(TaskModelCallMapper.class);
         TaskModelCallEntity entity = writeMapper.toModelCallEntity(taskId, modelCall);
@@ -413,6 +528,12 @@ public class MybatisTaskRepository implements TaskRepository {
         );
     }
 
+    /**
+     * 保存素材。
+     * @param session session值
+     * @param taskId 任务标识
+     * @param material 素材值
+     */
     private void saveMaterial(SqlSession session, String taskId, Map<String, Object> material) {
         MaterialAssetMapper mapper = session.getMapper(MaterialAssetMapper.class);
         MaterialAssetEntity entity = writeMapper.toMaterialAssetEntity(taskId, material);
@@ -431,6 +552,12 @@ public class MybatisTaskRepository implements TaskRepository {
         );
     }
 
+    /**
+     * 保存结果。
+     * @param session session值
+     * @param taskId 任务标识
+     * @param result 结果值
+     */
     private void saveResult(SqlSession session, String taskId, Map<String, Object> result) {
         TaskResultMapper mapper = session.getMapper(TaskResultMapper.class);
         TaskResultEntity entity = writeMapper.toResultEntity(taskId, result);
@@ -460,6 +587,12 @@ public class MybatisTaskRepository implements TaskRepository {
         );
     }
 
+    /**
+     * 保存队列事件。
+     * @param session session值
+     * @param taskId 任务标识
+     * @param queueEvent 队列事件值
+     */
     private void saveQueueEvent(SqlSession session, String taskId, Map<String, Object> queueEvent) {
         TaskQueueEventMapper mapper = session.getMapper(TaskQueueEventMapper.class);
         TaskQueueEventEntity entity = writeMapper.toTaskQueueEventEntity(taskId, queueEvent);
@@ -478,6 +611,11 @@ public class MybatisTaskRepository implements TaskRepository {
         );
     }
 
+    /**
+     * 保存工作节点Instance。
+     * @param session session值
+     * @param workerInstance 工作节点Instance值
+     */
     private void saveWorkerInstance(SqlSession session, Map<String, Object> workerInstance) {
         WorkerInstanceMapper mapper = session.getMapper(WorkerInstanceMapper.class);
         WorkerInstanceEntity entity = writeMapper.toWorkerInstanceEntity(workerInstance);
@@ -496,6 +634,12 @@ public class MybatisTaskRepository implements TaskRepository {
         );
     }
 
+    /**
+     * 处理upsert。
+     * @param existingSupplier existingSupplier值
+     * @param insertAction insertAction值
+     * @param updateAction updateAction值
+     */
     private <T> void upsert(
         Supplier<T> existingSupplier,
         Runnable insertAction,
@@ -508,6 +652,11 @@ public class MybatisTaskRepository implements TaskRepository {
         }
     }
 
+    /**
+     * 检查是否requires任务标识。
+     * @param mutation 变更值
+     * @return 是否满足条件
+     */
     private boolean requiresTaskId(TaskPersistenceMutation mutation) {
         return !mutation.attempts().isEmpty()
             || !mutation.statusHistoryRows().isEmpty()

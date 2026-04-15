@@ -21,6 +21,9 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
+/**
+ * 任务工作节点Render阶段相关测试。
+ */
 class TaskWorkerRenderStageServiceTest {
 
     private TaskRepository taskRepository;
@@ -31,6 +34,9 @@ class TaskWorkerRenderStageServiceTest {
     private TaskWorkerStatusStageService statusStageService;
     private TaskWorkerJoinStageService joinStageService;
 
+    /**
+     * 处理setUp。
+     */
     @BeforeEach
     void setUp() {
         taskRepository = mock(TaskRepository.class);
@@ -42,6 +48,9 @@ class TaskWorkerRenderStageServiceTest {
         joinStageService = mock(TaskWorkerJoinStageService.class);
     }
 
+    /**
+     * 处理awaitCompleted视频运行PollsUntilSucceeded。
+     */
     @Test
     void awaitCompletedVideoRunPollsUntilSucceeded() {
         TaskWorkerRenderStageService service = service(generationApplicationService);
@@ -59,6 +68,9 @@ class TaskWorkerRenderStageServiceTest {
         verify(generationApplicationService, times(1)).getRun("run_1");
     }
 
+    /**
+     * 处理awaitCompleted视频运行ThrowsWhenFailed。
+     */
     @Test
     void awaitCompletedVideoRunThrowsWhenFailed() {
         TaskWorkerRenderStageService service = service(generationApplicationService);
@@ -79,6 +91,9 @@ class TaskWorkerRenderStageServiceTest {
         verify(generationApplicationService, times(1)).getRun("run_2");
     }
 
+    /**
+     * 渲染ReusesPrevious片段LastFrameForNext片段。
+     */
     @Test
     void renderReusesPreviousClipLastFrameForNextClip() {
         TaskWorkerRenderStageService service = service(generationApplicationService);
@@ -234,6 +249,9 @@ class TaskWorkerRenderStageServiceTest {
         verifyNoMoreInteractions(generationApplicationService);
     }
 
+    /**
+     * 渲染UpdatesRendering状态WhenResumingFromMiddle片段。
+     */
     @Test
     void renderUpdatesRenderingStatusWhenResumingFromMiddleClip() {
         TaskWorkerRenderStageService service = service(generationApplicationService);
@@ -337,6 +355,11 @@ class TaskWorkerRenderStageServiceTest {
         );
     }
 
+    /**
+     * 处理服务。
+     * @param generationApplicationService 生成应用服务值
+     * @return 处理结果
+     */
     private TaskWorkerRenderStageService service(GenerationApplicationService generationApplicationService) {
         return new TaskWorkerRenderStageService(
             taskRepository,

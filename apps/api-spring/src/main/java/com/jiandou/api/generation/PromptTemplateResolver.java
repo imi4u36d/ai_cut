@@ -12,6 +12,9 @@ import org.springframework.core.env.Environment;
 import org.springframework.core.io.FileSystemResource;
 import org.springframework.stereotype.Service;
 
+/**
+ * 提示词模板解析器。
+ */
 @Service
 public class PromptTemplateResolver {
 
@@ -23,6 +26,12 @@ public class PromptTemplateResolver {
     private final boolean failFastOnPromptError;
     private volatile PromptDiagnostics diagnostics = PromptDiagnostics.empty();
 
+    /**
+     * 创建新的提示词模板解析器。
+     * @param environment environment值
+     * @param modelRuntimePropertiesResolver 模型运行时Properties解析器值
+     * @param configPathLocator 配置路径Locator值
+     */
     public PromptTemplateResolver(
         Environment environment,
         ModelRuntimePropertiesResolver modelRuntimePropertiesResolver,
@@ -34,6 +43,12 @@ public class PromptTemplateResolver {
         this.failFastOnPromptError = resolvePromptFailFast();
     }
 
+    /**
+     * 处理系统提示词。
+     * @param promptName 提示词Name值
+     * @param key key值
+     * @return 处理结果
+     */
     public String systemPrompt(String promptName, String key) {
         Path promptFile = locatePromptFile(promptName);
         if (promptFile == null || !Files.exists(promptFile)) {
@@ -54,10 +69,19 @@ public class PromptTemplateResolver {
         }
     }
 
+    /**
+     * 处理提示词Errors。
+     * @return 处理结果
+     */
     public List<String> promptErrors() {
         return diagnostics.errors();
     }
 
+    /**
+     * 处理locate提示词文件。
+     * @param promptName 提示词Name值
+     * @return 处理结果
+     */
     private Path locatePromptFile(String promptName) {
         String promptDirectory = firstNonBlank(
             property("JIANDOU_PROMPT_DIR"),
@@ -80,6 +104,12 @@ public class PromptTemplateResolver {
         return null;
     }
 
+    /**
+     * 加载Yaml提示词。
+     * @param promptFile 提示词文件值
+     * @param key key值
+     * @return 处理结果
+     */
     private String loadYamlPrompt(Path promptFile, String key) {
         YamlMapFactoryBean factory = new YamlMapFactoryBean();
         factory.setResources(new FileSystemResource(promptFile.toFile()));
@@ -103,6 +133,12 @@ public class PromptTemplateResolver {
         return text;
     }
 
+    /**
+     * 将OrEmpty标记为失败。
+     * @param message 消息文本
+     * @param cause cause值
+     * @return 处理结果
+     */
     private String failOrEmpty(String message, RuntimeException cause) {
         diagnostics = new PromptDiagnostics(List.of(message));
         if (cause == null) {
@@ -116,6 +152,10 @@ public class PromptTemplateResolver {
         return "";
     }
 
+    /**
+     * 检查是否解析提示词失败Fast。
+     * @return 是否满足条件
+     */
     private boolean resolvePromptFailFast() {
         String promptLevel = firstNonBlank(
             property("JIANDOU_PROMPT_FAIL_FAST"),
@@ -131,11 +171,21 @@ public class PromptTemplateResolver {
         ));
     }
 
+    /**
+     * 检查是否布尔值。
+     * @param raw 原始值
+     * @return 是否满足条件
+     */
     private boolean boolValue(String raw) {
         String normalized = raw == null ? "" : raw.trim().toLowerCase();
         return "1".equals(normalized) || "true".equals(normalized) || "yes".equals(normalized) || "on".equals(normalized);
     }
 
+    /**
+     * 处理首个非空白。
+     * @param values 值
+     * @return 处理结果
+     */
     private String firstNonBlank(String... values) {
         for (String value : values) {
             if (value != null && !value.isBlank()) {
@@ -145,11 +195,21 @@ public class PromptTemplateResolver {
         return "";
     }
 
+    /**
+     * 处理property。
+     * @param key key值
+     * @return 处理结果
+     */
     private String property(String key) {
         String value = environment.getProperty(key);
         return value == null ? "" : value.trim();
     }
 
+    /**
+     * 规范化Map。
+     * @param source 来源值
+     * @return 处理结果
+     */
     @SuppressWarnings("unchecked")
     private Map<String, Object> normalizeMap(Map<?, ?> source) {
         Map<String, Object> normalized = new LinkedHashMap<>();
@@ -164,8 +224,17 @@ public class PromptTemplateResolver {
         return normalized;
     }
 
+    /**
+     * 处理提示词Diagnostics。
+     * @param errors errors值
+     * @return 处理结果
+     */
     private record PromptDiagnostics(List<String> errors) {
 
+        /**
+         * 处理empty。
+         * @return 处理结果
+         */
         private static PromptDiagnostics empty() {
             return new PromptDiagnostics(List.of());
         }

@@ -42,6 +42,9 @@
 </template>
 
 <script setup lang="ts">
+/**
+ * 管理组件。
+ */
 import { computed, onMounted, ref } from "vue";
 import { useRoute } from "vue-router";
 import { fetchHealth } from "@/api/health";
@@ -55,6 +58,10 @@ const navButtonActiveClass = "admin-nav-button-active";
 const secondaryButtonClass = "admin-btn-secondary";
 const primaryButtonClass = "admin-btn-primary";
 
+/**
+ * 检查是否管理NavActive。
+ * @param path 路径值
+ */
 function isAdminNavActive(path: string) {
   if (path === "/admin/dashboard") {
     return route.path === "/admin" || route.path === "/admin/dashboard";
@@ -105,4 +112,5 @@ onMounted(async () => {
     health.value = null;
   }
 });
+
 </script>

@@ -75,6 +75,9 @@
 </template>
 
 <script setup lang="ts">
+/**
+ * 首页视频Showcase组件。
+ */
 const leadCase = {
   title: "城市夜雨",
   scene: "电影感街景",
@@ -105,6 +108,7 @@ const sideCases = [
     accent: "rgba(95, 208, 186, 0.8)",
   },
 ];
+
 </script>
 
 <style scoped>

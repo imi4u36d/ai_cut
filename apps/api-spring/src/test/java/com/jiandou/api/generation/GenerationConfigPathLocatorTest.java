@@ -11,11 +11,17 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.mock.env.MockEnvironment;
 
+/**
+ * 生成配置路径Locator相关测试。
+ */
 class GenerationConfigPathLocatorTest {
 
     @TempDir
     Path tempDir;
 
+    /**
+     * 处理explicit配置文件HasHighestPriority。
+     */
     @Test
     void explicitConfigFileHasHighestPriority() throws IOException {
         Path explicit = writeConfig(tempDir.resolve("explicit").resolve("app.yml"));
@@ -32,6 +38,9 @@ class GenerationConfigPathLocatorTest {
         assertEquals("explicit-file", located.detail());
     }
 
+    /**
+     * 处理springAdditionalLocationSupportsDirectory。
+     */
     @Test
     void springAdditionalLocationSupportsDirectory() throws IOException {
         Path app = writeConfig(tempDir.resolve("spring-config").resolve("app.yaml"));
@@ -45,6 +54,9 @@ class GenerationConfigPathLocatorTest {
         assertEquals("spring.config.additional-location", located.detail());
     }
 
+    /**
+     * 处理解析Relative路径UsesLocated配置Directory。
+     */
     @Test
     void resolveRelativePathUsesLocatedConfigDirectory() throws IOException {
         Path app = writeConfig(tempDir.resolve("config").resolve("app.yml"));
@@ -60,6 +72,9 @@ class GenerationConfigPathLocatorTest {
         assertEquals(tempDir.resolve("config").resolve("prompts").toAbsolutePath().normalize(), resolvedConfigPath);
     }
 
+    /**
+     * 处理locateMissingIncludesCheckedCandidates。
+     */
     @Test
     void locateMissingIncludesCheckedCandidates() {
         MockEnvironment env = new MockEnvironment()
@@ -71,6 +86,9 @@ class GenerationConfigPathLocatorTest {
         assertTrue(located.detail().contains("checked config candidates"));
     }
 
+    /**
+     * 处理父级Directory配置IsUsedWhenStartedFromModuleDir。
+     */
     @Test
     void parentDirectoryConfigIsUsedWhenStartedFromModuleDir() throws IOException {
         Path repoRoot = tempDir.resolve("repo");
@@ -95,6 +113,11 @@ class GenerationConfigPathLocatorTest {
         }
     }
 
+    /**
+     * 处理写入配置。
+     * @param path 路径值
+     * @return 处理结果
+     */
     private Path writeConfig(Path path) throws IOException {
         Files.createDirectories(path.getParent());
         Files.writeString(path, "prompt:\n  file: \"prompts\"\n");

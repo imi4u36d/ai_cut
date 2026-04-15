@@ -52,6 +52,9 @@
 </template>
 
 <script setup lang="ts">
+/**
+ * 任务进度组件。
+ */
 import { computed } from "vue";
 import type { TaskProgressCardProps } from "./types";
 
@@ -72,6 +75,7 @@ const statusLabel = computed(() => {
   }
   return "待开始";
 });
+
 </script>
 
 <style scoped>

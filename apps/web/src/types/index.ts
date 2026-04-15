@@ -1,3 +1,9 @@
+/**
+ * 任务状态。
+ */
+/**
+ * 索引相关类型定义。
+ */
 export type TaskStatus =
   | "PENDING"
   | "PAUSED"
@@ -7,8 +13,14 @@ export type TaskStatus =
   | "COMPLETED"
   | "FAILED";
 
+/**
+ * 编辑模式。
+ */
 export type EditingMode = "drama";
 
+/**
+ * 任务规划片段接口定义。
+ */
 export interface TaskPlanClip {
   clipIndex: number;
   title: string;
@@ -24,6 +36,9 @@ export interface TaskPlanClip {
   effectStyle?: string | null;
 }
 
+/**
+ * 任务规划Segment接口定义。
+ */
 export interface TaskPlanSegment {
   sourceAssetId: string;
   sourceFileName: string;
@@ -37,6 +52,9 @@ export interface TaskPlanSegment {
   framePreviewUrl?: string | null;
 }
 
+/**
+ * 任务来源素材摘要接口定义。
+ */
 export interface TaskSourceAssetSummary {
   assetId: string;
   originalFileName: string;
@@ -53,6 +71,9 @@ export interface TaskSourceAssetSummary {
   updatedAt: string;
 }
 
+/**
+ * 上传响应体。
+ */
 export interface UploadResponse {
   assetId: string;
   fileName: string;
@@ -60,6 +81,9 @@ export interface UploadResponse {
   sizeBytes: number;
 }
 
+/**
+ * Create生成任务请求体。
+ */
 export interface CreateGenerationTaskRequest {
   title: string;
   creativePrompt?: string | null;
@@ -78,6 +102,9 @@ export interface CreateGenerationTaskRequest {
   stopBeforeVideoGeneration?: boolean | null;
 }
 
+/**
+ * Generate创意提示词请求体。
+ */
 export interface GenerateCreativePromptRequest {
   title: string;
   aspectRatio: "9:16" | "16:9";
@@ -90,17 +117,26 @@ export interface GenerateCreativePromptRequest {
   editingMode?: EditingMode;
 }
 
+/**
+ * Generate创意提示词响应体。
+ */
 export interface GenerateCreativePromptResponse {
   prompt: string;
   source: string;
 }
 
+/**
+ * Generate脚本请求体。
+ */
 export interface GenerateScriptRequest {
   text: string;
   visualStyle?: string | null;
   textAnalysisModel?: string | null;
 }
 
+/**
+ * Generate脚本响应体。
+ */
 export interface GenerateScriptResponse {
   id: string;
   sourceText: string;
@@ -117,10 +153,16 @@ export interface GenerateScriptResponse {
   metadata?: Record<string, unknown>;
 }
 
+/**
+ * 探测文本分析模型请求体。
+ */
 export interface ProbeTextAnalysisModelRequest {
   textAnalysisModel?: string | null;
 }
 
+/**
+ * 探测文本分析模型响应体。
+ */
 export interface ProbeTextAnalysisModelResponse {
   ready: boolean;
   requestedModel: string;
@@ -134,8 +176,14 @@ export interface ProbeTextAnalysisModelResponse {
   checkedAt: string;
 }
 
+/**
+ * 生成媒体类型。
+ */
 export type GenerationMediaKind = "image" | "video";
 
+/**
+ * 生成视频模型信息接口定义。
+ */
 export interface GenerationVideoModelInfo {
   value: string;
   label: string;
@@ -150,6 +198,9 @@ export interface GenerationVideoModelInfo {
   aliases?: string[];
 }
 
+/**
+ * 生成文本分析模型信息接口定义。
+ */
 export interface GenerationTextAnalysisModelInfo {
   value: string;
   label: string;
@@ -161,6 +212,9 @@ export interface GenerationTextAnalysisModelInfo {
   aliases?: string[];
 }
 
+/**
+ * 视频模型UsageItem接口定义。
+ */
 export interface VideoModelUsageItem {
   model: string;
   label?: string | null;
@@ -177,12 +231,18 @@ export interface VideoModelUsageItem {
   updatedAt?: string | null;
 }
 
+/**
+ * 视频模型Usage响应体。
+ */
 export interface VideoModelUsageResponse {
   items: VideoModelUsageItem[];
   generatedAt?: string | null;
   updatedAt?: string | null;
 }
 
+/**
+ * 生成风格预设选项接口定义。
+ */
 export interface GenerationStylePresetOption {
   key: string;
   label: string;
@@ -190,11 +250,17 @@ export interface GenerationStylePresetOption {
   mediaKinds?: GenerationMediaKind[];
 }
 
+/**
+ * 生成AspectRatio选项接口定义。
+ */
 export interface GenerationAspectRatioOption {
   value: string;
   label: string;
 }
 
+/**
+ * 生成图像Size选项接口定义。
+ */
 export interface GenerationImageSizeOption {
   value: string;
   label: string;
@@ -202,6 +268,9 @@ export interface GenerationImageSizeOption {
   height?: number;
 }
 
+/**
+ * 生成视频Size选项接口定义。
+ */
 export interface GenerationVideoSizeOption {
   value: string;
   label: string;
@@ -210,12 +279,18 @@ export interface GenerationVideoSizeOption {
   supportedModels?: string[];
 }
 
+/**
+ * 生成视频时长选项接口定义。
+ */
 export interface GenerationVideoDurationOption {
   value: number;
   label: string;
   supportedModels?: string[];
 }
 
+/**
+ * 生成选项响应体。
+ */
 export interface GenerationOptionsResponse {
   aspectRatios?: GenerationAspectRatioOption[];
   defaultAspectRatio?: string | null;
@@ -236,6 +311,9 @@ export interface GenerationOptionsResponse {
   defaultVideoDurationSeconds?: number | null;
 }
 
+/**
+ * Generate媒体请求体。
+ */
 export interface GenerateMediaRequest {
   prompt: string;
   mediaKind: GenerationMediaKind;
@@ -250,6 +328,9 @@ export interface GenerateMediaRequest {
   maxDurationSeconds?: number;
 }
 
+/**
+ * 生成模型信息接口定义。
+ */
 export interface GenerationModelInfo {
   provider?: string | null;
   modelName?: string | null;
@@ -267,6 +348,9 @@ export interface GenerationModelInfo {
   mediaKind?: GenerationMediaKind | null;
 }
 
+/**
+ * 生成调用日志条目接口定义。
+ */
 export interface GenerationCallLogEntry {
   timestamp: string;
   stage: string;
@@ -276,6 +360,9 @@ export interface GenerationCallLogEntry {
   details?: Record<string, unknown>;
 }
 
+/**
+ * Generate媒体响应体。
+ */
 export interface GenerateMediaResponse {
   id: string;
   mediaKind: GenerationMediaKind;
@@ -295,22 +382,34 @@ export interface GenerateMediaResponse {
   metadata?: Record<string, unknown>;
 }
 
+/**
+ * 任务删除接口定义。
+ */
 export interface TaskDeleteResult {
   taskId: string;
   deleted: boolean;
 }
 
+/**
+ * 评分任务效果请求体。
+ */
 export interface RateTaskEffectRequest {
   effectRating: number;
   effectRatingNote?: string | null;
 }
 
+/**
+ * 任务筛选条件接口定义。
+ */
 export interface TaskFilters {
   q?: string;
   status?: TaskStatus | "all";
   sort?: "updated_desc" | "created_desc" | "progress_desc" | "semantic_desc" | "effect_rating_desc";
 }
 
+/**
+ * 任务输出接口定义。
+ */
 export interface TaskOutput {
   id: string;
   clipIndex: number;
@@ -323,6 +422,9 @@ export interface TaskOutput {
   downloadUrl: string;
 }
 
+/**
+ * 任务素材接口定义。
+ */
 export interface TaskMaterial {
   id: string;
   kind: "source" | "output";
@@ -338,6 +440,9 @@ export interface TaskMaterial {
   createdAt?: string | null;
 }
 
+/**
+ * 任务追踪事件接口定义。
+ */
 export interface TaskTraceEvent {
   timestamp: string;
   level: string;
@@ -347,6 +452,9 @@ export interface TaskTraceEvent {
   payload: Record<string, unknown>;
 }
 
+/**
+ * Seedance任务查询接口定义。
+ */
 export interface SeedanceTaskQueryResult {
   taskId: string;
   status: string;
@@ -355,6 +463,9 @@ export interface SeedanceTaskQueryResult {
   payload: Record<string, unknown>;
 }
 
+/**
+ * 任务列表Item接口定义。
+ */
 export interface TaskListItem {
   id: string;
   title: string;
@@ -390,6 +501,9 @@ export interface TaskListItem {
   recommendedAction?: string | null;
 }
 
+/**
+ * 任务监控摘要接口定义。
+ */
 export interface TaskMonitoringSummary {
   currentStage?: string | null;
   activeAttemptStatus?: string | null;
@@ -414,6 +528,9 @@ export interface TaskMonitoringSummary {
   artifactDirectories?: TaskArtifactDirectories;
 }
 
+/**
+ * 任务时长诊断片段接口定义。
+ */
 export interface TaskDurationDiagnosticClip {
   clipIndex: number;
   durationSource?: string | null;
@@ -428,6 +545,9 @@ export interface TaskDurationDiagnosticClip {
   status?: "pending" | "rendered" | string | null;
 }
 
+/**
+ * 任务产物Directories接口定义。
+ */
 export interface TaskArtifactDirectories {
   storageRoot?: string | null;
   baseRelativeDir?: string | null;
@@ -445,6 +565,9 @@ export interface TaskArtifactDirectories {
   joinPattern?: string | null;
 }
 
+/**
+ * 管理任务诊断Finding接口定义。
+ */
 export interface AdminTaskDiagnosisFinding {
   code: string;
   severity: "info" | "low" | "medium" | "high";
@@ -452,6 +575,9 @@ export interface AdminTaskDiagnosisFinding {
   detail: string;
 }
 
+/**
+ * 管理任务诊断接口定义。
+ */
 export interface AdminTaskDiagnosis {
   taskId: string;
   title: string;
@@ -465,6 +591,9 @@ export interface AdminTaskDiagnosis {
   queue: Record<string, unknown>;
 }
 
+/**
+ * 任务请求快照对象。
+ */
 export interface TaskRequestSnapshot {
   taskType?: string | null;
   title?: string | null;
@@ -485,6 +614,9 @@ export interface TaskRequestSnapshot {
   stopBeforeVideoGeneration?: boolean | null;
 }
 
+/**
+ * 任务接口定义。
+ */
 export interface TaskDetail extends TaskListItem {
   sourceFileName: string;
   sourceFileNames?: string[];
@@ -518,6 +650,9 @@ export interface TaskDetail extends TaskListItem {
   outputs: TaskOutput[];
 }
 
+/**
+ * 健康检查模型摘要接口定义。
+ */
 export interface HealthModelSummary {
   provider: string | null;
   primary_model: string | null;
@@ -534,6 +669,9 @@ export interface HealthModelSummary {
   config_errors: string[];
 }
 
+/**
+ * 健康检查规划能力接口定义。
+ */
 export interface HealthPlanningCapabilities {
   timed_transcript_supported: boolean;
   transcript_semantic_planning: boolean;
@@ -546,6 +684,9 @@ export interface HealthPlanningCapabilities {
   fallback_heuristic_enabled: boolean;
 }
 
+/**
+ * 健康检查运行时摘要接口定义。
+ */
 export interface HealthRuntimeSummary {
   name: string;
   env: string;
@@ -557,11 +698,17 @@ export interface HealthRuntimeSummary {
   planning_capabilities: HealthPlanningCapabilities;
 }
 
+/**
+ * 健康检查响应体。
+ */
 export interface HealthResponse {
   ok: boolean;
   runtime: HealthRuntimeSummary;
 }
 
+/**
+ * 管理概览Counts接口定义。
+ */
 export interface AdminOverviewCounts {
   totalTasks: number;
   runningTasks: number;
@@ -575,6 +722,9 @@ export interface AdminOverviewCounts {
   averageProgress: number;
 }
 
+/**
+ * 管理概览接口定义。
+ */
 export interface AdminOverview {
   generatedAt: string;
   counts: AdminOverviewCounts;
@@ -588,21 +738,33 @@ export interface AdminOverview {
   recentTraceCount: number;
 }
 
+/**
+ * 管理追踪事件接口定义。
+ */
 export interface AdminTraceEvent extends TaskTraceEvent {
   taskId: string;
   taskTitle?: string | null;
   taskStatus?: string | null;
 }
 
+/**
+ * 管理任务筛选条件接口定义。
+ */
 export interface AdminTaskFilters extends TaskFilters {
   sort?: "updated_desc" | "created_desc" | "progress_desc" | "semantic_desc" | "status_desc" | "effect_rating_desc";
 }
 
+/**
+ * 管理任务批量失败接口定义。
+ */
 export interface AdminTaskBatchFailure {
   taskId: string;
   reason: string;
 }
 
+/**
+ * 管理任务批量接口定义。
+ */
 export interface AdminTaskBatchResult {
   action: "retry" | "delete";
   requestedCount: number;

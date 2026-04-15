@@ -73,6 +73,9 @@
 </template>
 
 <script setup lang="ts">
+/**
+ * 工作区组件。
+ */
 import { computed, reactive, ref, watch } from "vue";
 import { useRoute } from "vue-router";
 import { loadDeveloperSettings, saveDeveloperSettings } from "@/workbench/developer-settings";
@@ -88,6 +91,10 @@ const navItems = [
 const sidebarOpen = ref(false);
 const developerSettings = reactive(loadDeveloperSettings());
 
+/**
+ * 检查是否Active。
+ * @param target target值
+ */
 function isActive(target: string) {
   return target === "/" ? route.path === "/" : route.path.startsWith(target);
 }
@@ -116,6 +123,7 @@ watch(
   },
   { deep: true }
 );
+
 </script>
 
 <style scoped>

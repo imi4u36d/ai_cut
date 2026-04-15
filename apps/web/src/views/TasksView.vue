@@ -427,6 +427,9 @@
 </template>
 
 <script setup lang="ts">
+/**
+ * 任务页面组件。
+ */
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { continueTask, deleteTask, fetchTask, fetchTaskTrace, fetchTasks, pauseTask, rateTaskEffect, retryTask, terminateTask } from "@/api/tasks";
@@ -478,6 +481,10 @@ const isFilterActive = computed(() => {
   return Boolean(searchText.value.trim() || statusFilter.value !== "all");
 });
 
+/**
+ * 规范化查询值。
+ * @param value 待处理的值
+ */
 function normalizeQueryValue(value: unknown) {
   if (Array.isArray(value)) {
     return value[0] == null ? "" : String(value[0]);
@@ -485,6 +492,9 @@ function normalizeQueryValue(value: unknown) {
   return value == null ? "" : String(value);
 }
 
+/**
+ * 应用路由筛选条件。
+ */
 function applyRouteFilters() {
   searchText.value = normalizeQueryValue(route.query.q);
 
@@ -627,6 +637,10 @@ const selectedTaskStages = computed(() => {
   const stageOrder: TaskStatus[] = ["ANALYZING", "PLANNING", "RENDERING", "COMPLETED"];
   const pausedAtRender = status === "PAUSED";
   const currentIndex = pausedAtRender ? 2 : stageOrder.indexOf(status);
+  /**
+   * 处理转为标签。
+   * @param state 状态值
+   */
   const toLabel = (state: "pending" | "active" | "paused" | "done" | "failed") => {
     switch (state) {
       case "done":
@@ -652,6 +666,7 @@ const selectedTaskStages = computed(() => {
 
 const filteredTasks = computed(() => {
   const keyword = searchText.value.trim().toLowerCase();
+  // 搜索和状态过滤放在前端完成，保证输入联动时不额外触发接口请求。
   return tasks.value.filter((task) => {
     if (statusFilter.value !== "all" && task.status !== statusFilter.value) {
       return false;
@@ -703,6 +718,7 @@ const metrics = computed(() => {
 });
 
 const groupedTasks = computed(() => {
+  // 先排序再分组，保证同一生命周期分组内也维持统一的优先级顺序。
   const groups = [
     {
       key: "running",
@@ -742,7 +758,7 @@ async function loadTasks() {
   errorMessage.value = "";
   loading.value = tasks.value.length === 0;
   try {
-    // Keep filtering local so typing and toggling view mode do not trigger extra requests.
+    // 将筛选保留在前端本地，避免输入和视图切换时额外触发请求。
     tasks.value = await fetchTasks({
       sort: sortMode.value,
     });
@@ -771,6 +787,7 @@ async function loadSelectedTaskDetails() {
       fetchTaskTrace(selectedTaskId.value, 120),
     ]);
     selectedTaskDetail.value = detail;
+    // 详情面板优先显示最新事件，便于定位当前卡住的阶段。
     selectedTaskTrace.value = [...trace].reverse();
     selectedTaskRatingDraft.value = typeof detail.effectRating === "number" && detail.effectRating > 0 ? Math.trunc(detail.effectRating) : null;
     selectedTaskRatingNote.value = detail.effectRatingNote?.trim() || "";
@@ -804,6 +821,9 @@ async function saveSelectedTaskRating() {
   }
 }
 
+/**
+ * 处理写入查询。
+ */
 function writeQuery() {
   const query: Record<string, string> = {};
   if (searchText.value.trim()) {
@@ -836,6 +856,9 @@ function writeQuery() {
   }
 }
 
+/**
+ * 处理调度写入查询。
+ */
 function scheduleWriteQuery() {
   if (querySyncTimer !== null) {
     window.clearTimeout(querySyncTimer);
@@ -846,22 +869,37 @@ function scheduleWriteQuery() {
   }, 160);
 }
 
+/**
+ * 处理清空筛选条件。
+ */
 function clearFilters() {
   searchText.value = "";
   statusFilter.value = "all";
   sortMode.value = "updated_desc";
 }
 
+/**
+ * 处理处理Select任务。
+ * @param task 要处理的任务对象
+ */
 function handleSelectTask(task: TaskListItem) {
   selectedTaskId.value = task.id;
   writeQuery();
   void loadSelectedTaskDetails();
 }
 
+/**
+ * 检查是否分组折叠。
+ * @param groupKey 分组Key值
+ */
 function isGroupCollapsed(groupKey: string) {
   return Boolean(collapsedGroups.value[groupKey]);
 }
 
+/**
+ * 处理切换分组。
+ * @param groupKey 分组Key值
+ */
 function toggleGroup(groupKey: string) {
   collapsedGroups.value = {
     ...collapsedGroups.value,
@@ -964,6 +1002,10 @@ async function handleDelete(task: TaskListItem) {
   }
 }
 
+/**
+ * 格式化日期时间。
+ * @param value 待处理的值
+ */
 function formatDateTime(value?: string | null) {
   if (!value) {
     return "-";
@@ -975,6 +1017,10 @@ function formatDateTime(value?: string | null) {
   return new Date(timestamp).toLocaleString();
 }
 
+/**
+ * 格式化监控值。
+ * @param value 待处理的值
+ */
 function formatMonitoringValue(value: unknown) {
   if (value == null) {
     return "暂无";
@@ -986,6 +1032,10 @@ function formatMonitoringValue(value: unknown) {
   return text ? text : "暂无";
 }
 
+/**
+ * 处理阶段状态样式类。
+ * @param state 状态值
+ */
 function stageStateClass(state: "pending" | "active" | "paused" | "done" | "failed") {
   switch (state) {
     case "done":
@@ -1029,6 +1079,7 @@ onUnmounted(() => {
     querySyncTimer = null;
   }
 });
+
 </script>
 
 <style scoped>

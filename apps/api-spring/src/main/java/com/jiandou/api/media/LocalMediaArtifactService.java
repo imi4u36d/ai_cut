@@ -22,6 +22,9 @@ import javax.imageio.ImageIO;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
+/**
+ * 本地媒体产物服务。
+ */
 @Service
 public class LocalMediaArtifactService {
 
@@ -29,6 +32,9 @@ public class LocalMediaArtifactService {
     private final String ffmpegBin;
     private final HttpClient httpClient;
 
+    /**
+     * 创建新的本地媒体产物服务。
+     */
     public LocalMediaArtifactService(
         @Value("${JIANDOU_STORAGE_ROOT:../../storage}") String storageRoot,
         @Value("${JIANDOU_FFMPEG_BIN:ffmpeg}") String ffmpegBin
@@ -38,6 +44,13 @@ public class LocalMediaArtifactService {
         this.httpClient = HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NORMAL).build();
     }
 
+    /**
+     * 处理写入文本。
+     * @param relativeDir relativeDir值
+     * @param fileName 文件Name值
+     * @param content content值
+     * @return 处理结果
+     */
     public TextArtifact writeText(String relativeDir, String fileName, String content) {
         try {
             Path dir = ensureDirectory(relativeDir);
@@ -55,6 +68,17 @@ public class LocalMediaArtifactService {
         }
     }
 
+    /**
+     * 处理写入提示词卡片。
+     * @param relativeDir relativeDir值
+     * @param fileName 文件Name值
+     * @param width width值
+     * @param height height值
+     * @param title title值
+     * @param subtitle subtitle值
+     * @param bodyText body文本值
+     * @return 处理结果
+     */
     public ImageArtifact writePromptCard(
         String relativeDir,
         String fileName,
@@ -108,6 +132,16 @@ public class LocalMediaArtifactService {
         }
     }
 
+    /**
+     * 处理写入Silent视频。
+     * @param relativeDir relativeDir值
+     * @param fileName 文件Name值
+     * @param width width值
+     * @param height height值
+     * @param durationSeconds 时长Seconds值
+     * @param poster poster值
+     * @return 处理结果
+     */
     public VideoArtifact writeSilentVideo(
         String relativeDir,
         String fileName,
@@ -172,17 +206,33 @@ public class LocalMediaArtifactService {
         }
     }
 
+    /**
+     * 处理ensureDirectory。
+     * @param relativeDir relativeDir值
+     * @return 处理结果
+     */
     private Path ensureDirectory(String relativeDir) throws IOException {
         Path dir = storageRoot.resolve(relativeDir).normalize();
         Files.createDirectories(dir);
         return dir;
     }
 
+    /**
+     * 构建PublicURL。
+     * @param relativeDir relativeDir值
+     * @param fileName 文件Name值
+     * @return 处理结果
+     */
     private String buildPublicUrl(String relativeDir, String fileName) {
         String normalizedDir = relativeDir.replace('\\', '/');
         return "/storage/" + normalizedDir + "/" + fileName;
     }
 
+    /**
+     * 处理解析Absolute路径。
+     * @param publicUrl publicURL值
+     * @return 处理结果
+     */
     public String resolveAbsolutePath(String publicUrl) {
         String normalized = publicUrl == null ? "" : publicUrl.trim();
         if (!normalized.startsWith("/storage/")) {
@@ -192,6 +242,13 @@ public class LocalMediaArtifactService {
         return storageRoot.resolve(relative).normalize().toAbsolutePath().toString();
     }
 
+    /**
+     * 处理copy产物。
+     * @param sourcePublicUrl 来源PublicURL值
+     * @param relativeDir relativeDir值
+     * @param fileName 文件Name值
+     * @return 处理结果
+     */
     public StoredArtifact copyArtifact(String sourcePublicUrl, String relativeDir, String fileName) {
         String absoluteSourcePath = resolveAbsolutePath(sourcePublicUrl);
         if (absoluteSourcePath.isBlank()) {
@@ -218,6 +275,13 @@ public class LocalMediaArtifactService {
         }
     }
 
+    /**
+     * 处理materialize产物。
+     * @param sourceUrl 来源URL值
+     * @param relativeDir relativeDir值
+     * @param fileName 文件Name值
+     * @return 处理结果
+     */
     public StoredArtifact materializeArtifact(String sourceUrl, String relativeDir, String fileName) {
         String absoluteSourcePath = resolveAbsolutePath(sourceUrl);
         if (!absoluteSourcePath.isBlank()) {
@@ -247,6 +311,13 @@ public class LocalMediaArtifactService {
         }
     }
 
+    /**
+     * 处理写入Binary。
+     * @param relativeDir relativeDir值
+     * @param fileName 文件Name值
+     * @param data data值
+     * @return 处理结果
+     */
     public StoredArtifact writeBinary(String relativeDir, String fileName, byte[] data) {
         try {
             Path dir = ensureDirectory(relativeDir);
@@ -263,6 +334,13 @@ public class LocalMediaArtifactService {
         }
     }
 
+    /**
+     * 处理concatVideos。
+     * @param relativeDir relativeDir值
+     * @param fileName 文件Name值
+     * @param sourcePublicUrls 来源PublicUrls值
+     * @return 处理结果
+     */
     public StoredArtifact concatVideos(String relativeDir, String fileName, List<String> sourcePublicUrls) {
         if (sourcePublicUrls == null || sourcePublicUrls.size() < 2) {
             throw new IllegalArgumentException("at least two source videos are required");
@@ -323,11 +401,23 @@ public class LocalMediaArtifactService {
         }
     }
 
+    /**
+     * 处理safeLine。
+     * @param value 待处理的值
+     * @param fallback 兜底值
+     * @return 处理结果
+     */
     private String safeLine(String value, String fallback) {
         String normalized = value == null ? "" : value.trim();
         return normalized.isEmpty() ? fallback : normalized;
     }
 
+    /**
+     * 处理wrap文本。
+     * @param text 文本值
+     * @param maxCharsPerLine 最大CharsPerLine值
+     * @return 处理结果
+     */
     private List<String> wrapText(String text, int maxCharsPerLine) {
         String normalized = text == null ? "" : text.replace('\n', ' ').trim();
         if (normalized.isBlank()) {
@@ -343,6 +433,15 @@ public class LocalMediaArtifactService {
         return lines;
     }
 
+    /**
+     * 处理文本产物。
+     * @param fileName 文件Name值
+     * @param absolutePath absolute路径值
+     * @param publicUrl publicURL值
+     * @param sizeBytes sizeBytes值
+     * @param mimeType mime类型值
+     * @return 处理结果
+     */
     public record TextArtifact(
         String fileName,
         String absolutePath,
@@ -351,6 +450,17 @@ public class LocalMediaArtifactService {
         String mimeType
     ) {}
 
+    /**
+     * 处理图像产物。
+     * @param fileName 文件Name值
+     * @param absolutePath absolute路径值
+     * @param publicUrl publicURL值
+     * @param sizeBytes sizeBytes值
+     * @param width width值
+     * @param height height值
+     * @param mimeType mime类型值
+     * @return 处理结果
+     */
     public record ImageArtifact(
         String fileName,
         String absolutePath,
@@ -361,6 +471,19 @@ public class LocalMediaArtifactService {
         String mimeType
     ) {}
 
+    /**
+     * 处理视频产物。
+     * @param fileName 文件Name值
+     * @param absolutePath absolute路径值
+     * @param publicUrl publicURL值
+     * @param sizeBytes sizeBytes值
+     * @param width width值
+     * @param height height值
+     * @param durationSeconds 时长Seconds值
+     * @param hasAudio hasAudio值
+     * @param mimeType mime类型值
+     * @return 处理结果
+     */
     public record VideoArtifact(
         String fileName,
         String absolutePath,
@@ -373,6 +496,14 @@ public class LocalMediaArtifactService {
         String mimeType
     ) {}
 
+    /**
+     * 处理Stored产物。
+     * @param fileName 文件Name值
+     * @param absolutePath absolute路径值
+     * @param publicUrl publicURL值
+     * @param sizeBytes sizeBytes值
+     * @return 处理结果
+     */
     public record StoredArtifact(
         String fileName,
         String absolutePath,

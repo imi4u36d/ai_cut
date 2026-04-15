@@ -6,6 +6,9 @@
 </template>
 
 <script setup lang="ts">
+/**
+ * 状态组件。
+ */
 import { computed } from "vue";
 import type { TaskStatus } from "@/types";
 import { formatTaskStatus } from "@/utils/task";
@@ -34,6 +37,7 @@ const statusClass = computed(() => {
       return "status-idle";
   }
 });
+
 </script>
 
 <style scoped>

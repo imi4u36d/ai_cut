@@ -16,11 +16,17 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.mock.env.MockEnvironment;
 
+/**
+ * 生成运行工厂视频Async相关测试。
+ */
 class GenerationRunFactoryVideoAsyncTest {
 
     @TempDir
     Path tempDir;
 
+    /**
+     * 创建视频运行ReturnsRunningAndRefreshCompletes。
+     */
     @Test
     void createVideoRunReturnsRunningAndRefreshCompletes() throws Exception {
         ModelRuntimeProfile textProfile = new ModelRuntimeProfile(
@@ -60,26 +66,53 @@ class GenerationRunFactoryVideoAsyncTest {
             "test"
         );
         ModelRuntimePropertiesResolver modelResolver = new ModelRuntimePropertiesResolver(new MockEnvironment()) {
+            /**
+             * 检查是否supports种子。
+             * @param requestedModel requested模型值
+             * @return 是否满足条件
+             */
             @Override
             public boolean supportsSeed(String requestedModel) {
                 return false;
             }
 
+            /**
+             * 处理解析文本Profile。
+             * @param requestedModel requested模型值
+             * @return 处理结果
+             */
             @Override
             public ModelRuntimeProfile resolveTextProfile(String requestedModel) {
                 return "gpt-vision".equals(requestedModel) ? visionProfile : textProfile;
             }
 
+            /**
+             * 处理解析视频Profile。
+             * @param requestedModel requested模型值
+             * @return 处理结果
+             */
             @Override
             public MediaProviderProfile resolveVideoProfile(String requestedModel) {
                 return videoProfile;
             }
 
+            /**
+             * 处理section。
+             * @param sectionName sectionName值
+             * @return 处理结果
+             */
             @Override
             public Map<String, String> section(String sectionName) {
                 return Map.of("supported_durations", "6,8,10");
             }
 
+            /**
+             * 处理值。
+             * @param section section值
+             * @param key key值
+             * @param fallback 兜底值
+             * @return 处理结果
+             */
             @Override
             public String value(String section, String key, String fallback) {
                 return fallback;
@@ -90,12 +123,27 @@ class GenerationRunFactoryVideoAsyncTest {
             modelResolver,
             new GenerationConfigPathLocator(new MockEnvironment())
         ) {
+            /**
+             * 处理系统提示词。
+             * @param promptName 提示词Name值
+             * @param key key值
+             * @return 处理结果
+             */
             @Override
             public String systemPrompt(String promptName, String key) {
                 return "";
             }
         };
         CompatibleTextModelClient textModelClient = new CompatibleTextModelClient(new ObjectMapper(), java.util.List.of()) {
+            /**
+             * 生成文本。
+             * @param profile profile值
+             * @param systemPrompt 系统提示词值
+             * @param userPrompt user提示词值
+             * @param temperature temperature值
+             * @param maxTokens 最大Tokens值
+             * @return 处理结果
+             */
             @Override
             public TextModelResponse generateText(
                 ModelRuntimeProfile profile,
@@ -114,6 +162,17 @@ class GenerationRunFactoryVideoAsyncTest {
                 );
             }
 
+            /**
+             * 生成视觉文本。
+             * @param profile profile值
+             * @param systemPrompt 系统提示词值
+             * @param userPrompt user提示词值
+             * @param imageUrls 图像Urls值
+             * @param temperature temperature值
+             * @param maxTokens 最大Tokens值
+             * @param seed 种子值
+             * @return 处理结果
+             */
             @Override
             public TextModelResponse generateVisionText(
                 ModelRuntimeProfile profile,
@@ -137,6 +196,17 @@ class GenerationRunFactoryVideoAsyncTest {
         LocalMediaArtifactService localMediaArtifactService = new LocalMediaArtifactService(tempDir.toString(), "ffmpeg");
         StoredArtifact remoteLocal = localMediaArtifactService.writeBinary("gen/_runs/source", "remote.mp4", new byte[] {1, 2, 3});
         RemoteMediaGenerationClient remoteMediaGenerationClient = new RemoteMediaGenerationClient(new ObjectMapper()) {
+            /**
+             * 处理submitDashscope视频任务。
+             * @param profile profile值
+             * @param requestedModel requested模型值
+             * @param prompt 提示词值
+             * @param width width值
+             * @param height height值
+             * @param durationSeconds 时长Seconds值
+             * @param seed 种子值
+             * @return 处理结果
+             */
             @Override
             public RemoteVideoTaskSubmission submitDashscopeVideoTask(
                 MediaProviderProfile profile,
@@ -163,6 +233,12 @@ class GenerationRunFactoryVideoAsyncTest {
                 );
             }
 
+            /**
+             * 处理查询Dashscope任务。
+             * @param profile profile值
+             * @param taskId 任务标识
+             * @return 处理结果
+             */
             @Override
             public RemoteTaskQueryResult queryDashscopeTask(MediaProviderProfile profile, String taskId) {
                 return new RemoteTaskQueryResult(

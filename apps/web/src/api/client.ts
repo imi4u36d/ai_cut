@@ -1,7 +1,14 @@
+/**
+ * 客户端相关 API 请求封装。
+ */
 import { getRuntimeConfig } from "./runtime-config";
 
 const ABSOLUTE_URL_RE = /^[a-zA-Z][a-zA-Z\d+\-.]*:\/\//;
 
+/**
+ * 处理解析Origin。
+ * @param baseUrl 基础 URL
+ */
 function resolveOrigin(baseUrl: string) {
   try {
     const fallbackOrigin = typeof window !== "undefined" ? window.location.origin : "http://localhost";
@@ -11,6 +18,11 @@ function resolveOrigin(baseUrl: string) {
   }
 }
 
+/**
+ * 拼接URL。
+ * @param baseUrl 基础 URL
+ * @param path 路径值
+ */
 function joinUrl(baseUrl: string, path: string) {
   const normalizedPath = path.trim();
   if (ABSOLUTE_URL_RE.test(normalizedPath)) {

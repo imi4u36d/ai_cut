@@ -335,6 +335,9 @@
 </template>
 
 <script setup lang="ts">
+/**
+ * 管理任务详情页面组件。
+ */
 import { computed, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { deleteAdminTask, fetchAdminTask, fetchAdminTaskDiagnosis, fetchAdminTaskTrace, rateAdminTaskEffect, retryAdminTask } from "@/api/admin";
@@ -495,6 +498,10 @@ const diagnosisQueueSummary = computed(() => {
   return `排队 ${formatDiagnosisValue(diagnosis.value.queue?.isQueued)}，位置 ${formatDiagnosisValue(diagnosis.value.queue?.queuePosition)}，Attempt ${formatDiagnosisValue(diagnosis.value.queue?.activeAttemptStatus)}`;
 });
 
+/**
+ * 处理日志Level样式类。
+ * @param level level值
+ */
 function logLevelClass(level: string) {
   if (level === "ERROR") {
     return "bg-rose-100 text-rose-700";
@@ -505,10 +512,18 @@ function logLevelClass(level: string) {
   return "bg-slate-100 text-slate-700";
 }
 
+/**
+ * 格式化时间。
+ * @param value 待处理的值
+ */
 function formatTime(value: string) {
   return new Date(value).toLocaleString();
 }
 
+/**
+ * 格式化监控值。
+ * @param value 待处理的值
+ */
 function formatMonitoringValue(value: unknown) {
   if (value == null) {
     return "暂无";
@@ -520,6 +535,10 @@ function formatMonitoringValue(value: unknown) {
   return text ? text : "暂无";
 }
 
+/**
+ * 格式化诊断值。
+ * @param value 待处理的值
+ */
 function formatDiagnosisValue(value: unknown) {
   if (typeof value === "boolean") {
     return value ? "是" : "否";
@@ -527,6 +546,10 @@ function formatDiagnosisValue(value: unknown) {
   return formatMonitoringValue(value);
 }
 
+/**
+ * 处理诊断Severity文本。
+ * @param severity severity值
+ */
 function diagnosisSeverityText(severity: string) {
   switch (severity) {
     case "high":
@@ -540,6 +563,10 @@ function diagnosisSeverityText(severity: string) {
   }
 }
 
+/**
+ * 处理诊断Finding样式类。
+ * @param severity severity值
+ */
 function diagnosisFindingClass(severity: string) {
   switch (severity) {
     case "high":
@@ -553,6 +580,10 @@ function diagnosisFindingClass(severity: string) {
   }
 }
 
+/**
+ * 格式化Seconds值。
+ * @param value 待处理的值
+ */
 function formatSecondsValue(value: number | null | undefined) {
   if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) {
     return "暂无";
@@ -560,6 +591,12 @@ function formatSecondsValue(value: number | null | undefined) {
   return `${Number.isInteger(value) ? value : value.toFixed(1)}s`;
 }
 
+/**
+ * 格式化Seconds范围。
+ * @param minValue 最小值
+ * @param maxValue 最大值
+ * @param targetValue target值
+ */
 function formatSecondsRange(minValue: number | null | undefined, maxValue: number | null | undefined, targetValue?: number | null) {
   const min = typeof minValue === "number" && Number.isFinite(minValue) && minValue > 0 ? minValue : null;
   const max = typeof maxValue === "number" && Number.isFinite(maxValue) && maxValue > 0 ? maxValue : null;
@@ -574,6 +611,10 @@ function formatSecondsRange(minValue: number | null | undefined, maxValue: numbe
   return target != null ? `${range} (目标 ${formatSecondsValue(target)})` : range;
 }
 
+/**
+ * 处理时长来源标签。
+ * @param item item值
+ */
 function durationSourceLabel(item: TaskDurationDiagnosticClip) {
   switch (item.durationSource) {
     case "storyboard":
@@ -585,6 +626,10 @@ function durationSourceLabel(item: TaskDurationDiagnosticClip) {
   }
 }
 
+/**
+ * 处理时长状态标签。
+ * @param status 状态值
+ */
 function durationStatusLabel(status: TaskDurationDiagnosticClip["status"]) {
   switch (status) {
     case "rendered":
@@ -675,6 +720,7 @@ watch(task, (value) => {
   ratingDraft.value = typeof value?.effectRating === "number" && value.effectRating > 0 ? Math.trunc(value.effectRating) : null;
   ratingNote.value = value?.effectRatingNote?.trim() || "";
 }, { immediate: true });
+
 </script>
 
 <style scoped>

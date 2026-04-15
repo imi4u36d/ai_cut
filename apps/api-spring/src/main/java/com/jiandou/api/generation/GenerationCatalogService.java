@@ -6,17 +6,29 @@ import java.util.List;
 import java.util.Map;
 import org.springframework.stereotype.Component;
 
+/**
+ * 生成目录服务。
+ */
 @Component
 public class GenerationCatalogService {
 
     private final ModelRuntimePropertiesResolver modelResolver;
     private final GenerationRunSupport support;
 
+    /**
+     * 创建新的生成目录服务。
+     * @param modelResolver 模型解析器值
+     * @param support 支持值
+     */
     public GenerationCatalogService(ModelRuntimePropertiesResolver modelResolver, GenerationRunSupport support) {
         this.modelResolver = modelResolver;
         this.support = support;
     }
 
+    /**
+     * 处理目录。
+     * @return 处理结果
+     */
     public Map<String, Object> catalog() {
         String defaultAspectRatio = support.firstNonBlank(
             modelResolver.value("pipeline", "default_aspect_ratio", "9:16"),
@@ -65,6 +77,11 @@ public class GenerationCatalogService {
         return payload;
     }
 
+    /**
+     * 处理enrich视频Models。
+     * @param items items值
+     * @return 处理结果
+     */
     private List<Map<String, Object>> enrichVideoModels(List<Map<String, Object>> items) {
         List<Map<String, Object>> normalizedItems = new ArrayList<>();
         for (Map<String, Object> item : items) {
@@ -79,6 +96,10 @@ public class GenerationCatalogService {
         return normalizedItems;
     }
 
+    /**
+     * 处理aspectRatio选项。
+     * @return 处理结果
+     */
     private List<Map<String, Object>> aspectRatioOptions() {
         List<Map<String, Object>> items = new ArrayList<>();
         for (ModelRuntimePropertiesResolver.ConfigSection section : modelResolver.listSections("catalog.aspect_ratios")) {
@@ -94,6 +115,10 @@ public class GenerationCatalogService {
         return items;
     }
 
+    /**
+     * 处理风格预设选项。
+     * @return 处理结果
+     */
     private List<Map<String, Object>> stylePresetOptions() {
         List<Map<String, Object>> items = new ArrayList<>();
         for (ModelRuntimePropertiesResolver.ConfigSection section : modelResolver.listSections("catalog.style_presets")) {
@@ -110,6 +135,10 @@ public class GenerationCatalogService {
         return items;
     }
 
+    /**
+     * 处理图像Size选项。
+     * @return 处理结果
+     */
     private List<Map<String, Object>> imageSizeOptions() {
         List<Map<String, Object>> items = new ArrayList<>();
         for (ModelRuntimePropertiesResolver.ConfigSection section : modelResolver.listSections("catalog.image_sizes")) {
@@ -127,6 +156,12 @@ public class GenerationCatalogService {
         return items;
     }
 
+    /**
+     * 处理视频Size选项。
+     * @param videoModels 视频Models值
+     * @param videoModelNames 视频模型Names值
+     * @return 处理结果
+     */
     private List<Map<String, Object>> videoSizeOptions(List<Map<String, Object>> videoModels, List<String> videoModelNames) {
         List<Map<String, Object>> items = new ArrayList<>();
         for (ModelRuntimePropertiesResolver.ConfigSection section : modelResolver.listSections("catalog.video_sizes")) {
@@ -149,6 +184,12 @@ public class GenerationCatalogService {
         return items;
     }
 
+    /**
+     * 处理视频时长选项。
+     * @param videoModels 视频Models值
+     * @param videoModelNames 视频模型Names值
+     * @return 处理结果
+     */
     private List<Map<String, Object>> videoDurationOptions(List<Map<String, Object>> videoModels, List<String> videoModelNames) {
         List<Map<String, Object>> items = new ArrayList<>();
         for (ModelRuntimePropertiesResolver.ConfigSection section : modelResolver.listSections("catalog.video_durations")) {
@@ -170,6 +211,13 @@ public class GenerationCatalogService {
         return items;
     }
 
+    /**
+     * 处理modelsSupportingSize。
+     * @param videoModels 视频Models值
+     * @param size size值
+     * @param fallback 兜底值
+     * @return 处理结果
+     */
     private List<String> modelsSupportingSize(List<Map<String, Object>> videoModels, String size, List<String> fallback) {
         List<String> matched = new ArrayList<>();
         String normalizedSize = support.normalizeValue(size);
@@ -184,6 +232,13 @@ public class GenerationCatalogService {
         return matched.isEmpty() ? fallback : matched;
     }
 
+    /**
+     * 处理modelsSupporting时长。
+     * @param videoModels 视频Models值
+     * @param duration 时长值
+     * @param fallback 兜底值
+     * @return 处理结果
+     */
     private List<String> modelsSupportingDuration(List<Map<String, Object>> videoModels, int duration, List<String> fallback) {
         List<String> matched = new ArrayList<>();
         for (Map<String, Object> videoModel : videoModels) {

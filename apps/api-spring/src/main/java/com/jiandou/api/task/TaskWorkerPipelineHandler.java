@@ -11,6 +11,9 @@ import java.util.Map;
 import org.springframework.context.annotation.DependsOn;
 import org.springframework.stereotype.Component;
 
+/**
+ * 任务工作节点流水线处理器。
+ */
 @Component
 @DependsOn("databaseSchemaReady")
 public class TaskWorkerPipelineHandler {
@@ -26,6 +29,19 @@ public class TaskWorkerPipelineHandler {
     private final TaskWorkerRenderStageService renderStageService;
     private final TaskWorkerJoinStageService joinStageService;
 
+    /**
+     * 创建新的任务工作节点流水线处理器。
+     * @param taskRepository 任务仓储值
+     * @param taskQueuePort 任务队列端口值
+     * @param executionCoordinator 执行协调器值
+     * @param generationApplicationService 生成应用服务值
+     * @param runtimeSupport 运行时支持值
+     * @param artifactAssembler 产物Assembler值
+     * @param storyboardPlanner 分镜规划器值
+     * @param statusStageService 状态阶段服务值
+     * @param renderStageService render阶段服务值
+     * @param joinStageService 拼接阶段服务值
+     */
     public TaskWorkerPipelineHandler(
         TaskRepository taskRepository,
         TaskQueuePort taskQueuePort,
@@ -50,6 +66,13 @@ public class TaskWorkerPipelineHandler {
         this.joinStageService = joinStageService;
     }
 
+    /**
+     * 处理process任务。
+     * @param taskId 任务标识
+     * @param workerInstanceId 工作节点实例标识
+     * @param workerType 工作节点类型值
+     * @param executionMode 执行模式值
+     */
     public void processTask(String taskId, String workerInstanceId, String workerType, String executionMode) {
         TaskWorkerExecutionContext runContext = new TaskWorkerExecutionContext(
             workerInstanceId == null ? "" : workerInstanceId,
@@ -203,10 +226,20 @@ public class TaskWorkerPipelineHandler {
         }
     }
 
+    /**
+     * 处理当前Iso。
+     * @return 处理结果
+     */
     private String nowIso() {
         return OffsetDateTime.now(ZoneOffset.UTC).toString();
     }
 
+    /**
+     * 处理put执行Context。
+     * @param task 要处理的任务对象
+     * @param key key值
+     * @param value 待处理的值
+     */
     private void putExecutionContext(TaskRecord task, String key, Object value) {
         if (task.executionContext == null) {
             task.executionContext = new LinkedHashMap<>();
@@ -223,6 +256,11 @@ public class TaskWorkerPipelineHandler {
         task.executionContext.put(key, value);
     }
 
+    /**
+     * 处理结果Map。
+     * @param run 运行值
+     * @return 处理结果
+     */
     @SuppressWarnings("unchecked")
     private Map<String, Object> resultMap(Map<String, Object> run) {
         Object result = run.get("result");
@@ -232,6 +270,11 @@ public class TaskWorkerPipelineHandler {
         return Map.of();
     }
 
+    /**
+     * 映射值。
+     * @param value 待处理的值
+     * @return 处理结果
+     */
     @SuppressWarnings("unchecked")
     private Map<String, Object> mapValue(Object value) {
         if (value instanceof Map<?, ?> map) {
@@ -240,10 +283,21 @@ public class TaskWorkerPipelineHandler {
         return Map.of();
     }
 
+    /**
+     * 处理string值。
+     * @param value 待处理的值
+     * @return 处理结果
+     */
     private String stringValue(Object value) {
         return value == null ? "" : String.valueOf(value).trim();
     }
 
+    /**
+     * 处理int值。
+     * @param value 待处理的值
+     * @param defaultValue 默认值
+     * @return 处理结果
+     */
     private int intValue(Object value, int defaultValue) {
         if (value instanceof Number number) {
             return number.intValue();
@@ -257,6 +311,11 @@ public class TaskWorkerPipelineHandler {
         return defaultValue;
     }
 
+    /**
+     * 处理existing视频片段Indices。
+     * @param task 要处理的任务对象
+     * @return 处理结果
+     */
     private List<Integer> existingVideoClipIndices(TaskRecord task) {
         List<Integer> indices = new ArrayList<>();
         for (Map<String, Object> output : task.outputsView()) {
@@ -272,6 +331,11 @@ public class TaskWorkerPipelineHandler {
         return indices;
     }
 
+    /**
+     * 处理lastContiguousCompleted片段索引。
+     * @param clipIndices 片段Indices值
+     * @return 处理结果
+     */
     private int lastContiguousCompletedClipIndex(List<Integer> clipIndices) {
         int expected = 1;
         for (Integer clipIndex : clipIndices) {
@@ -286,6 +350,12 @@ public class TaskWorkerPipelineHandler {
         return expected - 1;
     }
 
+    /**
+     * 处理解析ResumeLastFrameURL。
+     * @param task 要处理的任务对象
+     * @param completedClipCount completed片段数量值
+     * @return 处理结果
+     */
     private String resolveResumeLastFrameUrl(TaskRecord task, int completedClipCount) {
         String stored = stringValue(task.executionContext.get("lastFrameUrl"));
         if (!stored.isBlank()) {
@@ -307,6 +377,11 @@ public class TaskWorkerPipelineHandler {
         return "";
     }
 
+    /**
+     * 处理首个非空白。
+     * @param values 值
+     * @return 处理结果
+     */
     private String firstNonBlank(String... values) {
         for (String value : values) {
             if (value != null && !value.isBlank()) {

@@ -10,8 +10,14 @@ import java.time.OffsetDateTime;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 
+/**
+ * 任务执行产物Assembler相关测试。
+ */
 class TaskExecutionArtifactAssemblerTest {
 
+    /**
+     * 创建结果FallsBack转为片段时长规划When模型Omits时长。
+     */
     @Test
     void createResultFallsBackToClipDurationPlanWhenModelOmitsDuration() {
         LocalMediaArtifactService localMediaArtifactService = mock(LocalMediaArtifactService.class);
@@ -49,6 +55,9 @@ class TaskExecutionArtifactAssemblerTest {
         assertEquals(6.0, extra.get("appliedDurationSeconds"));
     }
 
+    /**
+     * 创建ReferenceFrame素材SanitizesSignedURLExtension。
+     */
     @Test
     void createReferenceFrameMaterialSanitizesSignedUrlExtension() {
         LocalMediaArtifactService localMediaArtifactService = mock(LocalMediaArtifactService.class);
