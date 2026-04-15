@@ -1,7 +1,6 @@
 package com.jiandou.api.task;
 
 import com.jiandou.api.generation.ModelRuntimePropertiesResolver;
-import com.jiandou.api.task.domain.GenerationRequestSnapshot;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -15,6 +14,8 @@ import org.springframework.stereotype.Service;
  */
 @Service
 public class TaskStoryboardPlanner {
+    private static final int CLIP_MIN_SECONDS = 5;
+    private static final int CLIP_MAX_SECONDS = 12;
 
     private static final Pattern SCRIPT_DURATION_RANGE_PATTERN = Pattern.compile(
         "(?<left>\\d{1,3}(?:\\.\\d+)?)\\s*(?:-|~|～|—|到)\\s*(?<right>\\d{1,3}(?:\\.\\d+)?)\\s*(?:s|sec|secs|second|seconds|秒)",
@@ -32,9 +33,6 @@ public class TaskStoryboardPlanner {
         "^\\s*(?<value>\\d{1,3}(?:\\.\\d+)?)\\s*$",
         Pattern.CASE_INSENSITIVE
     );
-    private static final Pattern SHOT_HEADING_PATTERN = Pattern.compile(
-        "^\\s*#{2,4}\\s*分镜\\s*(?<index>[0-9一二三四五六七八九十百千两]+)?\\s*[·\\-：:]*\\s*(?<title>.*)$"
-    );
 
     private final ModelRuntimePropertiesResolver modelResolver;
 
@@ -43,11 +41,7 @@ public class TaskStoryboardPlanner {
     }
 
     public List<String> buildSequentialClipPrompts(TaskRecord task, String storyboardMarkdown) {
-        List<StoryboardShotPlan> shotPlans = buildStoryboardShotPlans(task, storyboardMarkdown);
-        if (shotPlans.isEmpty()) {
-            return List.of(buildVisualPrompt(task, storyboardMarkdown));
-        }
-        return shotPlans.stream().map(StoryboardShotPlan::videoPrompt).toList();
+        return buildStoryboardShotPlans(task, storyboardMarkdown).stream().map(StoryboardShotPlan::videoPrompt).toList();
     }
 
     public List<StoryboardShotPlan> buildStoryboardShotPlans(TaskRecord task, String storyboardMarkdown) {
@@ -55,17 +49,15 @@ public class TaskStoryboardPlanner {
         if (!shotPlans.isEmpty()) {
             return shotPlans;
         }
-        String fallbackPrompt = buildVisualPrompt(task, storyboardMarkdown);
-        return List.of(new StoryboardShotPlan(1, "1", "", fallbackPrompt, fallbackPrompt, "", "static", "", fallbackPrompt, fallbackPrompt));
+        throw new IllegalStateException("分镜解析失败，未识别到有效镜头。");
     }
 
     public List<String> buildStoryboardVideoPrompts(String storyboardMarkdown) {
         List<StoryboardShotPlan> shotPlans = extractStoryboardShotPlans(storyboardMarkdown);
-        if (!shotPlans.isEmpty()) {
-            return shotPlans.stream().map(StoryboardShotPlan::videoPrompt).toList();
+        if (shotPlans.isEmpty()) {
+            throw new IllegalStateException("分镜解析失败，未识别到有效镜头。");
         }
-        String normalized = stringValue(storyboardMarkdown).replaceAll("\\s+", " ").trim();
-        return normalized.isBlank() ? List.of() : List.of(truncateText(normalized, 1200));
+        return shotPlans.stream().map(StoryboardShotPlan::videoPrompt).toList();
     }
 
     public int resolveRequestedOutputCount(TaskRecord task, int storyboardClipCount) {
@@ -124,19 +116,24 @@ public class TaskStoryboardPlanner {
         }
         int unresolvedClipCount = Math.max(0, normalizedClipCount - scriptedClipCount);
         int globalMin = unresolvedClipCount == 0
-            ? 1
+            ? CLIP_MIN_SECONDS
             : Math.max(1, Math.round((float) Math.max(unresolvedClipCount, totalMin - scriptedMinSum) / unresolvedClipCount));
         int globalMax = unresolvedClipCount == 0
             ? globalMin
             : Math.max(globalMin, Math.round((float) Math.max(unresolvedClipCount, totalMax - scriptedMaxSum) / unresolvedClipCount));
+        globalMin = clamp(globalMin, CLIP_MIN_SECONDS, CLIP_MAX_SECONDS);
+        globalMax = clamp(globalMax, globalMin, CLIP_MAX_SECONDS);
         List<int[]> plan = new ArrayList<>();
         for (int index = 0; index < normalizedClipCount; index++) {
             boolean scripted = index < ranges.size();
-            int clipMin = scripted ? Math.max(1, ranges.get(index)[0]) : globalMin;
+            int clipMin = scripted ? ranges.get(index)[0] : globalMin;
             int clipMax = scripted ? Math.max(clipMin, ranges.get(index)[1]) : globalMax;
+            clipMin = clamp(clipMin, CLIP_MIN_SECONDS, CLIP_MAX_SECONDS);
+            clipMax = clamp(clipMax, clipMin, CLIP_MAX_SECONDS);
             int clipTarget = scripted
                 ? clipMin
                 : Math.max(clipMin, Math.min(clipMax, Math.round((clipMin + clipMax) / 2.0f)));
+            clipTarget = clamp(clipTarget, clipMin, clipMax);
             plan.add(new int[] {clipTarget, clipMin, clipMax});
         }
         return plan;
@@ -201,65 +198,6 @@ public class TaskStoryboardPlanner {
         return ranges;
     }
 
-    public String buildFallbackStoryboard(TaskRecord task, int durationSeconds, int width, int height) {
-        return String.join("\n",
-            "# 分镜脚本",
-            "",
-            "- 任务标题: " + task.title,
-            "- 画幅: " + task.aspectRatio + " (" + width + "x" + height + ")",
-            "- 时长: " + durationSeconds + " 秒",
-            "",
-            "## 场景摘要",
-            truncateText(!task.creativePrompt.isBlank() ? task.creativePrompt : task.transcriptText, 360)
-        );
-    }
-
-    private String buildCompactPromptContext(TaskRecord task, String storyboardMarkdown) {
-        String storyboardContext = extractStoryboardContextSummary(storyboardMarkdown);
-        if (!storyboardContext.isBlank()) {
-            return storyboardContext;
-        }
-        String fallback = !task.creativePrompt.isBlank()
-            ? task.creativePrompt
-            : (!task.transcriptText.isBlank() ? task.transcriptText : task.title);
-        return truncateText(fallback.replaceAll("\\s+", " ").trim(), 320);
-    }
-
-    private String extractStoryboardContextSummary(String storyboardMarkdown) {
-        String normalized = stringValue(storyboardMarkdown);
-        if (normalized.isBlank()) {
-            return "";
-        }
-        List<String> lines = List.of(normalized.split("\\R"));
-        List<String> summaryLines = new ArrayList<>();
-        for (String rawLine : lines) {
-            String stripped = rawLine.trim();
-            if (stripped.isBlank()) {
-                continue;
-            }
-            if (stripped.startsWith("|")) {
-                break;
-            }
-            String cleaned = stripped
-                .replaceAll("^#{1,6}\\s*", "")
-                .replaceAll("^[-*]\\s*", "")
-                .replace("**", "")
-                .replace("<br>", " ")
-                .replace("<br/>", " ")
-                .replace("<br />", " ")
-                .replaceAll("\\s+", " ")
-                .trim();
-            if (cleaned.isBlank()) {
-                continue;
-            }
-            summaryLines.add(cleaned);
-            if (String.join("；", summaryLines).length() >= 320) {
-                break;
-            }
-        }
-        return truncateText(String.join("；", summaryLines), 320);
-    }
-
     private List<StoryboardShotPlan> extractStoryboardShotPlans(String storyboardMarkdown) {
         String normalized = stringValue(storyboardMarkdown);
         if (normalized.isBlank()) {
@@ -275,7 +213,7 @@ public class TaskStoryboardPlanner {
                 continue;
             }
             List<String> cells = splitTableRow(stripped);
-            if (cells.size() < 4 || isDividerRow(cells) || schema.isHeaderRow(cells)) {
+            if (cells.size() < 2 || isDividerRow(cells) || schema.isHeaderRow(cells)) {
                 continue;
             }
             String first = schema.cell(cells, schema.shotNoIndex(), 0);
@@ -302,32 +240,39 @@ public class TaskStoryboardPlanner {
             String explicitLastFrame = normalizeStoryboardPromptValue(schema.cell(cells, schema.lastFramePromptIndex(), -1));
             String visual = schema.cell(cells, schema.visualIndex(), 3);
             String dynamic = schema.cell(cells, schema.dynamicIndex(), -1);
-            String unifiedPrompt = unifyStoryboardPrompt(visual, dynamic);
+            String storyDescription = schema.cell(cells, schema.storyDescriptionIndex(), -1);
             String characterAppearance = schema.cell(cells, schema.characterAppearanceIndex(), -1);
             String action = schema.cell(cells, schema.actionIndex(), -1);
             String emotion = schema.cell(cells, schema.emotionIndex(), -1);
-            String lighting = schema.cell(cells, schema.lightingIndex(), -1);
-            String atmosphere = schema.cell(cells, schema.atmosphereIndex(), -1);
             String dialogue = normalizeStoryboardPromptValue(schema.cell(cells, schema.dialogueIndex(), -1));
             String audio = normalizeStoryboardPromptValue(schema.cell(cells, schema.audioIndex(), -1));
             String durationHint = schema.cell(cells, schema.durationIndex(), legacyDurationFallbackIndex);
             String firstFramePrompt = explicitFirstFrame;
             String lastFramePrompt = explicitLastFrame;
             String motion = explicitMotion;
-            if (firstFramePrompt.isBlank()) {
-                firstFramePrompt = buildLegacyFirstFramePrompt(scene, time, shotSpec, visual, characterAppearance, lighting, atmosphere);
-            }
-            if (lastFramePrompt.isBlank()) {
-                lastFramePrompt = buildLegacyLastFramePrompt(scene, unifiedPrompt, action, emotion);
-            }
             if (motion.isBlank()) {
                 motion = normalizeStoryboardPromptValue(action);
+            }
+            cameraMovement = firstNonBlank(extractCameraMovement(cameraMovement), normalizeStoryboardPromptValue(cameraMovement));
+            if (cameraMovement.isBlank()) {
+                cameraMovement = inferCameraMovement(shotSpec, motion);
             }
             if (cameraMovement.isBlank()) {
                 cameraMovement = "static";
             }
-            String imagePrompt = sequentialIndex == 1 ? firstNonBlank(firstFramePrompt, lastFramePrompt, unifiedPrompt) : "";
-            String videoPrompt = buildContinuousClipPrompt(lastFramePrompt, motion, cameraMovement, dialogue, audio);
+            String sceneDescription = normalizeStoryboardPromptValue(storyDescription);
+            if (sceneDescription.isBlank()) {
+                continue;
+            }
+            if (firstFramePrompt.isBlank()) {
+                firstFramePrompt = sceneDescription;
+            }
+            if (lastFramePrompt.isBlank()) {
+                lastFramePrompt = sceneDescription;
+            }
+            String imagePrompt = sequentialIndex == 1 ? firstNonBlank(firstFramePrompt, sceneDescription) : "";
+            String videoPromptBase = firstNonBlank(lastFramePrompt, sceneDescription);
+            String videoPrompt = buildContinuousClipPrompt(videoPromptBase, motion, cameraMovement, "", audio);
             if (!videoPrompt.isBlank()) {
                 shotPlans.add(new StoryboardShotPlan(
                     sequentialIndex,
@@ -346,53 +291,7 @@ public class TaskStoryboardPlanner {
         if (!shotPlans.isEmpty()) {
             return shotPlans;
         }
-
-        String currentTitle = "";
-        List<String> currentLines = new ArrayList<>();
-        for (String rawLine : lines) {
-            String stripped = rawLine.trim();
-            Matcher matcher = SHOT_HEADING_PATTERN.matcher(stripped);
-            if (matcher.matches()) {
-                flushHeadingShot(shotPlans, currentTitle, currentLines);
-                currentTitle = stringValue(matcher.group("title"));
-                currentLines = new ArrayList<>();
-                continue;
-            }
-            if (!currentTitle.isBlank()) {
-                currentLines.add(rawLine);
-            }
-        }
-        flushHeadingShot(shotPlans, currentTitle, currentLines);
-        return shotPlans.isEmpty() ? List.of() : shotPlans;
-    }
-
-    private void flushHeadingShot(List<StoryboardShotPlan> shotPlans, String currentTitle, List<String> currentLines) {
-        String title = stringValue(currentTitle);
-        String body = stripNarrationVoiceoverText(String.join(" ", currentLines).replaceAll("\\s+", " ").trim());
-        String lastFramePrompt;
-        if (!title.isBlank() && !body.isBlank()) {
-            lastFramePrompt = "same scene, same character, " + body;
-        } else if (!title.isBlank()) {
-            lastFramePrompt = title;
-        } else {
-            lastFramePrompt = body;
-        }
-        if (!lastFramePrompt.isBlank()) {
-            int sequentialIndex = shotPlans.size() + 1;
-            String videoPrompt = buildContinuousClipPrompt(lastFramePrompt, "", "static", "", "");
-            shotPlans.add(new StoryboardShotPlan(
-                sequentialIndex,
-                String.valueOf(sequentialIndex),
-                title,
-                sequentialIndex == 1 ? lastFramePrompt : "",
-                lastFramePrompt,
-                "",
-                "static",
-                "",
-                sequentialIndex == 1 ? lastFramePrompt : "",
-                videoPrompt
-            ));
-        }
+        return List.of();
     }
 
     private int[] normalizeClipDurationRange(
@@ -401,9 +300,9 @@ public class TaskStoryboardPlanner {
         int minDurationSeconds,
         int maxDurationSeconds
     ) {
-        int normalizedTarget = Math.max(1, targetDurationSeconds);
-        int normalizedMin = Math.max(1, Math.min(minDurationSeconds, maxDurationSeconds));
-        int normalizedMax = Math.max(normalizedMin, Math.max(minDurationSeconds, maxDurationSeconds));
+        int normalizedTarget = clamp(targetDurationSeconds, CLIP_MIN_SECONDS, CLIP_MAX_SECONDS);
+        int normalizedMin = clamp(Math.min(minDurationSeconds, maxDurationSeconds), CLIP_MIN_SECONDS, CLIP_MAX_SECONDS);
+        int normalizedMax = clamp(Math.max(minDurationSeconds, maxDurationSeconds), normalizedMin, CLIP_MAX_SECONDS);
         List<Integer> inRange = supportedDurations.stream()
             .filter(candidate -> candidate >= normalizedMin && candidate <= normalizedMax)
             .toList();
@@ -464,26 +363,26 @@ public class TaskStoryboardPlanner {
         if (rangeMatcher.find()) {
             int left = safeRoundedSeconds(rangeMatcher.group("left"));
             int right = safeRoundedSeconds(rangeMatcher.group("right"));
-            int low = Math.max(1, Math.min(left, right));
-            int high = Math.max(low, Math.max(left, right));
+            int low = clamp(Math.min(left, right), CLIP_MIN_SECONDS, CLIP_MAX_SECONDS);
+            int high = clamp(Math.max(left, right), low, CLIP_MAX_SECONDS);
             return new int[] {low, high};
         }
         Matcher valueMatcher = SCRIPT_DURATION_VALUE_PATTERN.matcher(normalized);
         if (valueMatcher.find()) {
-            int value = safeRoundedSeconds(valueMatcher.group("value"));
+            int value = clamp(safeRoundedSeconds(valueMatcher.group("value")), CLIP_MIN_SECONDS, CLIP_MAX_SECONDS);
             return new int[] {value, value};
         }
         Matcher plainRangeMatcher = PLAIN_DURATION_RANGE_PATTERN.matcher(normalized);
         if (plainRangeMatcher.find()) {
             int left = safeRoundedSeconds(plainRangeMatcher.group("left"));
             int right = safeRoundedSeconds(plainRangeMatcher.group("right"));
-            int low = Math.max(1, Math.min(left, right));
-            int high = Math.max(low, Math.max(left, right));
+            int low = clamp(Math.min(left, right), CLIP_MIN_SECONDS, CLIP_MAX_SECONDS);
+            int high = clamp(Math.max(left, right), low, CLIP_MAX_SECONDS);
             return new int[] {low, high};
         }
         Matcher plainValueMatcher = PLAIN_DURATION_VALUE_PATTERN.matcher(normalized);
         if (plainValueMatcher.find()) {
-            int value = safeRoundedSeconds(plainValueMatcher.group("value"));
+            int value = clamp(safeRoundedSeconds(plainValueMatcher.group("value")), CLIP_MIN_SECONDS, CLIP_MAX_SECONDS);
             return new int[] {value, value};
         }
         return null;
@@ -495,6 +394,10 @@ public class TaskStoryboardPlanner {
         } catch (NumberFormatException ex) {
             return 1;
         }
+    }
+
+    private int clamp(int value, int min, int max) {
+        return Math.max(min, Math.min(max, value));
     }
 
     private List<String> splitTableRow(String row) {
@@ -534,6 +437,7 @@ public class TaskStoryboardPlanner {
                 || normalized.contains("运镜") || normalized.contains("镜头参数") || normalized.contains("画面") || normalized.contains("visual")
                 || normalized.contains("audio") || normalized.contains("duration") || normalized.contains("时长")
                 || normalized.contains("剧情摘要") || normalized.contains("seedream") || normalized.contains("seedance")
+                || normalized.contains("剧情描述") || normalized.contains("画面叙述") || normalized.contains("storydescription")
                 || normalized.contains("scene") || normalized.contains("time") || normalized.contains("lighting")
                 || normalized.contains("atmosphere") || normalized.contains("appearance") || normalized.contains("action")
                 || normalized.contains("emotion") || normalized.contains("camera") || normalized.contains("continuity")) {
@@ -550,32 +454,6 @@ public class TaskStoryboardPlanner {
             .replaceAll("[\\s_\\-()（）/\\\\+:：·,.，]", "");
     }
 
-    private String joinNonBlank(String delimiter, String... values) {
-        List<String> parts = new ArrayList<>();
-        for (String value : values) {
-            String normalized = stringValue(value);
-            if (!normalized.isBlank()) {
-                parts.add(normalized);
-            }
-        }
-        return String.join(delimiter, parts);
-    }
-
-    private String unifyStoryboardPrompt(String visual, String dynamic) {
-        String normalizedVisual = normalizeStoryboardPromptValue(visual);
-        String normalizedDynamic = normalizeStoryboardPromptValue(dynamic);
-        if (normalizedVisual.isBlank()) {
-            return normalizedDynamic;
-        }
-        if (normalizedDynamic.isBlank()) {
-            return normalizedVisual;
-        }
-        if (normalizedVisual.equalsIgnoreCase(normalizedDynamic)) {
-            return normalizedVisual;
-        }
-        return truncateText(normalizedVisual + "；动态延展：" + normalizedDynamic, 1200);
-    }
-
     private String normalizeStoryboardPromptValue(String value) {
         return stringValue(value)
             .replace("<br>", " ")
@@ -583,37 +461,6 @@ public class TaskStoryboardPlanner {
             .replace("<br />", " ")
             .replaceAll("\\s+", " ")
             .trim();
-    }
-
-    private String buildLegacyFirstFramePrompt(
-        String scene,
-        String time,
-        String shotSpec,
-        String visual,
-        String characterAppearance,
-        String lighting,
-        String atmosphere
-    ) {
-        String normalizedVisual = normalizeStoryboardPromptValue(visual);
-        return truncateText(joinNonBlank(", ",
-            normalizedVisual,
-            normalizeStoryboardPromptValue(characterAppearance),
-            normalizedVisual.isBlank() && !scene.isBlank() ? scene : "",
-            normalizedVisual.isBlank() && !time.isBlank() ? time : "",
-            normalizeStoryboardPromptValue(shotSpec),
-            normalizeStoryboardPromptValue(lighting),
-            normalizeStoryboardPromptValue(atmosphere)
-        ), 1200);
-    }
-
-    private String buildLegacyLastFramePrompt(String scene, String unifiedPrompt, String action, String emotion) {
-        String normalizedPrompt = normalizeStoryboardPromptValue(unifiedPrompt);
-        return truncateText(joinNonBlank(", ",
-            normalizedPrompt,
-            normalizedPrompt.isBlank() && !scene.isBlank() ? scene : "",
-            normalizeStoryboardPromptValue(action),
-            normalizeStoryboardPromptValue(emotion)
-        ), 1200);
     }
 
     private String buildContinuousClipPrompt(String lastFramePrompt, String motion, String cameraMovement, String dialogue, String audio) {
@@ -642,6 +489,12 @@ public class TaskStoryboardPlanner {
         if (normalized.isBlank()) {
             return "";
         }
+        String lowered = normalized.toLowerCase();
+        if (normalized.startsWith("画外音") || normalized.startsWith("旁白")
+            || lowered.startsWith("voice over") || lowered.startsWith("voiceover")
+            || lowered.startsWith("off-screen") || lowered.startsWith("offscreen")) {
+            return "可听见的画外音：" + normalized + "；说话者可暂不出镜，画外音放在镜头中段，前0.5秒与后0.5秒保持人声留白，仅保留动作或环境声缓冲。";
+        }
         if (normalized.startsWith("独白：") || normalized.startsWith("独白:")) {
             return "可听见的人声独白：" + normalized + "；独白放在镜头中段，前0.5秒与后0.5秒保持无人声，仅保留动作或环境声缓冲。";
         }
@@ -649,6 +502,60 @@ public class TaskStoryboardPlanner {
             return "可听见的人声对白：" + normalized + "；对白放在镜头中段，前0.5秒与后0.5秒保持无人声，仅保留动作或环境声缓冲。";
         }
         return "可听见的人声独白：独白：" + normalized + "；独白放在镜头中段，前0.5秒与后0.5秒保持无人声，仅保留动作或环境声缓冲。";
+    }
+
+    private String inferCameraMovement(String shotSpec, String motion) {
+        String normalizedShotSpec = normalizeStoryboardPromptValue(shotSpec);
+        String normalizedMotion = normalizeStoryboardPromptValue(motion);
+        for (String candidate : List.of(normalizedShotSpec, normalizedMotion)) {
+            String inferred = extractCameraMovement(candidate);
+            if (!inferred.isBlank()) {
+                return inferred;
+            }
+        }
+        return "";
+    }
+
+    private String extractCameraMovement(String value) {
+        String normalized = normalizeStoryboardPromptValue(value);
+        if (normalized.isBlank()) {
+            return "";
+        }
+        for (String token : normalized.split("[/／+＋,，;；|｜]")) {
+            String trimmed = token.trim();
+            if (looksLikeCameraMovement(trimmed)) {
+                return trimmed;
+            }
+        }
+        return looksLikeCameraMovement(normalized) ? normalized : "";
+    }
+
+    private boolean looksLikeCameraMovement(String value) {
+        String normalized = normalizeStoryboardPromptValue(value).toLowerCase();
+        if (normalized.isBlank()) {
+            return false;
+        }
+        return normalized.contains("推")
+            || normalized.contains("拉")
+            || normalized.contains("摇")
+            || normalized.contains("移")
+            || normalized.contains("跟")
+            || normalized.contains("甩")
+            || normalized.contains("升")
+            || normalized.contains("降")
+            || normalized.contains("环绕")
+            || normalized.contains("环拍")
+            || normalized.contains("手持")
+            || normalized.contains("dolly")
+            || normalized.contains("push")
+            || normalized.contains("pull")
+            || normalized.contains("pan")
+            || normalized.contains("tilt")
+            || normalized.contains("truck")
+            || normalized.contains("track")
+            || normalized.contains("orbit")
+            || normalized.contains("handheld")
+            || normalized.contains("whip");
     }
 
     private String firstNonBlank(String... values) {
@@ -668,41 +575,6 @@ public class TaskStoryboardPlanner {
             }
         }
         return true;
-    }
-
-    private String stripNarrationVoiceoverText(String text) {
-        String normalized = stringValue(text);
-        String lowered = normalized.toLowerCase();
-        if (!(normalized.contains("旁白") || normalized.contains("画外音") || normalized.contains("解说")
-            || lowered.contains("narration") || lowered.contains("voiceover") || lowered.contains("voice over"))) {
-            return normalized;
-        }
-        String cleaned = normalized.replaceAll("[（(]\\s*(?:旁白|画外音|解说|narration|voice\\s*over|voiceover)\\s*[)）]\\s*[:：]?\\s*", "");
-        String[] segments = cleaned.split("[；;。!！?？\\n]+");
-        List<String> kept = new ArrayList<>();
-        for (String segment : segments) {
-            String candidate = segment.trim();
-            String loweredCandidate = candidate.toLowerCase();
-            if (candidate.isBlank()) {
-                continue;
-            }
-            if (candidate.contains("旁白") || candidate.contains("画外音") || candidate.contains("解说")
-                || loweredCandidate.contains("narration") || loweredCandidate.contains("voiceover") || loweredCandidate.contains("voice over")) {
-                continue;
-            }
-            kept.add(candidate);
-        }
-        return String.join("；", kept).replaceAll("^[，,；;。\\s]+|[，,；;。\\s]+$", "");
-    }
-
-    private String buildVisualPrompt(TaskRecord task, String storyboardMarkdown) {
-        String base = !task.creativePrompt.isBlank() ? task.creativePrompt : (!task.transcriptText.isBlank() ? task.transcriptText : task.title);
-        String storyboardSnippet = truncateText(storyboardMarkdown, 280);
-        return truncateText(base + "\n\n参考分镜语义：" + storyboardSnippet, 640);
-    }
-
-    private GenerationRequestSnapshot requestSnapshot(TaskRecord task) {
-        return task == null ? null : task.requestSnapshot;
     }
 
     private String truncateText(String value, int maxLength) {
@@ -730,6 +602,7 @@ public class TaskStoryboardPlanner {
         Integer cameraMovementIndex,
         Integer visualIndex,
         Integer dynamicIndex,
+        Integer storyDescriptionIndex,
         Integer characterAppearanceIndex,
         Integer actionIndex,
         Integer emotionIndex,
@@ -740,7 +613,29 @@ public class TaskStoryboardPlanner {
         Integer durationIndex
     ) {
         static StoryboardTableSchema empty() {
-            return new StoryboardTableSchema(List.of(), null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null);
+            return new StoryboardTableSchema(
+                List.of(),
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null
+            );
         }
 
         static StoryboardTableSchema fromHeader(List<String> headers) {
@@ -755,15 +650,33 @@ public class TaskStoryboardPlanner {
                 resolve(headers, "lastframeprompt", "lastframe", "尾帧提示词", "尾帧"),
                 resolve(headers, "motion", "动作"),
                 resolve(headers, "cameramovement", "movement", "运镜"),
-                resolve(headers, "统一提示词", "统一画面提示词", "镜头提示词", "cinematicvisualdescription", "visualdescription", "visualcontent", "视觉描述", "画面细节描述", "画面描述", "visualprompt", "seedream提示词", "seedream", "关键帧", "visual"),
-                resolve(headers, "统一提示词", "统一画面提示词", "镜头提示词", "seedance提示词", "seedance", "动态与运镜", "动态", "衔接逻辑", "continuity", "motion"),
+                resolve(headers, "统一提示词", "统一画面提示词", "镜头提示词", "cinematicvisualdescription", "visualdescription", "visualcontent", "视觉描述", "画面提示词", "画面细节描述", "画面描述", "visualprompt", "seedream提示词", "seedream", "关键帧", "visual"),
+                resolve(headers, "统一提示词", "统一画面提示词", "镜头提示词", "seedance提示词", "seedance", "动态与运镜", "动态", "衔接逻辑", "转场", "转场衔接", "镜头节拍", "continuity", "motion"),
+                resolve(
+                    headers,
+                    "剧情描述",
+                    "剧情画面描述",
+                    "剧情画面与声音描述",
+                    "剧情画面与声音长描述",
+                    "整段描述",
+                    "合并长段描述",
+                    "长段描述",
+                    "scene description",
+                    "story description",
+                    "combined description",
+                    "merged description",
+                    "storyline",
+                    "plot description",
+                    "story narrative",
+                    "画面叙述"
+                ),
                 resolve(headers, "characterappearance", "appearance", "人物外观", "角色外观"),
-                resolve(headers, "action", "动作"),
+                resolve(headers, "action", "动作", "表演调度", "动作节拍", "动作链", "角色动作", "表演", "blocking", "beat", "performance"),
                 resolve(headers, "sentiment", "emotion", "情绪", "情感分析", "感情分析", "情感", "感情"),
                 resolve(headers, "lighting", "光线"),
                 resolve(headers, "atmosphere", "氛围"),
-                resolve(headers, "dialogue", "独白", "对话", "对白", "台词", "字幕"),
-                resolve(headers, "audio", "音效", "bgm", "sfx", "旁白", "画外音", "声音与对白"),
+                resolve(headers, "dialogue", "独白", "对话", "对白", "对白人声", "台词", "字幕", "对话独白画外音", "对白独白画外音", "dialoguevoiceover"),
+                resolve(headers, "audio", "音效", "bgm", "sfx", "声音与对白", "声音设计转场", "声音设计", "音效转场设计", "转场设计"),
                 resolve(headers, "duration", "时长", "秒")
             );
         }

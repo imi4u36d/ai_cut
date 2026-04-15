@@ -40,21 +40,21 @@ model:
       base_url: "https://api.openai.com/v1"
     qwen:
       provider: "qwen"
-      api_key: "sk-4a35c7684ae1455e919ea3fa9827ad36"
+      api_key: "sk-fb6e80b3f3034d4ea58923af0ff7bc7e"
       base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1"
       extras:
         use_responses_api: true
         timeout_seconds: 300
     ark:
       provider: "ark"
-      api_key: "777e66a1-3c30-409c-9bbc-5b963024bff8"
+      api_key: "63dc1334-4b8a-488c-bf0e-8ff5efbeef98"
       base_url: "https://ark.cn-beijing.volces.com/api/v3"
       extras:
         use_responses_api: true
         timeout_seconds: 180
     wan:
       provider: "wan"
-      api_key: "sk-4a35c7684ae1455e919ea3fa9827ad36"
+      api_key: "sk-fb6e80b3f3034d4ea58923af0ff7bc7e"
       base_url: "https://dashscope.aliyuncs.com/api/v1/services/aigc/video-generation/video-synthesis"
       extras:
         task_base_url: "https://dashscope.aliyuncs.com/api/v1/tasks"
@@ -63,11 +63,11 @@ model:
         prompt_extend: false
     seedream:
       provider: "seedream"
-      api_key: "777e66a1-3c30-409c-9bbc-5b963024bff8"
+      api_key: "63dc1334-4b8a-488c-bf0e-8ff5efbeef98"
       base_url: "https://ark.cn-beijing.volces.com/api/v3/images/generations"
     seedance:
       provider: "seedance"
-      api_key: "777e66a1-3c30-409c-9bbc-5b963024bff8"
+      api_key: "63dc1334-4b8a-488c-bf0e-8ff5efbeef98"
       base_url: "https://ark.cn-beijing.volces.com/api/v3/contents/generations/tasks"
       extras:
         task_base_url: "https://ark.cn-beijing.volces.com/api/v3/contents/generations/tasks"
@@ -75,7 +75,8 @@ model:
         poll_interval_seconds: 8
         poll_timeout_seconds: 600
         camera_fixed: false
-        watermark: true
+        watermark: false
+        prompt_extend: false
   models:
     "qwen3.6-plus":
       provider: "qwen"
@@ -147,7 +148,8 @@ catalog:
     style_preset: "cinematic"
     image_size: "1024x1024"
     video_size: "720*1280"
-    video_duration_seconds: 8
+    video_duration_seconds: 10
+    video_generate_audio: true
   aspect_ratios:
     "9:16":
       label: "竖版 9:16"
