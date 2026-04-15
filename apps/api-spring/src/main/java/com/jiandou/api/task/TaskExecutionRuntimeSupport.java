@@ -1,5 +1,6 @@
 package com.jiandou.api.task;
 
+import com.jiandou.api.generation.ModelRuntimePropertiesResolver;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import org.springframework.stereotype.Component;
@@ -8,9 +9,11 @@ import org.springframework.stereotype.Component;
 final class TaskExecutionRuntimeSupport {
 
     private final TaskRepository taskRepository;
+    private final ModelRuntimePropertiesResolver modelResolver;
 
-    TaskExecutionRuntimeSupport(TaskRepository taskRepository) {
+    TaskExecutionRuntimeSupport(TaskRepository taskRepository, ModelRuntimePropertiesResolver modelResolver) {
         this.taskRepository = taskRepository;
+        this.modelResolver = modelResolver;
     }
 
     Map<String, Object> activeAttempt(TaskRecord task) {
@@ -56,7 +59,8 @@ final class TaskExecutionRuntimeSupport {
         if (task.minDurationSeconds > 0) {
             return task.minDurationSeconds;
         }
-        return 8;
+        int configuredDefault = modelResolver.intValue("catalog.defaults", "video_duration_seconds", 10);
+        return Math.max(1, configuredDefault);
     }
 
     void assertTaskStillActive(TaskRecord task) {
@@ -161,7 +165,7 @@ final class TaskExecutionRuntimeSupport {
         if (lastFrameUrl != null && !lastFrameUrl.isBlank()) {
             input.put("lastFrameUrl", lastFrameUrl);
         }
-        input.put("generateAudio", true);
+        input.put("generateAudio", defaultVideoGenerateAudio());
         input.put("returnLastFrame", true);
         Integer taskSeed = taskSeed(task);
         if (taskSeed != null) {
@@ -192,6 +196,10 @@ final class TaskExecutionRuntimeSupport {
 
     private String buildVideoClipExecutionPrompt(String prompt) {
         return truncateText(prompt, 2200);
+    }
+
+    private boolean defaultVideoGenerateAudio() {
+        return boolValue(modelResolver.value("catalog.defaults", "video_generate_audio", "true"), true);
     }
 
     private String textAnalysisModel(TaskRecord task) {
@@ -261,5 +269,16 @@ final class TaskExecutionRuntimeSupport {
             }
         }
         return null;
+    }
+
+    private boolean boolValue(String value, boolean fallback) {
+        String normalized = stringValue(value).toLowerCase();
+        if (normalized.isBlank()) {
+            return fallback;
+        }
+        return "1".equals(normalized)
+            || "true".equals(normalized)
+            || "yes".equals(normalized)
+            || "on".equals(normalized);
     }
 }

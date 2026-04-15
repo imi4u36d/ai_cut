@@ -24,6 +24,7 @@ public class TaskWorkerPipelineHandler {
     private final TaskStoryboardPlanner storyboardPlanner;
     private final TaskWorkerStatusStageService statusStageService;
     private final TaskWorkerRenderStageService renderStageService;
+    private final TaskWorkerJoinStageService joinStageService;
 
     public TaskWorkerPipelineHandler(
         TaskRepository taskRepository,
@@ -34,7 +35,8 @@ public class TaskWorkerPipelineHandler {
         TaskExecutionArtifactAssembler artifactAssembler,
         TaskStoryboardPlanner storyboardPlanner,
         TaskWorkerStatusStageService statusStageService,
-        TaskWorkerRenderStageService renderStageService
+        TaskWorkerRenderStageService renderStageService,
+        TaskWorkerJoinStageService joinStageService
     ) {
         this.taskRepository = taskRepository;
         this.taskQueuePort = taskQueuePort;
@@ -45,6 +47,7 @@ public class TaskWorkerPipelineHandler {
         this.storyboardPlanner = storyboardPlanner;
         this.statusStageService = statusStageService;
         this.renderStageService = renderStageService;
+        this.joinStageService = joinStageService;
     }
 
     public void processTask(String taskId, String workerInstanceId, String workerType, String executionMode) {
@@ -111,7 +114,7 @@ public class TaskWorkerPipelineHandler {
                 Map<String, Object> scriptResult = resultMap(scriptRun);
                 storyboardMarkdown = stringValue(scriptResult.get("scriptMarkdown"));
                 if (storyboardMarkdown.isBlank()) {
-                    storyboardMarkdown = storyboardPlanner.buildFallbackStoryboard(task, durationSeconds, dimensions[0], dimensions[1]);
+                    throw new IllegalStateException("分镜脚本为空，未生成有效输出。");
                 }
                 task.storyboardScript = storyboardMarkdown;
                 putExecutionContext(task, "analysisRunId", stringValue(scriptRun.get("id")));
@@ -191,6 +194,8 @@ public class TaskWorkerPipelineHandler {
                 renderResult.clipCount(),
                 renderResult.latestVideoOutputUrl()
             );
+            // 补触发一次 join，覆盖 resume/no-op render 场景下的状态门控窗口。
+            joinStageService.scheduleJoin(task);
         } catch (TaskExecutionAbortedException ex) {
             statusStageService.handleAbort(task, runContext, ex.taskStatus());
         } catch (Exception ex) {

@@ -198,7 +198,7 @@ final class TaskWorkerRenderStageService {
                     )
                 );
             }
-            if (clipIndex == 1) {
+            if (index == Math.max(0, request.renderStartIndex() - 1)) {
                 statusStageService.updateStatus(task, runContext, "RENDERING", 55, "render", "task.rendering", "任务开始按分镜生成视频输出。");
             } else {
                 task.progress = Math.min(94, 55 + (int) Math.round(35.0 * index / Math.max(1, request.shotPlans().size())));
