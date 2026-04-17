@@ -3,7 +3,15 @@ package com.jiandou.api.task;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 
+import com.jiandou.api.config.JiandouStorageProperties;
+import com.jiandou.api.config.JiandouTaskOpsProperties;
+import com.jiandou.api.task.application.TaskDiagnosisService;
+import com.jiandou.api.task.application.TaskExecutionCoordinator;
+import com.jiandou.api.task.application.TaskQueryService;
 import com.jiandou.api.task.application.port.TaskQueuePort;
+import com.jiandou.api.task.persistence.TaskPersistenceMutation;
+import com.jiandou.api.task.persistence.TaskRepository;
+import com.jiandou.api.task.view.TaskViewMapper;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -13,21 +21,30 @@ import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+/**
+ * 任务查询相关测试。
+ */
 class TaskQueryServiceTest {
 
     private FakeTaskRepository taskRepository;
     private RecordingTaskExecutionCoordinator executionCoordinator;
     private TaskQueryService service;
 
+    /**
+     * 处理setUp。
+     */
     @BeforeEach
     void setUp() {
         taskRepository = new FakeTaskRepository();
         executionCoordinator = new RecordingTaskExecutionCoordinator(taskRepository);
-        TaskViewMapper taskViewMapper = new TaskViewMapper("../../storage");
+        TaskViewMapper taskViewMapper = new TaskViewMapper(storageProperties("../../storage"));
         TaskDiagnosisService diagnosisService = new TaskDiagnosisService(taskViewMapper);
-        service = new TaskQueryService(taskRepository, taskViewMapper, executionCoordinator, diagnosisService);
+        service = new TaskQueryService(taskRepository, taskViewMapper, executionCoordinator, diagnosisService, new JiandouTaskOpsProperties());
     }
 
+    /**
+     * 列出任务SupportsRunningAlias状态筛选。
+     */
     @Test
     void listTasksSupportsRunningAliasStatusFilter() {
         TaskRecord running = task("task_running", "RUNNING", "2026-04-14T00:00:02Z");
@@ -43,11 +60,14 @@ class TaskQueryServiceTest {
         assertEquals(1, executionCoordinator.recomputeCalls);
     }
 
+    /**
+     * 列出任务SupportsQueuedAlias状态筛选。
+     */
     @Test
     void listTasksSupportsQueuedAliasStatusFilter() {
         TaskRecord queued = task("task_queued", "PENDING", "2026-04-14T00:00:02Z");
-        queued.isQueued = true;
-        queued.queuePosition = 1;
+        queued.setQueued(true);
+        queued.setQueuePosition(1);
         TaskRecord pending = task("task_not_queued", "PENDING", "2026-04-14T00:00:01Z");
         taskRepository.tasks = List.of(queued, pending);
         executionCoordinator.snapshot = List.of("task_queued");
@@ -58,6 +78,9 @@ class TaskQueryServiceTest {
         assertEquals("task_queued", rows.get(0).get("id"));
     }
 
+    /**
+     * 处理管理概览CountsRunning任务WithRunning状态Alias。
+     */
     @Test
     void adminOverviewCountsRunningTasksWithRunningStatusAlias() {
         TaskRecord running = task("task_running", "RUNNING", "2026-04-14T00:00:02Z");
@@ -78,16 +101,29 @@ class TaskQueryServiceTest {
         assertEquals(2, recentRunningTasks.size());
     }
 
+    /**
+     * 处理任务。
+     * @param id 标识值
+     * @param status 状态值
+     * @param updatedAt updatedAt值
+     * @return 处理结果
+     */
     private TaskRecord task(String id, String status, String updatedAt) {
         TaskRecord task = new TaskRecord();
-        task.id = id;
-        task.title = id;
-        task.status = status;
-        task.createdAt = updatedAt;
-        task.updatedAt = updatedAt;
-        task.executionContext = new LinkedHashMap<>();
+        task.setId(id);
+        task.setTitle(id);
+        task.setStatus(status);
+        task.setCreatedAt(updatedAt);
+        task.setUpdatedAt(updatedAt);
+        task.setExecutionContext(new LinkedHashMap<>());
         taskRepository.tasksById.put(id, task);
         return task;
+    }
+
+    private JiandouStorageProperties storageProperties(String rootDir) {
+        JiandouStorageProperties properties = new JiandouStorageProperties();
+        properties.setRootDir(rootDir);
+        return properties;
     }
 
     private static final class RecordingTaskExecutionCoordinator extends TaskExecutionCoordinator {
@@ -95,16 +131,28 @@ class TaskQueryServiceTest {
         private int recomputeCalls;
         private List<String> snapshot = List.of();
 
+        /**
+         * 处理Recording任务执行协调器。
+         * @param taskRepository 任务仓储值
+         */
         private RecordingTaskExecutionCoordinator(TaskRepository taskRepository) {
             super(new NoopQueuePort(), taskRepository);
         }
 
+        /**
+         * 重新计算队列Positions。
+         * @param tasks 任务值
+         */
         @Override
         public void recomputeQueuePositions(Collection<TaskRecord> tasks) {
             recomputeCalls += 1;
             super.recomputeQueuePositions(tasks);
         }
 
+        /**
+         * 处理队列快照。
+         * @return 处理结果
+         */
         @Override
         public List<String> queueSnapshot() {
             return new ArrayList<>(snapshot);
@@ -113,19 +161,36 @@ class TaskQueryServiceTest {
 
     private static final class NoopQueuePort implements TaskQueuePort {
 
+        /**
+         * 将enqueue加入队列。
+         * @param taskId 任务标识
+         */
         @Override
         public void enqueue(String taskId) {
         }
 
+        /**
+         * 移除remove。
+         * @param taskId 任务标识
+         */
         @Override
         public void remove(String taskId) {
         }
 
+        /**
+         * 领取Next。
+         * @param workerInstanceId 工作节点实例标识
+         * @return 处理结果
+         */
         @Override
         public String claimNext(String workerInstanceId) {
             return "";
         }
 
+        /**
+         * 处理快照。
+         * @return 处理结果
+         */
         @Override
         public List<String> snapshot() {
             return List.of();
@@ -140,68 +205,140 @@ class TaskQueryServiceTest {
         private List<Map<String, Object>> workerInstances = List.of();
         private List<Map<String, Object>> traces = List.of();
 
+        /**
+         * 查找All。
+         * @return 处理结果
+         */
         @Override
         public Collection<TaskRecord> findAll() {
             return tasks;
         }
 
+        /**
+         * 查找By标识。
+         * @param taskId 任务标识
+         * @return 处理结果
+         */
         @Override
         public TaskRecord findById(String taskId) {
             return tasksById.get(taskId);
         }
 
+        /**
+         * 列出队列Events。
+         * @param taskId 任务标识
+         * @param limit 返回的最大条目数
+         * @return 处理结果
+         */
         @Override
         public List<Map<String, Object>> listQueueEvents(String taskId, int limit) {
             return queueEvents;
         }
 
+        /**
+         * 列出工作节点Instances。
+         * @param limit 返回的最大条目数
+         * @return 处理结果
+         */
         @Override
         public List<Map<String, Object>> listWorkerInstances(int limit) {
             return workerInstances;
         }
 
+        /**
+         * 列出Traces。
+         * @param taskId 任务标识
+         * @param stage 阶段名称
+         * @param level level值
+         * @param query 查询值
+         * @param limit 返回的最大条目数
+         * @return 处理结果
+         */
         @Override
         public List<Map<String, Object>> listTraces(String taskId, String stage, String level, String query, int limit) {
             return traces;
         }
 
+        /**
+         * 查找工作节点Instance。
+         * @param workerInstanceId 工作节点实例标识
+         * @return 处理结果
+         */
         @Override
         public Map<String, Object> findWorkerInstance(String workerInstanceId) {
             return Map.of();
         }
 
+        /**
+         * 保存save。
+         * @param task 要处理的任务对象
+         */
         @Override
         public void save(TaskRecord task) {
         }
 
+        /**
+         * 保存变更。
+         * @param mutation 变更值
+         */
         @Override
         public void saveMutation(TaskPersistenceMutation mutation) {
         }
 
+        /**
+         * 移除Queued任务。
+         * @param taskId 任务标识
+         */
         @Override
         public void removeQueuedTask(String taskId) {
         }
 
+        /**
+         * 领取NextQueued任务。
+         * @param workerInstanceId 工作节点实例标识
+         * @return 处理结果
+         */
         @Override
         public String claimNextQueuedTask(String workerInstanceId) {
             return "";
         }
 
+        /**
+         * 列出Queued任务标识列表。
+         * @param limit 返回的最大条目数
+         * @return 处理结果
+         */
         @Override
         public List<String> listQueuedTaskIds(int limit) {
             return List.of();
         }
 
+        /**
+         * 列出StaleRunningClaims。
+         * @param staleBefore staleBefore值
+         * @param limit 返回的最大条目数
+         * @return 处理结果
+         */
         @Override
         public List<Map<String, Object>> listStaleRunningClaims(OffsetDateTime staleBefore, int limit) {
             return List.of();
         }
 
+        /**
+         * 列出Stale工作节点Instance标识列表。
+         * @param staleBefore staleBefore值
+         * @param limit 返回的最大条目数
+         * @return 处理结果
+         */
         @Override
         public List<String> listStaleWorkerInstanceIds(OffsetDateTime staleBefore, int limit) {
             return List.of();
         }
 
+        /**
+         * 删除删除。
+         * @param taskId 任务标识
+         */
         @Override
         public void delete(String taskId) {
         }

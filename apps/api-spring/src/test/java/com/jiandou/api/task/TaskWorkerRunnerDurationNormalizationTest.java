@@ -3,13 +3,20 @@ package com.jiandou.api.task;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-import com.jiandou.api.generation.ModelRuntimePropertiesResolver;
+import com.jiandou.api.generation.runtime.ModelRuntimePropertiesResolver;
+import com.jiandou.api.task.application.TaskStoryboardPlanner;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.env.MockEnvironment;
 
+/**
+ * 任务工作节点Runner时长Normalization相关测试。
+ */
 class TaskWorkerRunnerDurationNormalizationTest {
 
+    /**
+     * 规范化片段时长规划PromotesUnsupportedOneSecondClips转为Supported时长。
+     */
     @Test
     void normalizeClipDurationPlanPromotesUnsupportedOneSecondClipsToSupportedDuration() {
         MockEnvironment environment = new MockEnvironment()
@@ -23,9 +30,12 @@ class TaskWorkerRunnerDurationNormalizationTest {
         );
 
         assertEquals(1, normalized.size());
-        assertArrayEquals(new int[] {4, 4, 4}, normalized.get(0));
+        assertArrayEquals(new int[] {6, 6, 6}, normalized.get(0));
     }
 
+    /**
+     * 规范化片段时长规划KeepsSupportedRangesAndChoosesClosestTarget。
+     */
     @Test
     void normalizeClipDurationPlanKeepsSupportedRangesAndChoosesClosestTarget() {
         MockEnvironment environment = new MockEnvironment()

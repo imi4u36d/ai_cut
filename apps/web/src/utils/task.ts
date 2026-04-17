@@ -1,3 +1,6 @@
+/**
+ * 任务相关工具方法。
+ */
 import type { TaskStatus } from "@/types";
 
 export const TERMINAL_TASK_STATUSES: TaskStatus[] = ["COMPLETED", "FAILED"];
@@ -20,14 +23,26 @@ export const TASK_LIFECYCLE_GROUP_LABELS = {
   failed: "失败"
 } as const;
 
+/**
+ * 检查是否终态任务状态。
+ * @param status 状态值
+ */
 export function isTerminalTaskStatus(status: TaskStatus) {
   return TERMINAL_TASK_STATUSES.includes(status);
 }
 
+/**
+ * 格式化任务状态。
+ * @param status 状态值
+ */
 export function formatTaskStatus(status: TaskStatus) {
   return TASK_STATUS_LABELS[status] ?? status;
 }
 
+/**
+ * 返回任务生命周期分组。
+ * @param status 状态值
+ */
 export function getTaskLifecycleGroup(status: TaskStatus) {
   switch (status) {
     case "COMPLETED":
@@ -45,10 +60,19 @@ export function getTaskLifecycleGroup(status: TaskStatus) {
   }
 }
 
+/**
+ * 格式化任务范围。
+ * @param minDuration 最小时长值
+ * @param maxDuration 最大时长值
+ */
 export function formatTaskRange(minDuration: number, maxDuration: number) {
   return `${minDuration}-${maxDuration}s`;
 }
 
+/**
+ * 格式化任务进度。
+ * @param progress 进度值
+ */
 export function formatTaskProgress(progress: number) {
   return `${Math.max(0, Math.min(100, progress))}%`;
 }

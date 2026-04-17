@@ -1,14 +1,23 @@
 package com.jiandou.api.task;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+
+import com.jiandou.api.task.view.TaskViewMapper;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 
+import com.jiandou.api.config.JiandouStorageProperties;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 
+/**
+ * 任务视图相关测试。
+ */
 class TaskViewMapperTest {
 
+    /**
+     * 处理转为详情UsesPending时长DiagnosticsWhen规划HasNo已渲染输出。
+     */
     @Test
     void toDetailUsesPendingDurationDiagnosticsWhenPlanHasNoRenderedOutput() {
         TaskRecord task = new TaskRecord();
@@ -30,7 +39,7 @@ class TaskViewMapperTest {
             )
         );
 
-        TaskViewMapper mapper = new TaskViewMapper("../../storage");
+        TaskViewMapper mapper = new TaskViewMapper(storageProperties("../../storage"));
         Map<String, Object> detail = mapper.toDetail(task);
 
         Object diagnosticsValue = detail.get("durationDiagnostics");
@@ -41,6 +50,9 @@ class TaskViewMapperTest {
         assertEquals(6, firstRow.get("plannedTargetDurationSeconds"));
     }
 
+    /**
+     * 处理转为详情Uses时长兜底From已渲染输出When规划Missing。
+     */
     @Test
     void toDetailUsesDurationFallbackFromRenderedOutputWhenPlanMissing() {
         TaskRecord task = new TaskRecord();
@@ -60,7 +72,7 @@ class TaskViewMapperTest {
             )
         ));
 
-        TaskViewMapper mapper = new TaskViewMapper("../../storage");
+        TaskViewMapper mapper = new TaskViewMapper(storageProperties("../../storage"));
         Map<String, Object> detail = mapper.toDetail(task);
 
         List<?> diagnostics = assertInstanceOf(List.class, detail.get("durationDiagnostics"));
@@ -74,6 +86,9 @@ class TaskViewMapperTest {
         assertEquals("rendered", firstRow.get("status"));
     }
 
+    /**
+     * 处理转为列表ItemFallsBack转为执行Context工作节点And阶段ForRunning状态。
+     */
     @Test
     void toListItemFallsBackToExecutionContextWorkerAndStageForRunningStatus() {
         TaskRecord task = new TaskRecord();
@@ -83,10 +98,16 @@ class TaskViewMapperTest {
         task.executionContext.put("workerInstanceId", "worker_1");
         task.executionContext.put("currentStage", "render");
 
-        TaskViewMapper mapper = new TaskViewMapper("../../storage");
+        TaskViewMapper mapper = new TaskViewMapper(storageProperties("../../storage"));
         Map<String, Object> row = mapper.toListItem(task);
 
         assertEquals("worker_1", row.get("activeWorkerInstanceId"));
         assertEquals("render", row.get("currentStage"));
+    }
+
+    private JiandouStorageProperties storageProperties(String rootDir) {
+        JiandouStorageProperties properties = new JiandouStorageProperties();
+        properties.setRootDir(rootDir);
+        return properties;
     }
 }

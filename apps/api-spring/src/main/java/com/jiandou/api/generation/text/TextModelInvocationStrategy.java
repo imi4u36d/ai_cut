@@ -1,6 +1,6 @@
 package com.jiandou.api.generation.text;
 
-import com.jiandou.api.generation.ModelRuntimeProfile;
+import com.jiandou.api.generation.runtime.ModelRuntimeProfile;
 
 /**
  * 文本模型调用策略接口。
@@ -8,7 +8,19 @@ import com.jiandou.api.generation.ModelRuntimeProfile;
  */
 public interface TextModelInvocationStrategy {
 
+    /**
+     * 检查是否supports。
+     * @param profile profile值
+     * @param invocation 调用值
+     * @return 是否满足条件
+     */
     boolean supports(ModelRuntimeProfile profile, TextModelInvocation invocation);
 
+    /**
+     * 处理prepare。
+     * @param profile profile值
+     * @param invocation 调用值
+     * @return 处理结果
+     */
     PreparedTextModelRequest prepare(ModelRuntimeProfile profile, TextModelInvocation invocation);
 }

@@ -16,6 +16,9 @@
 </template>
 
 <script setup lang="ts">
+/**
+ * 时间线组件。
+ */
 import { computed } from "vue";
 
 const props = defineProps<{
@@ -78,4 +81,5 @@ const barClass = computed(() => {
       return "bg-slate-300";
   }
 });
+
 </script>

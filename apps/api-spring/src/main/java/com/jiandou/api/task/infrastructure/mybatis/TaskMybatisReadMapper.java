@@ -7,8 +7,16 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * 任务MyBatisReadMyBatis Mapper。
+ */
 final class TaskMybatisReadMapper {
 
+    /**
+     * 处理转为任务行。
+     * @param entity 实体值
+     * @return 处理结果
+     */
     TaskRow toTaskRow(TaskEntity entity) {
         return new TaskRow(
             entity.getTaskId(),
@@ -49,6 +57,11 @@ final class TaskMybatisReadMapper {
         );
     }
 
+    /**
+     * 处理转为StaleRunningClaimMap。
+     * @param item item值
+     * @return 处理结果
+     */
     Map<String, Object> toStaleRunningClaimMap(StaleRunningTaskRow item) {
         Map<String, Object> row = new LinkedHashMap<>();
         row.put("taskId", item.taskId());
@@ -56,6 +69,11 @@ final class TaskMybatisReadMapper {
         return row;
     }
 
+    /**
+     * 处理转为队列事件Map。
+     * @param entity 实体值
+     * @return 处理结果
+     */
     Map<String, Object> toQueueEventMap(TaskQueueEventEntity entity) {
         Map<String, Object> row = new LinkedHashMap<>();
         row.put("taskQueueEventId", entity.getTaskQueueEventId());
@@ -71,6 +89,11 @@ final class TaskMybatisReadMapper {
         return row;
     }
 
+    /**
+     * 处理转为工作节点InstanceMap。
+     * @param entity 实体值
+     * @return 处理结果
+     */
     Map<String, Object> toWorkerInstanceMap(WorkerInstanceEntity entity) {
         Map<String, Object> row = new LinkedHashMap<>();
         row.put("workerInstanceId", entity.getWorkerInstanceId());
@@ -88,6 +111,11 @@ final class TaskMybatisReadMapper {
         return row;
     }
 
+    /**
+     * 处理转为追踪Map。
+     * @param entity 实体值
+     * @return 处理结果
+     */
     Map<String, Object> toTraceMap(SystemLogEntity entity) {
         Map<String, Object> row = new LinkedHashMap<>();
         row.put("traceId", entity.getTraceId());
@@ -104,6 +132,11 @@ final class TaskMybatisReadMapper {
         return row;
     }
 
+    /**
+     * 处理转为状态History行。
+     * @param entity 实体值
+     * @return 处理结果
+     */
     TaskStatusHistoryRow toStatusHistoryRow(TaskStatusHistoryEntity entity) {
         return new TaskStatusHistoryRow(
             entity.getTaskStatusHistoryId(),
@@ -124,6 +157,11 @@ final class TaskMybatisReadMapper {
         );
     }
 
+    /**
+     * 应用Attempts。
+     * @param task 要处理的任务对象
+     * @param entities entities值
+     */
     void applyAttempts(TaskRecord task, List<TaskAttemptEntity> entities) {
         task.attemptsView().clear();
         for (TaskAttemptEntity entity : entities) {
@@ -153,6 +191,11 @@ final class TaskMybatisReadMapper {
         }
     }
 
+    /**
+     * 应用阶段Runs。
+     * @param task 要处理的任务对象
+     * @param entities entities值
+     */
     void applyStageRuns(TaskRecord task, List<TaskStageRunEntity> entities) {
         task.stageRunsView().clear();
         for (TaskStageRunEntity entity : entities) {
@@ -176,6 +219,11 @@ final class TaskMybatisReadMapper {
         }
     }
 
+    /**
+     * 应用模型Calls。
+     * @param task 要处理的任务对象
+     * @param entities entities值
+     */
     void applyModelCalls(TaskRecord task, List<TaskModelCallEntity> entities) {
         task.modelCallsView().clear();
         for (TaskModelCallEntity entity : entities) {
@@ -201,6 +249,11 @@ final class TaskMybatisReadMapper {
         }
     }
 
+    /**
+     * 应用素材。
+     * @param task 要处理的任务对象
+     * @param entities entities值
+     */
     void applyMaterials(TaskRecord task, List<MaterialAssetEntity> entities) {
         task.materialsView().clear();
         for (MaterialAssetEntity entity : entities) {
@@ -235,6 +288,11 @@ final class TaskMybatisReadMapper {
         }
     }
 
+    /**
+     * 应用Results。
+     * @param task 要处理的任务对象
+     * @param entities entities值
+     */
     void applyResults(TaskRecord task, List<TaskResultEntity> entities) {
         task.outputsView().clear();
         for (TaskResultEntity entity : entities) {
@@ -262,6 +320,11 @@ final class TaskMybatisReadMapper {
         }
     }
 
+    /**
+     * 应用追踪。
+     * @param task 要处理的任务对象
+     * @param entities entities值
+     */
     void applyTrace(TaskRecord task, List<SystemLogEntity> entities) {
         task.traceView().clear();
         for (SystemLogEntity entity : entities) {

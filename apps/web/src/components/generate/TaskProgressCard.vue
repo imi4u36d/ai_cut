@@ -5,7 +5,7 @@
 
     <div class="card-head">
       <div>
-        <p class="eyebrow">Task Progress</p>
+        <p class="eyebrow">任务进度</p>
         <h2>实时进度</h2>
       </div>
       <span :class="['status-pill', `status-${props.state.status}`]">
@@ -52,6 +52,9 @@
 </template>
 
 <script setup lang="ts">
+/**
+ * 任务进度组件。
+ */
 import { computed } from "vue";
 import type { TaskProgressCardProps } from "./types";
 
@@ -72,6 +75,7 @@ const statusLabel = computed(() => {
   }
   return "待开始";
 });
+
 </script>
 
 <style scoped>

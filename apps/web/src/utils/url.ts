@@ -1,3 +1,11 @@
+/**
+ * 处理解析运行时URL。
+ * @param input 输入值
+ * @param baseUrl 基础 URL
+ */
+/**
+ * URL相关工具方法。
+ */
 export function resolveRuntimeUrl(input: string | null | undefined, baseUrl: string) {
   if (!input) {
     return "";

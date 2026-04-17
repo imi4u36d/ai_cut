@@ -94,6 +94,9 @@
 </template>
 
 <script setup lang="ts">
+/**
+ * 管理系统页面组件。
+ */
 import { onMounted, ref, watch } from "vue";
 import { fetchAdminTraces } from "@/api/admin";
 import ModelStatusStrip from "@/components/ModelStatusStrip.vue";
@@ -108,10 +111,18 @@ const stageFilter = ref("");
 const keywordFilter = ref("");
 let refreshDebounceTimer: ReturnType<typeof setTimeout> | null = null;
 
+/**
+ * 格式化时间。
+ * @param value 待处理的值
+ */
 function formatTime(value: string) {
   return new Date(value).toLocaleString();
 }
 
+/**
+ * 处理日志Level样式类。
+ * @param level level值
+ */
 function logLevelClass(level: string) {
   if (level === "ERROR") {
     return "bg-rose-100 text-rose-700";
@@ -152,6 +163,7 @@ watch([taskIdFilter, levelFilter, stageFilter, keywordFilter], () => {
 onMounted(async () => {
   await loadTraces();
 });
+
 </script>
 
 <style scoped>

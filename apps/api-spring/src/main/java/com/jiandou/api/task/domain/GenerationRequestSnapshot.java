@@ -27,6 +27,10 @@ public record GenerationRequestSnapshot(
     boolean stopBeforeVideoGeneration
 ) {
 
+    /**
+     * 处理empty。
+     * @return 处理结果
+     */
     public static GenerationRequestSnapshot empty() {
         return new GenerationRequestSnapshot(
             "generation",
@@ -49,6 +53,11 @@ public record GenerationRequestSnapshot(
         );
     }
 
+    /**
+     * 处理fromMap。
+     * @param map map值
+     * @return 处理结果
+     */
     public static GenerationRequestSnapshot fromMap(Map<String, Object> map) {
         if (map == null || map.isEmpty()) {
             return empty();
@@ -74,6 +83,10 @@ public record GenerationRequestSnapshot(
         );
     }
 
+    /**
+     * 处理转为Map。
+     * @return 处理结果
+     */
     public Map<String, Object> toMap() {
         Map<String, Object> row = new LinkedHashMap<>();
         row.put("taskType", taskType);
@@ -96,6 +109,11 @@ public record GenerationRequestSnapshot(
         return row;
     }
 
+    /**
+     * 处理模型值。
+     * @param fieldName fieldName值
+     * @return 处理结果
+     */
     public String modelValue(String fieldName) {
         return switch (fieldName) {
             case "textAnalysisModel" -> textAnalysisModel;
@@ -106,11 +124,22 @@ public record GenerationRequestSnapshot(
         };
     }
 
+    /**
+     * 处理string值。
+     * @param value 待处理的值
+     * @param fallback 兜底值
+     * @return 处理结果
+     */
     private static String stringValue(Object value, String fallback) {
         String normalized = value == null ? "" : String.valueOf(value).trim();
         return normalized.isBlank() ? fallback : normalized;
     }
 
+    /**
+     * 处理integer值。
+     * @param value 待处理的值
+     * @return 处理结果
+     */
     private static Integer integerValue(Object value) {
         if (value instanceof Number number) {
             return number.intValue();
@@ -125,11 +154,22 @@ public record GenerationRequestSnapshot(
         }
     }
 
+    /**
+     * 处理integer值。
+     * @param value 待处理的值
+     * @param fallback 兜底值
+     * @return 处理结果
+     */
     private static int integerValue(Object value, int fallback) {
         Integer parsed = integerValue(value);
         return parsed == null ? fallback : parsed;
     }
 
+    /**
+     * 检查是否boolean值。
+     * @param value 待处理的值
+     * @return 是否满足条件
+     */
     private static boolean booleanValue(Object value) {
         if (value instanceof Boolean bool) {
             return bool;
@@ -142,10 +182,19 @@ public record GenerationRequestSnapshot(
      */
     public record RequestedDuration(boolean auto, Integer seconds) {
 
+        /**
+         * 处理automatic。
+         * @return 处理结果
+         */
         public static RequestedDuration automatic() {
             return new RequestedDuration(true, null);
         }
 
+        /**
+         * 处理from。
+         * @param raw 原始值
+         * @return 处理结果
+         */
         public static RequestedDuration from(Object raw) {
             if (raw == null) {
                 return automatic();
@@ -164,6 +213,10 @@ public record GenerationRequestSnapshot(
             }
         }
 
+        /**
+         * 处理转为值。
+         * @return 处理结果
+         */
         public Object toValue() {
             return auto ? "auto" : seconds;
         }
@@ -174,10 +227,19 @@ public record GenerationRequestSnapshot(
      */
     public record RequestedOutputCount(boolean auto, Integer count) {
 
+        /**
+         * 处理automatic。
+         * @return 处理结果
+         */
         public static RequestedOutputCount automatic() {
             return new RequestedOutputCount(true, null);
         }
 
+        /**
+         * 处理from。
+         * @param raw 原始值
+         * @return 处理结果
+         */
         public static RequestedOutputCount from(Object raw) {
             if (raw == null) {
                 return automatic();
@@ -196,6 +258,10 @@ public record GenerationRequestSnapshot(
             }
         }
 
+        /**
+         * 处理转为值。
+         * @return 处理结果
+         */
         public Object toValue() {
             return auto ? "auto" : count;
         }

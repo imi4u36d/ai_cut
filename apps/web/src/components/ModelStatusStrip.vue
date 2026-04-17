@@ -101,6 +101,9 @@
 </template>
 
 <script setup lang="ts">
+/**
+ * 模型状态组件。
+ */
 import { computed, onMounted, ref } from "vue";
 import { fetchHealth } from "@/api/health";
 import type { HealthResponse } from "@/types";
@@ -141,6 +144,7 @@ async function loadHealth() {
 onMounted(() => {
   void loadHealth();
 });
+
 </script>
 
 <style scoped>

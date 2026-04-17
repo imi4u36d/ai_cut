@@ -1,3 +1,6 @@
+/**
+ * 类型组件。
+ */
 import type {
   GenerationTextAnalysisModelInfo,
   GenerationVideoDurationOption,
@@ -5,6 +8,9 @@ import type {
   GenerationVideoSizeOption,
 } from "@/types";
 
+/**
+ * Generate表单模型接口定义。
+ */
 export interface GenerateFormModel {
   prompt: string;
   textAnalysisModel: string;
@@ -14,6 +20,9 @@ export interface GenerateFormModel {
   maxDurationSeconds: string;
 }
 
+/**
+ * Generate表单卡片Props接口定义。
+ */
 export interface GenerateFormCardProps {
   form: GenerateFormModel;
   textAnalysisModels: GenerationTextAnalysisModelInfo[];
@@ -30,8 +39,14 @@ export interface GenerateFormCardProps {
   canSubmit: boolean;
 }
 
+/**
+ * 进度状态。
+ */
 export type ProgressStatus = "idle" | "running" | "paused" | "completed" | "failed";
 
+/**
+ * 任务进度接口定义。
+ */
 export interface TaskProgressState {
   status: ProgressStatus;
   progress: number;
@@ -40,6 +55,9 @@ export interface TaskProgressState {
   updatedAt: string;
 }
 
+/**
+ * 任务进度卡片Props接口定义。
+ */
 export interface TaskProgressCardProps {
   state: TaskProgressState;
   taskId: string;

@@ -107,6 +107,9 @@
 </template>
 
 <script setup lang="ts">
+/**
+ * Generate表单组件。
+ */
 import { computed, ref } from "vue";
 import TextModelProbeInline from "@/components/TextModelProbeInline.vue";
 import type { GenerateFormCardProps } from "./types";
@@ -129,6 +132,7 @@ defineExpose({
     return (await textModelProbeRef.value?.ensureReady()) !== false;
   },
 });
+
 </script>
 
 <style scoped>

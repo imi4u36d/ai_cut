@@ -5,7 +5,26 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.jiandou.api.config.JiandouStorageProperties;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.jiandou.api.generation.image.ImageModelProviderRegistry;
+import com.jiandou.api.generation.orchestration.GenerationRunFactory;
+import com.jiandou.api.generation.orchestration.GenerationRunSupport;
+import com.jiandou.api.generation.runtime.GenerationConfigPathLocator;
+import com.jiandou.api.generation.runtime.MediaProviderCapabilities;
+import com.jiandou.api.generation.runtime.MediaProviderConfig;
+import com.jiandou.api.generation.runtime.MediaProviderProfile;
+import com.jiandou.api.generation.runtime.ModelRuntimeProfile;
+import com.jiandou.api.generation.runtime.ModelRuntimePropertiesResolver;
+import com.jiandou.api.generation.runtime.PromptTemplateResolver;
+import com.jiandou.api.generation.text.TextCompletionInvocation;
+import com.jiandou.api.generation.text.TextModelInvocation;
+import com.jiandou.api.generation.text.TextModelProvider;
+import com.jiandou.api.generation.text.TextModelProviderRegistry;
+import com.jiandou.api.generation.text.VisionCompletionInvocation;
+import com.jiandou.api.generation.video.VideoGenerationRequest;
+import com.jiandou.api.generation.video.VideoModelProvider;
+import com.jiandou.api.generation.video.VideoModelProviderRegistry;
 import com.jiandou.api.media.LocalMediaArtifactService;
 import com.jiandou.api.media.LocalMediaArtifactService.StoredArtifact;
 import java.nio.file.Files;
@@ -16,11 +35,17 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.mock.env.MockEnvironment;
 
+/**
+ * 生成运行工厂视频Async相关测试。
+ */
 class GenerationRunFactoryVideoAsyncTest {
 
     @TempDir
     Path tempDir;
 
+    /**
+     * 创建视频运行ReturnsRunningAndRefreshCompletes。
+     */
     @Test
     void createVideoRunReturnsRunningAndRefreshCompletes() throws Exception {
         ModelRuntimeProfile textProfile = new ModelRuntimeProfile(
@@ -46,40 +71,57 @@ class GenerationRunFactoryVideoAsyncTest {
             "test"
         );
         MediaProviderProfile videoProfile = new MediaProviderProfile(
-            "wan",
-            "wan2.2-i2v-plus",
-            "k",
-            "https://dashscope.aliyuncs.com/api/v1/services/aigc/video-generation/video-synthesis",
-            "https://dashscope.aliyuncs.com/api/v1/tasks",
-            60,
-            1,
-            120,
-            true,
-            false,
-            false,
-            "test"
+            new MediaProviderConfig(
+                "video",
+                "wan2.2-i2v-plus",
+                "wan",
+                "wan2.2-i2v-plus",
+                "k",
+                "https://dashscope.aliyuncs.com/api/v1/services/aigc/video-generation/video-synthesis",
+                "https://dashscope.aliyuncs.com/api/v1/tasks",
+                60,
+                "test"
+            ),
+            new MediaProviderCapabilities(false, true, false, false, 1, 120, "i2v", java.util.List.of(), java.util.List.of(6, 8, 10))
         );
         ModelRuntimePropertiesResolver modelResolver = new ModelRuntimePropertiesResolver(new MockEnvironment()) {
+            /**
+             * 检查是否supports种子。
+             * @param requestedModel requested模型值
+             * @return 是否满足条件
+             */
             @Override
             public boolean supportsSeed(String requestedModel) {
                 return false;
             }
 
+            /**
+             * 处理解析文本Profile。
+             * @param requestedModel requested模型值
+             * @return 处理结果
+             */
             @Override
             public ModelRuntimeProfile resolveTextProfile(String requestedModel) {
                 return "gpt-vision".equals(requestedModel) ? visionProfile : textProfile;
             }
 
+            /**
+             * 处理解析视频Profile。
+             * @param requestedModel requested模型值
+             * @return 处理结果
+             */
             @Override
-            public MediaProviderProfile resolveVideoProfile(String requestedModel) {
+            public MediaProviderProfile resolveMediaProfile(String requestedModel, String expectedKind) {
                 return videoProfile;
             }
 
-            @Override
-            public Map<String, String> section(String sectionName) {
-                return Map.of("supported_durations", "6,8,10");
-            }
-
+            /**
+             * 处理值。
+             * @param section section值
+             * @param key key值
+             * @param fallback 兜底值
+             * @return 处理结果
+             */
             @Override
             public String value(String section, String key, String fallback) {
                 return fallback;
@@ -90,22 +132,52 @@ class GenerationRunFactoryVideoAsyncTest {
             modelResolver,
             new GenerationConfigPathLocator(new MockEnvironment())
         ) {
+            /**
+             * 处理系统提示词。
+             * @param promptName 提示词Name值
+             * @param key key值
+             * @return 处理结果
+             */
             @Override
             public String systemPrompt(String promptName, String key) {
                 return "";
             }
         };
-        CompatibleTextModelClient textModelClient = new CompatibleTextModelClient(new ObjectMapper(), java.util.List.of()) {
+        TextModelProviderRegistry textModelProviderRegistry = new TextModelProviderRegistry(java.util.List.of(new TextModelProvider() {
+            /**
+             * 检查是否supports。
+             * @param profile profile值
+             * @return 是否满足条件
+             */
             @Override
-            public TextModelResponse generateText(
+            public boolean supports(ModelRuntimeProfile profile) {
+                return true;
+            }
+
+            /**
+             * 处理generate。
+             * @param profile profile值
+             * @param invocation 调用值
+             * @return 处理结果
+             */
+            @Override
+            public TextModelResponse generate(
                 ModelRuntimeProfile profile,
-                String systemPrompt,
-                String userPrompt,
-                double temperature,
-                int maxTokens
+                TextModelInvocation invocation
             ) {
+                if (invocation instanceof VisionCompletionInvocation) {
+                    return new TextModelResponse(
+                        "vision notes",
+                        "https://api.example.com/v1/responses",
+                        "api.example.com",
+                        10,
+                        true,
+                        "resp_2"
+                    );
+                }
+                TextCompletionInvocation textInvocation = (TextCompletionInvocation) invocation;
                 return new TextModelResponse(
-                    "rewritten prompt",
+                    textInvocation.userPrompt(),
                     "https://api.example.com/v1/responses",
                     "api.example.com",
                     10,
@@ -113,44 +185,21 @@ class GenerationRunFactoryVideoAsyncTest {
                     "resp_1"
                 );
             }
+        }));
+        LocalMediaArtifactService localMediaArtifactService = new LocalMediaArtifactService(storageProperties(tempDir), "ffmpeg");
+        StoredArtifact remoteLocal = localMediaArtifactService.writeBinary("gen/_runs/source", "remote.mp4", new byte[] {1, 2, 3});
+        VideoModelProvider fakeVideoModelProvider = new VideoModelProvider() {
+            @Override
+            public boolean supports(MediaProviderProfile profile) {
+                return true;
+            }
 
             @Override
-            public TextModelResponse generateVisionText(
-                ModelRuntimeProfile profile,
-                String systemPrompt,
-                String userPrompt,
-                java.util.List<String> imageUrls,
-                double temperature,
-                int maxTokens,
-                Integer seed
-            ) {
-                return new TextModelResponse(
-                    "vision notes",
-                    "https://api.example.com/v1/responses",
-                    "api.example.com",
-                    10,
-                    true,
-                    "resp_2"
-                );
-            }
-        };
-        LocalMediaArtifactService localMediaArtifactService = new LocalMediaArtifactService(tempDir.toString(), "ffmpeg");
-        StoredArtifact remoteLocal = localMediaArtifactService.writeBinary("gen/_runs/source", "remote.mp4", new byte[] {1, 2, 3});
-        RemoteMediaGenerationClient remoteMediaGenerationClient = new RemoteMediaGenerationClient(new ObjectMapper()) {
-            @Override
-            public RemoteVideoTaskSubmission submitDashscopeVideoTask(
-                MediaProviderProfile profile,
-                String requestedModel,
-                String prompt,
-                int width,
-                int height,
-                int durationSeconds,
-                Integer seed
-            ) {
+            public RemoteVideoTaskSubmission submit(MediaProviderProfile profile, VideoGenerationRequest request) {
                 return new RemoteVideoTaskSubmission(
                     "wan",
-                    "wan2.2-i2v-plus",
-                    "wan2.2-i2v-plus",
+                    request.requestedModel(),
+                    request.requestedModel(),
                     "dashscope.aliyuncs.com",
                     "dashscope.aliyuncs.com",
                     "task_123",
@@ -158,13 +207,13 @@ class GenerationRunFactoryVideoAsyncTest {
                     "",
                     false,
                     true,
-                    prompt,
+                    request.prompt(),
                     0
                 );
             }
 
             @Override
-            public RemoteTaskQueryResult queryDashscopeTask(MediaProviderProfile profile, String taskId) {
+            public RemoteTaskQueryResult query(MediaProviderProfile profile, String taskId) {
                 return new RemoteTaskQueryResult(
                     taskId,
                     "SUCCEEDED",
@@ -181,12 +230,17 @@ class GenerationRunFactoryVideoAsyncTest {
                 );
             }
         };
-        GenerationRunSupport support = new GenerationRunSupport(localMediaArtifactService, modelResolver, textModelClient);
+        GenerationRunSupport support = new GenerationRunSupport(localMediaArtifactService, modelResolver, textModelProviderRegistry);
+        ImageModelProviderRegistry imageModelProviderRegistry = new ImageModelProviderRegistry(java.util.List.of());
+        VideoModelProviderRegistry videoModelProviderRegistry = new VideoModelProviderRegistry(java.util.List.of(
+            fakeVideoModelProvider
+        ));
         GenerationRunFactory factory = new GenerationRunFactory(
             modelResolver,
             promptTemplateResolver,
-            textModelClient,
-            remoteMediaGenerationClient,
+            textModelProviderRegistry,
+            imageModelProviderRegistry,
+            videoModelProviderRegistry,
             support
         );
 
@@ -233,5 +287,11 @@ class GenerationRunFactoryVideoAsyncTest {
         assertEquals("https://example.com/generated-last-frame.png", refreshedMetadata.get("last_frame_url"));
         assertNotNull(refreshedMetadata.get("providerPayload"));
         assertNotNull(refreshedResult.get("callChain"));
+    }
+
+    private JiandouStorageProperties storageProperties(Path rootDir) {
+        JiandouStorageProperties properties = new JiandouStorageProperties();
+        properties.setRootDir(rootDir.toString());
+        return properties;
     }
 }

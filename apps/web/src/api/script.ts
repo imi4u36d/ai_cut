@@ -1,13 +1,25 @@
+/**
+ * 脚本相关 API 请求封装。
+ */
 import { getJson, postJson } from "./client";
 import type { GenerateScriptRequest, GenerateScriptResponse } from "@/types";
 
 const RUNS_ENDPOINT = "/api/v2/generation/runs";
+/**
+ * 处理RUNDETAILSENDPOINT。
+ * @param runId 运行标识值
+ */
 const RUN_DETAILS_ENDPOINT = (runId: string) => `/api/v2/generation/runs/${encodeURIComponent(runId)}`;
 const RUN_POLL_INTERVAL_MS = 1200;
 const RUN_POLL_TIMEOUT_MS = 120000;
 
 type UnknownRecord = Record<string, unknown>;
 
+/**
+ * 处理as记录。
+ * @param value 待处理的值
+ * @return 处理结果
+ */
 function asRecord(value: unknown): UnknownRecord | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     return null;
@@ -15,10 +27,21 @@ function asRecord(value: unknown): UnknownRecord | null {
   return value as UnknownRecord;
 }
 
+/**
+ * 处理asString。
+ * @param value 待处理的值
+ * @return 处理结果
+ */
 function asString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
 }
 
+/**
+ * 规范化响应。
+ * @param raw 原始值
+ * @param requestPayload 请求负载值
+ * @return 处理结果
+ */
 function normalizeResponse(
   raw: Partial<GenerateScriptResponse> | null | undefined,
   requestPayload: GenerateScriptRequest,
@@ -40,6 +63,12 @@ function normalizeResponse(
   };
 }
 
+/**
+ * 处理simplify生成运行。
+ * @param raw 原始值
+ * @param payload 附加负载数据
+ * @return 处理结果
+ */
 function simplifyGenerationRun(raw: UnknownRecord | null | undefined, payload: GenerateScriptRequest): Partial<GenerateScriptResponse> {
   const run = raw ?? {};
   const scriptResult = asRecord(run.resultScript ?? run.result ?? {}) ?? {};
@@ -64,6 +93,10 @@ function simplifyGenerationRun(raw: UnknownRecord | null | undefined, payload: G
   };
 }
 
+/**
+ * 检查是否脚本结果。
+ * @param raw 原始值
+ */
 function hasScriptResult(raw: UnknownRecord | null | undefined) {
   const run = raw ?? {};
   const scriptResult = asRecord(run.resultScript ?? run.result ?? {}) ?? {};

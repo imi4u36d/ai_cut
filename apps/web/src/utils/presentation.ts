@@ -1,3 +1,6 @@
+/**
+ * 展示相关工具方法。
+ */
 import type { TaskDetail, TaskListItem, TaskStatus } from "@/types";
 
 type StatusMeta = {
@@ -15,10 +18,18 @@ export const TASK_STATUS_META: Record<TaskStatus, StatusMeta> = {
   FAILED: { label: "失败", tone: "danger" },
 };
 
+/**
+ * 返回任务状态Meta。
+ * @param status 状态值
+ */
 export function getTaskStatusMeta(status: TaskStatus) {
   return TASK_STATUS_META[status] ?? TASK_STATUS_META.PENDING;
 }
 
+/**
+ * 处理clamp进度。
+ * @param value 待处理的值
+ */
 export function clampProgress(value: number | null | undefined) {
   if (!Number.isFinite(value)) {
     return 0;
@@ -26,6 +37,10 @@ export function clampProgress(value: number | null | undefined) {
   return Math.max(0, Math.min(100, Math.round(Number(value))));
 }
 
+/**
+ * 格式化日期时间。
+ * @param value 待处理的值
+ */
 export function formatDateTime(value: string | null | undefined) {
   if (!value) {
     return "暂无";
@@ -42,6 +57,10 @@ export function formatDateTime(value: string | null | undefined) {
   }).format(date);
 }
 
+/**
+ * 格式化Long日期时间。
+ * @param value 待处理的值
+ */
 export function formatLongDateTime(value: string | null | undefined) {
   if (!value) {
     return "暂无";
@@ -60,6 +79,11 @@ export function formatLongDateTime(value: string | null | undefined) {
   }).format(date);
 }
 
+/**
+ * 格式化时长标签。
+ * @param minSeconds 最小Seconds值
+ * @param maxSeconds 最大Seconds值
+ */
 export function formatDurationLabel(minSeconds?: number | null, maxSeconds?: number | null) {
   if (!minSeconds && !maxSeconds) {
     return "未设置";
@@ -70,6 +94,10 @@ export function formatDurationLabel(minSeconds?: number | null, maxSeconds?: num
   return `${maxSeconds ?? minSeconds ?? 0}s`;
 }
 
+/**
+ * 格式化AspectRatio标签。
+ * @param value 待处理的值
+ */
 export function formatAspectRatioLabel(value?: string | null) {
   if (!value) {
     return "未指定比例";
@@ -77,6 +105,10 @@ export function formatAspectRatioLabel(value?: string | null) {
   return value === "9:16" ? "竖屏 9:16" : value === "16:9" ? "横屏 16:9" : value;
 }
 
+/**
+ * 格式化任务Outputs。
+ * @param task 要处理的任务对象
+ */
 export function formatTaskOutputs(task: TaskListItem | TaskDetail | null | undefined) {
   if (!task) {
     return "暂无结果";
@@ -89,6 +121,10 @@ export function formatTaskOutputs(task: TaskListItem | TaskDetail | null | undef
   return `${completed} 条结果`;
 }
 
+/**
+ * 处理summarize任务。
+ * @param task 要处理的任务对象
+ */
 export function summarizeTask(task: TaskListItem) {
   return [formatAspectRatioLabel(task.aspectRatio), formatDurationLabel(task.minDurationSeconds, task.maxDurationSeconds)]
     .filter(Boolean)

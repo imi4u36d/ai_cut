@@ -8,6 +8,10 @@ import org.springframework.http.HttpStatus;
  */
 public class TaskNotFoundException extends ApiException {
 
+    /**
+     * 创建新的任务NotFound异常。
+     * @param taskId 任务标识
+     */
     public TaskNotFoundException(String taskId) {
         super(HttpStatus.NOT_FOUND, "task_not_found", "task not found: " + taskId);
     }

@@ -1,12 +1,22 @@
 package com.jiandou.api.task.infrastructure.mybatis;
 
-import com.jiandou.api.task.TaskRecordAssembler;
+import com.jiandou.api.task.domain.ExecutionMode;
+import com.jiandou.api.task.domain.TaskResultTypes;
+import com.jiandou.api.task.persistence.TaskRecordAssembler;
 import java.util.Map;
 
+/**
+ * 任务MyBatis写入MyBatis Mapper。
+ */
 final class TaskMybatisWriteMapper {
 
     private static final int DEFAULT_TIMEZONE_OFFSET_MINUTES = 480;
 
+    /**
+     * 处理转为任务实体。
+     * @param model 模型值
+     * @return 处理结果
+     */
     TaskEntity toTaskEntity(TaskRecordAssembler.TaskWriteModel model) {
         TaskEntity entity = new TaskEntity();
         entity.setTaskId(model.taskId());
@@ -31,7 +41,7 @@ final class TaskMybatisWriteMapper {
         entity.setEffectRatingNote(model.effectRatingNote());
         entity.setRatedAt(model.ratedAt());
         entity.setModelProvider("");
-        entity.setExecutionMode("queue");
+        entity.setExecutionMode(ExecutionMode.QUEUE.value());
         entity.setEditingMode(model.editingMode());
         entity.setStatus(model.status());
         entity.setProgress(model.progress());
@@ -46,6 +56,12 @@ final class TaskMybatisWriteMapper {
         return entity;
     }
 
+    /**
+     * 处理转为尝试实体。
+     * @param taskId 任务标识
+     * @param attempt 尝试值
+     * @return 处理结果
+     */
     TaskAttemptEntity toAttemptEntity(String taskId, Map<String, Object> attempt) {
         TaskAttemptEntity entity = new TaskAttemptEntity();
         entity.setTaskAttemptId(TaskMybatisValueSupport.stringValue(attempt.get("attemptId")));
@@ -70,6 +86,12 @@ final class TaskMybatisWriteMapper {
         return entity;
     }
 
+    /**
+     * 处理转为状态History实体。
+     * @param taskId 任务标识
+     * @param statusHistory 状态History值
+     * @return 处理结果
+     */
     TaskStatusHistoryEntity toStatusHistoryEntity(String taskId, Map<String, Object> statusHistory) {
         TaskStatusHistoryEntity entity = new TaskStatusHistoryEntity();
         entity.setTaskStatusHistoryId(TaskMybatisValueSupport.stringValue(statusHistory.get("statusHistoryId")));
@@ -89,6 +111,12 @@ final class TaskMybatisWriteMapper {
         return entity;
     }
 
+    /**
+     * 处理转为系统日志实体。
+     * @param taskId 任务标识
+     * @param trace 追踪值
+     * @return 处理结果
+     */
     SystemLogEntity toSystemLogEntity(String taskId, Map<String, Object> trace) {
         SystemLogEntity entity = new SystemLogEntity();
         entity.setSystemLogId(TaskMybatisValueSupport.stringValue(trace.getOrDefault("traceId", trace.get("systemLogId"))));
@@ -109,6 +137,12 @@ final class TaskMybatisWriteMapper {
         return entity;
     }
 
+    /**
+     * 处理转为阶段运行实体。
+     * @param taskId 任务标识
+     * @param stageRun 阶段运行值
+     * @return 处理结果
+     */
     TaskStageRunEntity toStageRunEntity(String taskId, Map<String, Object> stageRun) {
         TaskStageRunEntity entity = new TaskStageRunEntity();
         entity.setTaskStageRunId(TaskMybatisValueSupport.stringValue(stageRun.get("stageRunId")));
@@ -131,6 +165,12 @@ final class TaskMybatisWriteMapper {
         return entity;
     }
 
+    /**
+     * 处理转为任务队列事件实体。
+     * @param taskId 任务标识
+     * @param queueEvent 队列事件值
+     * @return 处理结果
+     */
     TaskQueueEventEntity toTaskQueueEventEntity(String taskId, Map<String, Object> queueEvent) {
         TaskQueueEventEntity entity = new TaskQueueEventEntity();
         entity.setTaskQueueEventId(TaskMybatisValueSupport.stringValue(queueEvent.get("taskQueueEventId")));
@@ -147,6 +187,11 @@ final class TaskMybatisWriteMapper {
         return entity;
     }
 
+    /**
+     * 处理转为工作节点Instance实体。
+     * @param workerInstance 工作节点Instance值
+     * @return 处理结果
+     */
     WorkerInstanceEntity toWorkerInstanceEntity(Map<String, Object> workerInstance) {
         WorkerInstanceEntity entity = new WorkerInstanceEntity();
         entity.setWorkerInstanceId(TaskMybatisValueSupport.stringValue(workerInstance.get("workerInstanceId")));
@@ -164,6 +209,12 @@ final class TaskMybatisWriteMapper {
         return entity;
     }
 
+    /**
+     * 处理转为模型调用实体。
+     * @param taskId 任务标识
+     * @param modelCall 模型调用值
+     * @return 处理结果
+     */
     TaskModelCallEntity toModelCallEntity(String taskId, Map<String, Object> modelCall) {
         TaskModelCallEntity entity = new TaskModelCallEntity();
         entity.setTaskModelCallId(TaskMybatisValueSupport.stringValue(modelCall.get("modelCallId")));
@@ -200,6 +251,12 @@ final class TaskMybatisWriteMapper {
         return entity;
     }
 
+    /**
+     * 处理转为素材素材实体。
+     * @param taskId 任务标识
+     * @param material 素材值
+     * @return 处理结果
+     */
     MaterialAssetEntity toMaterialAssetEntity(String taskId, Map<String, Object> material) {
         MaterialAssetEntity entity = new MaterialAssetEntity();
         entity.setMaterialAssetId(TaskMybatisValueSupport.stringValue(material.get("id")));
@@ -236,11 +293,17 @@ final class TaskMybatisWriteMapper {
         return entity;
     }
 
+    /**
+     * 处理转为结果实体。
+     * @param taskId 任务标识
+     * @param result 结果值
+     * @return 处理结果
+     */
     TaskResultEntity toResultEntity(String taskId, Map<String, Object> result) {
         TaskResultEntity entity = new TaskResultEntity();
         entity.setTaskResultId(TaskMybatisValueSupport.stringValue(result.get("id")));
         entity.setTaskId(taskId);
-        entity.setResultType(TaskMybatisValueSupport.stringValue(result.getOrDefault("resultType", "video")));
+        entity.setResultType(TaskMybatisValueSupport.stringValue(result.getOrDefault("resultType", TaskResultTypes.VIDEO)));
         entity.setClipIndex(TaskMybatisValueSupport.intValue(result.get("clipIndex"), 0));
         entity.setTitle(TaskMybatisValueSupport.stringValue(result.get("title")));
         entity.setReason(TaskMybatisValueSupport.stringValue(result.get("reason")));

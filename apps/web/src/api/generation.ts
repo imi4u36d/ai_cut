@@ -1,3 +1,6 @@
+/**
+ * 生成相关 API 请求封装。
+ */
 import { getJson, postJson } from "./client";
 import type {
   GenerationCallLogEntry,
@@ -13,11 +16,20 @@ type UnknownRecord = Record<string, unknown>;
 
 const CATALOG_ENDPOINT = "/api/v2/generation/catalog";
 const RUNS_ENDPOINT = "/api/v2/generation/runs";
+/**
+ * 处理RUNDETAILSENDPOINT。
+ * @param runId 运行标识值
+ */
 const RUN_DETAILS_ENDPOINT = (runId: string) => `/api/v2/generation/runs/${encodeURIComponent(runId)}`;
 const USAGE_ENDPOINT = "/api/v2/generation/usage";
 const RUN_POLL_INTERVAL_MS = 1200;
 const RUN_POLL_TIMEOUT_MS = 120000;
 
+/**
+ * 处理as记录。
+ * @param value 待处理的值
+ * @return 处理结果
+ */
 function asRecord(value: unknown): UnknownRecord | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     return null;
@@ -25,10 +37,20 @@ function asRecord(value: unknown): UnknownRecord | null {
   return value as UnknownRecord;
 }
 
+/**
+ * 处理asString。
+ * @param value 待处理的值
+ * @return 处理结果
+ */
 function asString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
 }
 
+/**
+ * 处理asNumber。
+ * @param value 待处理的值
+ * @return 处理结果
+ */
 function asNumber(value: unknown): number | null {
   if (typeof value === "number" && Number.isFinite(value)) {
     return value;
@@ -42,6 +64,10 @@ function asNumber(value: unknown): number | null {
   return null;
 }
 
+/**
+ * 解析图像Size。
+ * @param size size值
+ */
 function parseImageSize(size: string | undefined): { width: number; height: number } {
   const normalized = (size ?? "").trim();
   const match = normalized.match(/^(\d+)\s*[xX*]\s*(\d+)$/);
@@ -56,6 +82,11 @@ function parseImageSize(size: string | undefined): { width: number; height: numb
   return { width: Math.trunc(width), height: Math.trunc(height) };
 }
 
+/**
+ * 规范化调用Chain。
+ * @param raw 原始值
+ * @return 处理结果
+ */
 function normalizeCallChain(raw: unknown): GenerationCallLogEntry[] {
   if (!Array.isArray(raw)) {
     return [];
@@ -86,6 +117,11 @@ function normalizeCallChain(raw: unknown): GenerationCallLogEntry[] {
   return items;
 }
 
+/**
+ * 规范化选项。
+ * @param raw 原始值
+ * @return 处理结果
+ */
 function normalizeOptions(raw: unknown): GenerationOptionsResponse {
   const record = asRecord(raw) ?? {};
   return {
@@ -117,6 +153,11 @@ function normalizeOptions(raw: unknown): GenerationOptionsResponse {
   };
 }
 
+/**
+ * 构建运行负载。
+ * @param payload 附加负载数据
+ * @return 处理结果
+ */
 function buildRunPayload(payload: GenerateMediaRequest): UnknownRecord {
   const { width, height } = parseImageSize(payload.mediaKind === "image" ? payload.imageSize : payload.videoSize);
   const input: UnknownRecord = {
@@ -144,6 +185,12 @@ function buildRunPayload(payload: GenerateMediaRequest): UnknownRecord {
   };
 }
 
+/**
+ * 规范化媒体运行结果。
+ * @param rawRun 原始运行值
+ * @param requestPayload 请求负载值
+ * @return 处理结果
+ */
 function normalizeMediaRunResult(rawRun: unknown, requestPayload: GenerateMediaRequest): GenerateMediaResponse {
   const run = asRecord(rawRun) ?? {};
   const resultRecord =
@@ -193,6 +240,11 @@ function normalizeMediaRunResult(rawRun: unknown, requestPayload: GenerateMediaR
   };
 }
 
+/**
+ * 检查是否终态运行结果。
+ * @param rawRun 原始运行值
+ * @return 是否满足条件
+ */
 function hasTerminalRunResult(rawRun: unknown): boolean {
   const run = asRecord(rawRun) ?? {};
   const resultRecord =
@@ -209,6 +261,11 @@ function hasTerminalRunResult(rawRun: unknown): boolean {
   );
 }
 
+/**
+ * 处理运行状态。
+ * @param rawRun 原始运行值
+ * @return 处理结果
+ */
 function runStatus(rawRun: unknown): string {
   const run = asRecord(rawRun) ?? {};
   return asString(run.status).toLowerCase();

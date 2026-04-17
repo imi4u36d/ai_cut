@@ -27,6 +27,9 @@
 </template>
 
 <script setup lang="ts">
+/**
+ * 首页CapabilityHighlights组件。
+ */
 const items = [
   {
     tag: "Core",
@@ -53,6 +56,7 @@ const items = [
     variant: "warm",
   },
 ];
+
 </script>
 
 <style scoped>

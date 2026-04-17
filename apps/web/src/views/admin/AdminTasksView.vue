@@ -199,6 +199,9 @@
 </template>
 
 <script setup lang="ts">
+/**
+ * 管理任务页面组件。
+ */
 import { computed, onMounted, ref, watch } from "vue";
 import { bulkDeleteAdminTasks, bulkRetryAdminTasks, deleteAdminTask, fetchAdminTasks, retryAdminTask } from "@/api/admin";
 import { usePolling } from "@/composables/usePolling";
@@ -291,6 +294,10 @@ const summaryFooterLabel = computed(() => {
   return `${sortedTasks.value.length} / ${tasks.value.length} 可见`;
 });
 
+/**
+ * 处理状态标签。
+ * @param status 状态值
+ */
 function statusLabel(status: TaskStatus) {
   switch (status) {
     case "PENDING":
@@ -312,6 +319,10 @@ function statusLabel(status: TaskStatus) {
   }
 }
 
+/**
+ * 处理状态Pill样式类。
+ * @param status 状态值
+ */
 function statusPillClass(status: TaskStatus) {
   switch (status) {
     case "PENDING":
@@ -333,6 +344,10 @@ function statusPillClass(status: TaskStatus) {
   }
 }
 
+/**
+ * 处理进度Bar样式类。
+ * @param status 状态值
+ */
 function progressBarClass(status: TaskStatus) {
   if (status === "FAILED") {
     return "bg-rose-400";
@@ -349,6 +364,10 @@ function progressBarClass(status: TaskStatus) {
   return "bg-sky-500";
 }
 
+/**
+ * 处理行Tone样式类。
+ * @param status 状态值
+ */
 function rowToneClass(status: TaskStatus) {
   if (status === "FAILED") {
     return "bg-rose-50/40";
@@ -362,6 +381,10 @@ function rowToneClass(status: TaskStatus) {
   return "";
 }
 
+/**
+ * 处理semantic提示。
+ * @param task 要处理的任务对象
+ */
 function semanticHint(task: TaskListItem) {
   if (task.hasTimedTranscript) {
     return "时间轴字幕";
@@ -372,14 +395,26 @@ function semanticHint(task: TaskListItem) {
   return "无文本输入";
 }
 
+/**
+ * 格式化任务种子。
+ * @param value 待处理的值
+ */
 function formatTaskSeed(value: number | null | undefined) {
   return typeof value === "number" && Number.isFinite(value) ? String(Math.trunc(value)) : "未设置";
 }
 
+/**
+ * 格式化效果评分。
+ * @param value 待处理的值
+ */
 function formatEffectRating(value: number | null | undefined) {
   return typeof value === "number" && Number.isFinite(value) && value > 0 ? `${Math.trunc(value)}/5` : "未评分";
 }
 
+/**
+ * 处理进度标签。
+ * @param task 要处理的任务对象
+ */
 function progressLabel(task: TaskListItem) {
   if (task.diagnosisSeverity === "high") {
     return task.recommendedAction || "需要优先处理";
@@ -408,6 +443,10 @@ function progressLabel(task: TaskListItem) {
   return "待处理";
 }
 
+/**
+ * 处理诊断标签。
+ * @param severity severity值
+ */
 function diagnosisLabel(severity?: string | null) {
   switch (severity) {
     case "high":
@@ -421,6 +460,10 @@ function diagnosisLabel(severity?: string | null) {
   }
 }
 
+/**
+ * 处理诊断Pill样式类。
+ * @param severity severity值
+ */
 function diagnosisPillClass(severity?: string | null) {
   switch (severity) {
     case "high":
@@ -434,14 +477,26 @@ function diagnosisPillClass(severity?: string | null) {
   }
 }
 
+/**
+ * 格式化Short日期。
+ * @param value 待处理的值
+ */
 function formatShortDate(value: string) {
   return new Date(value).toLocaleString();
 }
 
+/**
+ * 处理running状态。
+ * @param status 状态值
+ */
 function runningStatus(status: TaskStatus) {
   return status === "ANALYZING" || status === "PLANNING" || status === "RENDERING";
 }
 
+/**
+ * 处理切换Selected。
+ * @param taskId 任务标识
+ */
 function toggleSelected(taskId: string) {
   const index = selectedIds.value.indexOf(taskId);
   if (index >= 0) {
@@ -451,6 +506,9 @@ function toggleSelected(taskId: string) {
   selectedIds.value.push(taskId);
 }
 
+/**
+ * 处理切换SelectVisible。
+ */
 function toggleSelectVisible() {
   if (allVisibleSelected.value) {
     selectedIds.value = selectedIds.value.filter((id) => !sortedTasks.value.some((task) => task.id === id));
@@ -462,6 +520,9 @@ function toggleSelectVisible() {
   selectedIds.value = Array.from(merged);
 }
 
+/**
+ * 处理清空Selection。
+ */
 function clearSelection() {
   selectedIds.value = [];
 }
@@ -605,6 +666,7 @@ const { start } = usePolling(refreshAll, 6000);
 onMounted(async () => {
   await start();
 });
+
 </script>
 
 <style scoped>

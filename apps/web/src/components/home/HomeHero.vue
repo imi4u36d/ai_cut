@@ -61,6 +61,9 @@
 </template>
 
 <script setup lang="ts">
+/**
+ * 首页头图组件。
+ */
 const chips = ["最少参数提交", "任务状态实时追踪", "结果资产可复用"];
 
 const flowSteps = [
@@ -74,6 +77,7 @@ const metrics = [
   { value: "97%", label: "任务完成率" },
   { value: "12+", label: "常用输出规格" },
 ];
+
 </script>
 
 <style scoped>
