@@ -256,6 +256,11 @@
           <div class="trace-preview__meta">
             <span v-for="item in previewResultMeta" :key="item">{{ item }}</span>
           </div>
+          <div v-if="previewDownloadUrl" class="trace-preview__actions">
+            <a class="btn-secondary btn-sm" :href="previewDownloadUrl" download target="_blank" rel="noopener noreferrer">
+              下载最新拼接结果
+            </a>
+          </div>
         </div>
 
         <section class="trace-feed">
@@ -751,20 +756,39 @@ const recentTraceEvents = computed(() => {
 });
 
 const previewOutputUrl = computed(() => {
-  const firstOutput = progressTaskDetail.value?.outputs?.[0];
-  if (!firstOutput) {
+  const task = progressTaskDetail.value;
+  if (!task) {
     return "";
   }
-  return firstOutput.previewUrl || firstOutput.downloadUrl || "";
+  return task.monitoring?.latestJoinOutputUrl
+    || task.monitoring?.latestVideoOutputUrl
+    || task.outputs?.[0]?.previewUrl
+    || task.outputs?.[0]?.downloadUrl
+    || "";
 });
 
 const previewPosterUrl = computed(() => "");
 
+const previewDownloadUrl = computed(() => {
+  const task = progressTaskDetail.value;
+  if (!task) {
+    return "";
+  }
+  return task.monitoring?.latestJoinOutputUrl
+    || task.outputs?.[0]?.downloadUrl
+    || task.outputs?.[0]?.previewUrl
+    || "";
+});
+
 const previewResultTitle = computed(() => {
-  if (!progressTaskDetail.value) {
+  const task = progressTaskDetail.value;
+  if (!task) {
     return "生成结果";
   }
-  return progressTaskDetail.value.status === "COMPLETED" ? "生成成片预览" : "生成结果";
+  if (task.monitoring?.latestJoinOutputUrl) {
+    return task.status === "COMPLETED" ? "最新拼接成片预览" : "最新拼接结果";
+  }
+  return task.status === "COMPLETED" ? "生成成片预览" : "首段生成结果";
 });
 
 const previewResultMeta = computed(() => {
@@ -780,6 +804,7 @@ const previewResultMeta = computed(() => {
   return [
     task.status,
     `进度 ${progress}`,
+    task.monitoring?.latestJoinName ? `拼接 ${task.monitoring.latestJoinName}` : "",
     task.aspectRatio ? `画幅 ${task.aspectRatio}` : "",
     durationLabel,
     task.outputs?.length ? `输出 ${task.outputs.length} 条` : "",
@@ -1415,6 +1440,11 @@ onUnmounted(() => {
   background: rgba(255, 255, 255, 0.04);
   color: var(--text-muted);
   font-size: 0.7rem;
+}
+
+.trace-preview__actions {
+  display: flex;
+  justify-content: flex-start;
 }
 
 .trace-feed {

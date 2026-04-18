@@ -58,6 +58,12 @@ class SecurityAccessTest {
     }
 
     @Test
+    void showcaseEndpointIsPublic() throws Exception {
+        mockMvc.perform(get("/api/v2/tasks/showcase"))
+            .andExpect(status().isNotFound());
+    }
+
+    @Test
     void authSessionEndpointIssuesCsrfCookieAndHeader() throws Exception {
         when(authApplicationService.session(any())).thenReturn(new AuthSessionResponse(false, null));
 

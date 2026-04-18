@@ -1,13 +1,15 @@
 import { createRouter, createWebHistory } from "vue-router";
 import { ensureAuthSession, useAuthSessionState } from "@/auth/session";
 import AdminLayout from "@/layouts/AdminLayout.vue";
+import DashboardView from "@/views/DashboardView.vue";
 import ForbiddenView from "@/views/ForbiddenView.vue";
 import LoginView from "@/views/LoginView.vue";
+import TaskManagementView from "@/views/TaskManagementView.vue";
 import UserManagementView from "@/views/UserManagementView.vue";
 
 function normalizeRedirectTarget(value: unknown) {
   if (typeof value !== "string" || !value.startsWith("/") || value.startsWith("//")) {
-    return "/users";
+    return "/dashboard";
   }
   return value;
 }
@@ -43,7 +45,15 @@ const router = createRouter({
       children: [
         {
           path: "",
-          redirect: "/users"
+          redirect: "/dashboard"
+        },
+        {
+          path: "dashboard",
+          name: "dashboard",
+          component: DashboardView,
+          meta: {
+            title: "首页概览"
+          }
         },
         {
           path: "users",
@@ -52,12 +62,20 @@ const router = createRouter({
           meta: {
             title: "用户管理"
           }
+        },
+        {
+          path: "tasks",
+          name: "tasks",
+          component: TaskManagementView,
+          meta: {
+            title: "任务管理"
+          }
         }
       ]
     },
     {
       path: "/:pathMatch(.*)*",
-      redirect: "/users"
+      redirect: "/dashboard"
     }
   ]
 });

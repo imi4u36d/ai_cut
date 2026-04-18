@@ -2,6 +2,7 @@ package com.jiandou.api.task.view;
 
 import com.jiandou.api.config.JiandouStorageProperties;
 import com.jiandou.api.task.TaskRecord;
+import com.jiandou.api.task.domain.GenerationRequestSnapshot;
 import com.jiandou.api.task.domain.TaskArtifactNaming;
 import com.jiandou.api.task.domain.TaskResultTypes;
 import com.jiandou.api.task.domain.TaskStage;
@@ -68,6 +69,61 @@ public class TaskViewMapper {
         row.put("diagnosisCode", diagnosis.code());
         row.put("diagnosisHint", diagnosis.hint());
         row.put("recommendedAction", diagnosis.recommendedAction());
+        return row;
+    }
+
+    /**
+     * 返回适合官网与工作台案例区使用的任务摘要。
+     * 该视图只保留公开展示必需字段，避免暴露完整任务上下文。
+     * @param task 要处理的任务对象
+     * @return 处理结果
+     */
+    public Map<String, Object> toShowcaseItem(TaskRecord task) {
+        TaskMonitoringSnapshot monitoring = monitoringSummary(task);
+        Map<String, Object> latestJoinOutput = latestJoinOutput(task);
+        Map<String, Object> latestVideoOutput = latestVideoOutput(task);
+        Map<String, Object> preferredOutput = latestJoinOutput.isEmpty() ? latestVideoOutput : latestJoinOutput;
+        Map<String, Object> outputExtra = mapValue(preferredOutput.get("extra"));
+        String previewUrl = firstNonBlank(
+            stringValue(preferredOutput.get("previewUrl")),
+            stringValue(preferredOutput.get("downloadUrl")),
+            monitoring.latestJoinOutputUrl(),
+            monitoring.latestVideoOutputUrl()
+        );
+        String downloadUrl = firstNonBlank(
+            stringValue(preferredOutput.get("downloadUrl")),
+            stringValue(preferredOutput.get("previewUrl")),
+            monitoring.latestJoinOutputUrl(),
+            monitoring.latestVideoOutputUrl()
+        );
+
+        Map<String, Object> media = new LinkedHashMap<>();
+        media.put("title", firstNonBlank(stringValue(preferredOutput.get("title")), monitoring.latestJoinName()));
+        media.put("clipIndex", nullableInt(preferredOutput.get("clipIndex")));
+        media.put("durationSeconds", nullableDouble(preferredOutput.get("durationSeconds")));
+        media.put("width", nullableInt(preferredOutput.get("width")));
+        media.put("height", nullableInt(preferredOutput.get("height")));
+        media.put("hasAudio", outputExtra.containsKey("hasAudio") ? boolValue(outputExtra.get("hasAudio")) : null);
+
+        Map<String, Object> row = new LinkedHashMap<>();
+        row.put("id", task.id());
+        row.put("title", task.title());
+        row.put("status", task.status());
+        row.put("createdAt", task.createdAt());
+        row.put("updatedAt", task.updatedAt());
+        row.put("sourceFileName", task.sourceFileName());
+        row.put("aspectRatio", task.aspectRatio());
+        row.put("minDurationSeconds", task.minDurationSeconds());
+        row.put("maxDurationSeconds", task.maxDurationSeconds());
+        row.put("completedOutputCount", task.completedOutputCount());
+        row.put("taskSeed", task.taskSeed());
+        row.put("effectRating", task.effectRating());
+        row.put("description", showcaseDescription(task));
+        row.put("previewUrl", previewUrl);
+        row.put("downloadUrl", downloadUrl);
+        row.put("joinName", monitoring.latestJoinName());
+        row.put("models", showcaseModels(task));
+        row.put("media", media);
         return row;
     }
 
@@ -493,6 +549,59 @@ public class TaskViewMapper {
     }
 
     /**
+     * 处理公开案例描述。
+     * @param task 要处理的任务对象
+     * @return 处理结果
+     */
+    private String showcaseDescription(TaskRecord task) {
+        String sourceFileName = stringValue(task.sourceFileName());
+        if (!sourceFileName.isBlank()) {
+            return "来源素材：" + sourceFileName;
+        }
+        String aspectRatio = stringValue(task.aspectRatio());
+        String duration = durationLabel(task.minDurationSeconds(), task.maxDurationSeconds());
+        if (!aspectRatio.isBlank() && !duration.isBlank()) {
+            return "真实任务 · " + aspectRatio + " · " + duration;
+        }
+        if (!aspectRatio.isBlank()) {
+            return "真实任务 · 画幅 " + aspectRatio;
+        }
+        if (!duration.isBlank()) {
+            return "真实任务 · 时长 " + duration;
+        }
+        return "真实生产任务案例";
+    }
+
+    /**
+     * 返回公开案例的模型摘要。
+     * @param task 要处理的任务对象
+     * @return 处理结果
+     */
+    private Map<String, Object> showcaseModels(TaskRecord task) {
+        GenerationRequestSnapshot snapshot = task.requestSnapshot() == null ? GenerationRequestSnapshot.empty() : task.requestSnapshot();
+        Map<String, Object> row = new LinkedHashMap<>();
+        row.put("textAnalysisModel", blankToNull(snapshot.textAnalysisModel()));
+        row.put("visionModel", blankToNull(snapshot.visionModel()));
+        row.put("imageModel", blankToNull(snapshot.imageModel()));
+        row.put("videoModel", blankToNull(snapshot.videoModel()));
+        return row;
+    }
+
+    /**
+     * 格式化时长区间。
+     * @param minSeconds 最小时长值
+     * @param maxSeconds 最大时长值
+     * @return 处理结果
+     */
+    private String durationLabel(int minSeconds, int maxSeconds) {
+        if (minSeconds > 0 && maxSeconds > 0 && minSeconds != maxSeconds) {
+            return minSeconds + "-" + maxSeconds + "s";
+        }
+        int seconds = Math.max(minSeconds, maxSeconds);
+        return seconds > 0 ? seconds + "s" : "";
+    }
+
+    /**
      * 处理时长规划行。
      * @param task 要处理的任务对象
      * @return 处理结果
@@ -735,6 +844,16 @@ public class TaskViewMapper {
      */
     private String stringValue(Object value) {
         return value == null ? "" : String.valueOf(value).trim();
+    }
+
+    /**
+     * 处理空白转null。
+     * @param value 待处理的值
+     * @return 处理结果
+     */
+    private String blankToNull(String value) {
+        String normalized = stringValue(value);
+        return normalized.isBlank() ? null : normalized;
     }
 
     /**

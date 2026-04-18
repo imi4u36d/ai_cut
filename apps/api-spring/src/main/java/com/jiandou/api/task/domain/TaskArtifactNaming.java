@@ -152,7 +152,7 @@ public final class TaskArtifactNaming {
     public static String joinName(int endClipIndex) {
         List<String> parts = new ArrayList<>();
         parts.add("join");
-        for (int index = 1; index <= Math.max(2, endClipIndex); index++) {
+        for (int index = 1; index <= Math.max(1, endClipIndex); index++) {
             parts.add(String.valueOf(index));
         }
         return String.join("-", parts);

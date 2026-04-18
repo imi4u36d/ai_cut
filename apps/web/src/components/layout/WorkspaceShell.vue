@@ -245,7 +245,7 @@ watch(
 
 .workspace-sidebar {
   position: relative;
-  z-index: 2;
+  z-index: 30;
   height: 100%;
   width: 264px;
   flex: 0 0 264px;

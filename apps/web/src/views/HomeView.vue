@@ -34,19 +34,30 @@
     <section class="cases-section">
       <div class="cases-section__head">
         <h3>案例展示</h3>
+        <p>{{ casesHint }}</p>
       </div>
 
-      <div class="case-grid">
+      <div v-if="caseStudies.length" class="case-grid">
         <article
           v-for="item in caseStudies"
-          :key="item.title"
+          :key="item.id"
           class="case-card"
           :style="{ '--case-accent': item.accent, '--case-scene': item.scene }"
         >
           <div class="case-card__visual">
             <div class="case-card__blur case-card__blur-left" aria-hidden="true"></div>
             <div class="case-card__poster">
-              <div class="case-card__poster-inner"></div>
+              <video
+                v-if="item.previewUrl"
+                class="case-card__poster-media"
+                :src="item.previewUrl"
+                autoplay
+                loop
+                muted
+                playsinline
+                preload="metadata"
+              ></video>
+              <div v-else class="case-card__poster-inner"></div>
               <p>{{ item.posterLabel }}</p>
             </div>
             <div class="case-card__blur case-card__blur-right" aria-hidden="true"></div>
@@ -54,40 +65,49 @@
           <div class="case-card__body">
             <h4>{{ item.title }}</h4>
             <p>{{ item.subtitle }}</p>
+            <span class="case-card__meta">{{ item.description }}</span>
           </div>
         </article>
+      </div>
+      <div v-else class="cases-empty">
+        {{ casesHint }}
       </div>
     </section>
   </main>
 </template>
 
 <script setup lang="ts">
-/**
- * 首页页面组件。
- */
-const caseStudies = [
-  {
-    title: "悬疑短剧 · 第 12 集",
-    subtitle: "电影感短剧预告",
-    posterLabel: "悬疑短剧",
-    accent: "rgba(164, 83, 255, 0.42)",
-    scene: "linear-gradient(180deg, rgba(35,40,52,0.78), rgba(6,8,13,0.92)), radial-gradient(circle at 50% 40%, rgba(207,180,140,0.48), transparent 56%)",
-  },
-  {
-    title: "奇幻世界 · Seed #88271",
-    subtitle: "9:16 竖版视频",
-    posterLabel: "奇幻爱情",
-    accent: "rgba(78, 219, 255, 0.38)",
-    scene: "linear-gradient(180deg, rgba(47,31,38,0.7), rgba(9,8,12,0.94)), radial-gradient(circle at 54% 38%, rgba(230,176,128,0.42), transparent 48%)",
-  },
-  {
-    title: "森林魔法 · Seed #88271",
-    subtitle: "9:16 竖版视频",
-    posterLabel: "森林魔法",
-    accent: "rgba(125, 169, 255, 0.38)",
-    scene: "linear-gradient(180deg, rgba(18,35,43,0.78), rgba(7,10,14,0.95)), radial-gradient(circle at 52% 38%, rgba(128,184,164,0.4), transparent 48%)",
-  },
-];
+import { computed } from "vue";
+import { useTaskShowcase } from "@/composables/useTaskShowcase";
+import { formatShowcaseTimeMeta, resolveShowcaseVisual, selectShowcasePrimaryModel } from "@/utils/showcase";
+
+const { items, loading, errorMessage } = useTaskShowcase();
+
+const caseStudies = computed(() => {
+  return items.value.slice(0, 3).map((item, index) => {
+    const visual = resolveShowcaseVisual(item, index);
+    return {
+      ...item,
+      ...visual,
+      posterLabel: selectShowcasePrimaryModel(item) || item.aspectRatio || "真实案例",
+      subtitle: formatShowcaseTimeMeta(item),
+      description: item.description || "真实任务案例",
+    };
+  });
+});
+
+const casesHint = computed(() => {
+  if (loading.value) {
+    return "正在同步真实案例...";
+  }
+  if (errorMessage.value) {
+    return errorMessage.value;
+  }
+  if (caseStudies.value.length) {
+    return `当前展示 ${caseStudies.value.length} 条真实任务案例`;
+  }
+  return "暂无可展示的真实案例";
+});
 </script>
 
 <style scoped>
@@ -215,6 +235,12 @@ const caseStudies = [
   color: rgba(255, 255, 255, 0.92);
 }
 
+.cases-section__head p {
+  margin: 6px 0 0;
+  font-size: 0.84rem;
+  color: rgba(255, 255, 255, 0.56);
+}
+
 .case-grid {
   display: grid;
   gap: 20px;
@@ -268,6 +294,13 @@ const caseStudies = [
   border-right: 1px solid rgba(255, 255, 255, 0.08);
 }
 
+.case-card__poster-media {
+  width: 100%;
+  height: 148px;
+  object-fit: cover;
+  border-radius: 0;
+}
+
 .case-card__poster-inner {
   width: 100%;
   flex: 1;
@@ -300,6 +333,21 @@ const caseStudies = [
   margin: 0;
   font-size: 0.84rem;
   color: rgba(255, 255, 255, 0.5);
+}
+
+.case-card__meta {
+  font-size: 0.76rem;
+  color: rgba(255, 255, 255, 0.42);
+}
+
+.cases-empty {
+  display: grid;
+  place-items: center;
+  min-height: 180px;
+  border-radius: 18px;
+  border: 1px dashed rgba(255, 255, 255, 0.14);
+  color: rgba(255, 255, 255, 0.56);
+  background: rgba(8, 11, 18, 0.52);
 }
 
 @media (max-width: 1100px) {

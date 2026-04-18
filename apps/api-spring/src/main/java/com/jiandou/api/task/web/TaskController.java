@@ -67,6 +67,15 @@ public class TaskController {
     }
 
     /**
+     * 返回官网与工作台共用的案例展示。
+     * @return 处理结果
+     */
+    @GetMapping("/showcase")
+    public Map<String, Object> showcaseCases() {
+        return taskService.showcaseCases();
+    }
+
+    /**
      * 返回任务。
      * @param taskId 任务标识
      * @return 处理结果

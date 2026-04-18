@@ -128,7 +128,8 @@ public class SecurityConfig {
                     ApiPathConstants.HEALTH,
                     ApiPathConstants.AUTH_SESSION,
                     ApiPathConstants.AUTH_LOGIN,
-                    ApiPathConstants.AUTH_ACTIVATE_INVITE
+                    ApiPathConstants.AUTH_ACTIVATE_INVITE,
+                    ApiPathConstants.TASK_SHOWCASE
                 ).permitAll()
                 .requestMatchers(ApiPathConstants.ADMIN_PATTERN).hasRole(UserRole.ADMIN.value())
                 .requestMatchers(ApiPathConstants.API_V2_PATTERN).authenticated()

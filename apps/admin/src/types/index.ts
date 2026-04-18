@@ -53,3 +53,108 @@ export interface UpdateAdminUserRequest {
 export interface UpdateAdminUserPasswordRequest {
   password: string;
 }
+
+export type TaskStatus =
+  | "PENDING"
+  | "PAUSED"
+  | "ANALYZING"
+  | "PLANNING"
+  | "RENDERING"
+  | "COMPLETED"
+  | "FAILED";
+
+export type AdminTaskSortMode =
+  | "updated_desc"
+  | "created_desc"
+  | "progress_desc"
+  | "status_desc"
+  | "effect_rating_desc";
+
+export interface AdminTaskListItem {
+  id: string;
+  title: string;
+  status: TaskStatus;
+  progress: number;
+  createdAt: string;
+  updatedAt: string;
+  sourceFileName?: string | null;
+  aspectRatio?: string | null;
+  minDurationSeconds?: number | null;
+  maxDurationSeconds?: number | null;
+  retryCount?: number | null;
+  startedAt?: string | null;
+  finishedAt?: string | null;
+  completedOutputCount?: number | null;
+  taskSeed?: number | null;
+  effectRating?: number | null;
+  effectRatingNote?: string | null;
+  ratedAt?: string | null;
+  hasTranscript?: boolean;
+  hasTimedTranscript?: boolean;
+  sourceAssetCount?: number | null;
+  editingMode?: string | null;
+  isQueued?: boolean;
+  queuePosition?: number | null;
+  currentStage?: string | null;
+  activeWorkerInstanceId?: string | null;
+  plannedClipCount?: number | null;
+  renderedClipCount?: number | null;
+  diagnosisSeverity?: "info" | "low" | "medium" | "high";
+  diagnosisCode?: string | null;
+  diagnosisHint?: string | null;
+  recommendedAction?: string | null;
+  ownerUserId?: number | null;
+  ownerUsername?: string | null;
+  ownerDisplayName?: string | null;
+  ownerRole?: UserRole | null | string;
+}
+
+export interface AdminTaskQuery {
+  q?: string;
+  status?: TaskStatus | "";
+  sort?: AdminTaskSortMode;
+}
+
+export interface AdminOverviewCounts {
+  totalTasks: number;
+  queuedTasks: number;
+  runningTasks: number;
+  completedTasks: number;
+  failedTasks: number;
+  highRiskTasks: number;
+  riskyTasks: number;
+  semanticTasks: number;
+  timedSemanticTasks: number;
+  averageProgress: number;
+}
+
+export interface AdminOverviewQueue {
+  generatedAt: string;
+  queueLength: number;
+  queueSnapshot: string[];
+  runningWorkers: number;
+  latestEvents: Array<Record<string, unknown>>;
+  oldestQueuedTaskId: string;
+  oldestQueuedTaskTitle: string;
+  oldestQueuedTaskCreatedAt?: string | null;
+}
+
+export interface AdminOverviewWorkers {
+  items: Array<Record<string, unknown>>;
+  onlineCount: number;
+}
+
+export interface AdminOverviewResponse {
+  generatedAt: string;
+  counts: AdminOverviewCounts;
+  queue: AdminOverviewQueue;
+  workers: AdminOverviewWorkers;
+  recentTasks: AdminTaskListItem[];
+  recentFailures: AdminTaskListItem[];
+  recentRunningTasks: AdminTaskListItem[];
+  recentTraceCount: number;
+  modelReady: boolean;
+  primaryModel?: string | null;
+  textModel?: string | null;
+  visionModel?: string | null;
+}

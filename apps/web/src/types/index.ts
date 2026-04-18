@@ -806,6 +806,61 @@ export interface TaskDetail extends TaskListItem {
 }
 
 /**
+ * 公开案例模型摘要接口定义。
+ */
+export interface TaskShowcaseModels {
+  textAnalysisModel?: string | null;
+  visionModel?: string | null;
+  imageModel?: string | null;
+  videoModel?: string | null;
+}
+
+/**
+ * 公开案例媒体摘要接口定义。
+ */
+export interface TaskShowcaseMedia {
+  title?: string | null;
+  clipIndex?: number | null;
+  durationSeconds?: number | null;
+  width?: number | null;
+  height?: number | null;
+  hasAudio?: boolean | null;
+}
+
+/**
+ * 公开案例条目接口定义。
+ */
+export interface TaskShowcaseItem {
+  id: string;
+  title: string;
+  status: TaskStatus;
+  createdAt: string;
+  updatedAt: string;
+  sourceFileName?: string | null;
+  aspectRatio?: string | null;
+  minDurationSeconds?: number | null;
+  maxDurationSeconds?: number | null;
+  completedOutputCount?: number | null;
+  taskSeed?: number | null;
+  effectRating?: number | null;
+  description?: string | null;
+  previewUrl?: string | null;
+  downloadUrl?: string | null;
+  joinName?: string | null;
+  models?: TaskShowcaseModels | null;
+  media?: TaskShowcaseMedia | null;
+}
+
+/**
+ * 公开案例响应体接口定义。
+ */
+export interface TaskShowcaseResponse {
+  generatedAt: string;
+  totalCompletedTasks: number;
+  items: TaskShowcaseItem[];
+}
+
+/**
  * 健康检查模型摘要接口定义。
  */
 export interface HealthModelSummary {

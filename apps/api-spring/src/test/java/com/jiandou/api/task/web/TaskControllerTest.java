@@ -35,6 +35,7 @@ class TaskControllerTest {
         when(service.createGenerationTask(createRequest)).thenReturn(row);
         when(service.generateCreativePrompt(promptRequest)).thenReturn(row);
         when(service.listTasks("q", "PENDING", "updatedAt")).thenReturn(rows);
+        when(service.showcaseCases()).thenReturn(row);
         when(service.getTask("task_1")).thenReturn(row);
         when(service.getTrace("task_1", 123)).thenReturn(rows);
         when(service.getLogs("task_1", 124)).thenReturn(rows);
@@ -53,6 +54,7 @@ class TaskControllerTest {
         assertSame(row, controller.createGenerationTask(createRequest));
         assertSame(row, controller.generateCreativePrompt(promptRequest));
         assertSame(rows, controller.listTasks("q", "PENDING", "updatedAt"));
+        assertSame(row, controller.showcaseCases());
         assertSame(row, controller.getTask("task_1"));
         assertSame(rows, controller.getTrace("task_1", null));
         assertSame(rows, controller.getLogs("task_1", null));

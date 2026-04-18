@@ -11,7 +11,7 @@ import { ensureAuthSession, installAuthClientBridge } from "./auth/session";
 
 function normalizeRedirectTarget(value: unknown) {
   if (typeof value !== "string" || !value.startsWith("/") || value.startsWith("//")) {
-    return "/users";
+    return "/dashboard";
   }
   return value;
 }

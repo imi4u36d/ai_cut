@@ -25,7 +25,7 @@ class TaskWorkerJoinStageService {
             return;
         }
         int endClipIndex = maxVideoClipIndex(task);
-        if (endClipIndex > 1) {
+        if (endClipIndex > 0) {
             joinOutputService.scheduleJoin(task.id(), endClipIndex);
         }
     }

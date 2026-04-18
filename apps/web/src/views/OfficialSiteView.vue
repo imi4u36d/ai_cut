@@ -45,10 +45,12 @@
             <a class="hero-button hero-button-secondary" href="#solutions">查看案例方案</a>
           </div>
 
-          <div class="hero-strip" aria-label="案例预览">
+          <p class="hero-strip__status">{{ showcaseStatusText }}</p>
+
+          <div v-if="heroFrames.length" class="hero-strip" aria-label="案例预览">
             <article
               v-for="(frame, index) in heroFrames"
-              :key="frame.title"
+              :key="frame.id"
               class="hero-strip__frame reveal-on-scroll floating-panel"
               :style="{
                 '--frame-scene': frame.scene,
@@ -57,6 +59,16 @@
               }"
             >
               <div class="hero-strip__visual">
+                <video
+                  v-if="frame.previewUrl"
+                  class="showcase-media"
+                  :src="frame.previewUrl"
+                  autoplay
+                  loop
+                  muted
+                  playsinline
+                  preload="metadata"
+                ></video>
                 <div class="hero-strip__poster">
                   <span>{{ frame.badge }}</span>
                 </div>
@@ -102,7 +114,7 @@
               <div class="showcase-card__map">
                 <article
                   v-for="(model, index) in showcaseModels"
-                  :key="model.name"
+                  :key="model.key"
                   class="showcase-node reveal-on-scroll floating-panel"
                   :class="model.className"
                   :style="{
@@ -118,14 +130,10 @@
 
               <aside class="showcase-card__details reveal-on-scroll" style="--reveal-delay: 280ms">
                 <p>链路详情</p>
-                <pre>{
-  "模式": "多模型协作",
-  "路由": "按提示词分发",
-  "同步": "实时回传"
-}</pre>
+                <pre>{{ showcaseDetailsJson }}</pre>
                 <div class="showcase-card__endpoint">
-                  <span>接口 / 密钥</span>
-                  <code>https://api.jiandou.local/v1/video/sora</code>
+                  <span>最新结果地址</span>
+                  <code>{{ showcaseEndpointLabel }}</code>
                 </div>
               </aside>
             </div>
@@ -148,6 +156,16 @@
                 }"
               >
                 <div class="solution-card__visual">
+                  <video
+                    v-if="solution.previewUrl"
+                    class="showcase-media"
+                    :src="solution.previewUrl"
+                    autoplay
+                    loop
+                    muted
+                    playsinline
+                    preload="metadata"
+                  ></video>
                   <div class="solution-card__poster">
                     <span>{{ solution.poster }}</span>
                   </div>
@@ -178,7 +196,18 @@
                   '--float-delay': `${index * 0.8}s`
                 }"
               >
-                <div class="side-media__visual"></div>
+                <div class="side-media__visual">
+                  <video
+                    v-if="sample.previewUrl"
+                    class="showcase-media"
+                    :src="sample.previewUrl"
+                    autoplay
+                    loop
+                    muted
+                    playsinline
+                    preload="metadata"
+                  ></video>
+                </div>
                 <div class="side-media__meta">
                   <span>{{ sample.title }}</span>
                   <strong>{{ sample.score }}</strong>
@@ -189,15 +218,11 @@
             <div class="side-json">
               <div class="side-json__card reveal-on-scroll" style="--reveal-delay: 180ms">
                 <p>参数详情</p>
-                <pre>{
-  "风格": "电影感",
-  "画幅": "9:16",
-  "种子": 88271
-}</pre>
+                <pre>{{ sideDetailsJson }}</pre>
               </div>
               <div class="side-json__card reveal-on-scroll" style="--reveal-delay: 260ms">
-                <p>接口 / 密钥</p>
-                <code>sk-live-preview-demo</code>
+                <p>案例结果</p>
+                <code>{{ showcaseEndpointLabel }}</code>
               </div>
             </div>
           </section>
@@ -326,8 +351,17 @@
 </template>
 
 <script setup lang="ts">
-import { nextTick, onBeforeUnmount, onMounted, ref } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from "vue";
+import { useTaskShowcase } from "@/composables/useTaskShowcase";
 import { getRuntimeConfig } from "@/api/runtime-config";
+import {
+  collectShowcaseModelNodes,
+  formatShowcaseDuration,
+  formatShowcaseRatingLabel,
+  formatShowcaseTimeMeta,
+  resolveShowcaseVisual,
+  selectShowcasePrimaryModel,
+} from "@/utils/showcase";
 
 const scrollRoot = ref<HTMLElement | null>(null);
 const typedHeadline = ref("");
@@ -339,33 +373,13 @@ const adminPortalUrl = getRuntimeConfig().adminBaseUrl;
 let typingTimer: number | null = null;
 let revealObserver: IntersectionObserver | null = null;
 let reducedMotionQuery: MediaQueryList | null = null;
-
-const heroFrames = [
-  {
-    title: "预览 01",
-    badge: "都市情感",
-    scene:
-      "linear-gradient(180deg, rgba(30,34,42,0.26), rgba(13,14,18,0.72)), radial-gradient(circle at 52% 18%, rgba(218, 183, 136, 0.92), transparent 28%), linear-gradient(135deg, #6b5848 0%, #2d3849 44%, #13161d 100%)"
-  },
-  {
-    title: "预览 02",
-    badge: "电影质感",
-    scene:
-      "linear-gradient(180deg, rgba(17,22,30,0.2), rgba(8,11,16,0.76)), radial-gradient(circle at 50% 22%, rgba(200, 183, 148, 0.8), transparent 22%), linear-gradient(135deg, #4f4336 0%, #34414a 42%, #11151b 100%)"
-  },
-  {
-    title: "预览 03",
-    badge: "奇幻世界",
-    scene:
-      "linear-gradient(180deg, rgba(10,15,24,0.24), rgba(10,14,20,0.74)), radial-gradient(circle at 56% 24%, rgba(114, 203, 221, 0.7), transparent 24%), linear-gradient(135deg, #26344a 0%, #20434f 44%, #10141b 100%)"
-  },
-  {
-    title: "预览 04",
-    badge: "剧情短片",
-    scene:
-      "linear-gradient(180deg, rgba(20,22,26,0.22), rgba(8,10,14,0.76)), radial-gradient(circle at 52% 22%, rgba(220, 196, 168, 0.78), transparent 22%), linear-gradient(135deg, #4a3d36 0%, #37454d 42%, #12171f 100%)"
-  }
-];
+const {
+  items: showcaseItems,
+  loading: showcaseLoading,
+  errorMessage: showcaseErrorMessage,
+  generatedAt: showcaseGeneratedAt,
+  totalCompletedTasks,
+} = useTaskShowcase();
 
 const features = [
   {
@@ -394,55 +408,92 @@ const features = [
   }
 ];
 
-const showcaseModels = [
-  { badge: "文", name: "文本模型", vendor: "ChatGPT", className: "showcase-node-openai" },
-  { badge: "视", name: "视觉理解", vendor: "VilaGPT", className: "showcase-node-vision" },
-  { badge: "多", name: "多模态理解", vendor: "Microsoft", className: "showcase-node-microsoft" },
-  { badge: "帧", name: "帧画面模型", vendor: "Midjourney", className: "showcase-node-frame" },
-  { badge: "影", name: "视频模型", vendor: "Sora", className: "showcase-node-sora" }
-];
+const heroFrames = computed(() => {
+  return showcaseItems.value.slice(0, 4).map((item, index) => {
+    const visual = resolveShowcaseVisual(item, index);
+    return {
+      ...item,
+      ...visual,
+      badge: selectShowcasePrimaryModel(item) || item.aspectRatio || "真实案例",
+    };
+  });
+});
 
-const solutions = [
-  {
-    title: "类型：爱情短剧流水线",
-    poster: "方案一",
-    description: "适合人物特写、情绪推进和高频复剪，支持连续剧集钩子内容的快速投放。",
-    rating: "★★★★☆",
-    scene:
-      "linear-gradient(180deg, rgba(23,29,40,0.24), rgba(13,16,22,0.7)), radial-gradient(circle at 52% 18%, rgba(214, 190, 151, 0.86), transparent 26%), linear-gradient(135deg, #6c5b4c 0%, #364652 48%, #101720 100%)"
-  },
-  {
-    title: "类型：悬疑竖屏连载",
-    poster: "方案二",
-    description: "针对悬念留白、角色连续性和多集节奏控制做了优化，适合高频更新内容。",
-    rating: "★★★★★",
-    scene:
-      "linear-gradient(180deg, rgba(18,24,32,0.2), rgba(10,13,18,0.76)), radial-gradient(circle at 48% 18%, rgba(184, 172, 146, 0.82), transparent 24%), linear-gradient(135deg, #51443b 0%, #2f3d4a 44%, #0e141c 100%)"
-  },
-  {
-    title: "类型：奇幻角色展示",
-    poster: "方案三",
-    description: "适合风格化角色设定、世界观氛围镜头以及用于投流展示的高辨识度片段。",
-    rating: "★★★★☆",
-    scene:
-      "linear-gradient(180deg, rgba(16,22,30,0.2), rgba(9,13,20,0.76)), radial-gradient(circle at 54% 18%, rgba(119, 194, 211, 0.78), transparent 24%), linear-gradient(135deg, #2a3851 0%, #1f3f4e 46%, #0e141b 100%)"
-  }
-];
+const showcaseModels = computed(() => collectShowcaseModelNodes(showcaseItems.value));
 
-const sideSamples = [
-  {
-    title: "情感短剧预览",
-    score: "★★★★★",
-    scene:
-      "linear-gradient(180deg, rgba(20,24,30,0.16), rgba(9,12,16,0.74)), radial-gradient(circle at 50% 18%, rgba(216, 187, 146, 0.82), transparent 24%), linear-gradient(135deg, #4c3f37 0%, #30404a 46%, #10151d 100%)"
-  },
-  {
-    title: "对话镜头样片",
-    score: "★★★★☆",
-    scene:
-      "linear-gradient(180deg, rgba(18,22,29,0.18), rgba(9,12,16,0.74)), radial-gradient(circle at 52% 18%, rgba(204, 179, 145, 0.78), transparent 22%), linear-gradient(135deg, #4d413a 0%, #33414a 46%, #10151d 100%)"
+const solutions = computed(() => {
+  return showcaseItems.value.slice(0, 3).map((item, index) => {
+    const visual = resolveShowcaseVisual(item, index);
+    return {
+      ...item,
+      ...visual,
+      poster: item.aspectRatio || "真实案例",
+      description: item.description || formatShowcaseTimeMeta(item),
+      rating: formatShowcaseRatingLabel(item.effectRating),
+    };
+  });
+});
+
+const sideSamples = computed(() => {
+  const sampledItems = showcaseItems.value.length > 3
+    ? showcaseItems.value.slice(3, 5)
+    : showcaseItems.value.slice(0, 2);
+  return sampledItems.map((item, index) => {
+    const visual = resolveShowcaseVisual(item, index + 2);
+    return {
+      ...item,
+      ...visual,
+      score: formatShowcaseRatingLabel(item.effectRating),
+    };
+  });
+});
+
+const showcaseStatusText = computed(() => {
+  if (showcaseLoading.value) {
+    return "正在同步真实案例...";
   }
-];
+  if (showcaseErrorMessage.value) {
+    return showcaseErrorMessage.value;
+  }
+  if (showcaseItems.value.length) {
+    return `已同步 ${showcaseItems.value.length} 条真实案例，累计完成 ${totalCompletedTasks.value} 个任务`;
+  }
+  return "暂无可展示的真实案例";
+});
+
+const showcaseDetailsJson = computed(() => {
+  const ratings = showcaseItems.value
+    .map((item) => item.effectRating)
+    .filter((item): item is number => typeof item === "number" && Number.isFinite(item));
+  const aspectRatios = Array.from(new Set(showcaseItems.value.map((item) => item.aspectRatio).filter(Boolean)));
+  const generatedAt = showcaseGeneratedAt.value
+    ? new Date(showcaseGeneratedAt.value).toLocaleString("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })
+    : "暂无";
+  return JSON.stringify({
+    案例数: showcaseItems.value.length,
+    已完成任务: totalCompletedTasks.value,
+    最高评分: ratings.length ? Math.max(...ratings).toFixed(1) : "暂无",
+    常见画幅: aspectRatios.join(" / ") || "暂无",
+    同步时间: generatedAt,
+  }, null, 2);
+});
+
+const showcaseEndpointLabel = computed(() => {
+  return showcaseItems.value[0]?.downloadUrl
+    || showcaseItems.value[0]?.previewUrl
+    || "暂无可公开预览地址";
+});
+
+const sideDetailsJson = computed(() => {
+  const item = showcaseItems.value[0];
+  return JSON.stringify({
+    标题: item?.title || "暂无",
+    画幅: item?.aspectRatio || "暂无",
+    时长: item ? formatShowcaseDuration(item) : "暂无",
+    种子: typeof item?.taskSeed === "number" ? item.taskSeed : "未设置",
+    主模型: item ? (selectShowcasePrimaryModel(item) || "暂无") : "暂无",
+  }, null, 2);
+});
 
 const plans = [
   {
@@ -930,6 +981,12 @@ onBeforeUnmount(() => {
   margin-top: 34px;
 }
 
+.hero-strip__status {
+  margin: 18px 0 0;
+  font-size: 0.88rem;
+  color: #72778a;
+}
+
 .hero-strip__frame {
   padding: 8px;
   border-radius: 22px;
@@ -947,6 +1004,7 @@ onBeforeUnmount(() => {
   border-radius: 16px;
   background: var(--frame-scene, var(--solution-scene, var(--sample-scene)));
   overflow: hidden;
+  isolation: isolate;
 }
 
 .hero-strip__visual::before,
@@ -955,6 +1013,7 @@ onBeforeUnmount(() => {
   content: "";
   position: absolute;
   inset: 0;
+  z-index: 1;
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(7, 10, 15, 0.26)),
     radial-gradient(circle at 50% 24%, rgba(255, 240, 220, 0.16), transparent 24%);
@@ -971,6 +1030,7 @@ onBeforeUnmount(() => {
   height: 76px;
   border-radius: 26px 26px 10px 10px;
   transform: translateX(-50%);
+  z-index: 1;
   background:
     radial-gradient(circle at 50% 20%, rgba(255, 239, 224, 0.74), transparent 18%),
     linear-gradient(180deg, rgba(244, 224, 200, 0.92), rgba(93, 85, 79, 0.88));
@@ -984,7 +1044,7 @@ onBeforeUnmount(() => {
   position: absolute;
   left: 10px;
   bottom: 10px;
-  z-index: 1;
+  z-index: 2;
   display: inline-flex;
   align-items: center;
   min-height: 26px;
@@ -995,6 +1055,15 @@ onBeforeUnmount(() => {
   font-size: 0.72rem;
   font-weight: 700;
   letter-spacing: 0.04em;
+}
+
+.showcase-media {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  z-index: 0;
 }
 
 .official-site__grid {

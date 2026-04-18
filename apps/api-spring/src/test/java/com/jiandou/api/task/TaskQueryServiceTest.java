@@ -3,6 +3,8 @@ package com.jiandou.api.task;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 
+import com.jiandou.api.auth.infrastructure.mybatis.MybatisAuthRepository;
+import com.jiandou.api.auth.infrastructure.mybatis.SysUserEntity;
 import com.jiandou.api.config.JiandouStorageProperties;
 import com.jiandou.api.config.JiandouTaskOpsProperties;
 import com.jiandou.api.task.application.TaskDiagnosisService;
@@ -39,7 +41,14 @@ class TaskQueryServiceTest {
         executionCoordinator = new RecordingTaskExecutionCoordinator(taskRepository);
         TaskViewMapper taskViewMapper = new TaskViewMapper(storageProperties("../../storage"));
         TaskDiagnosisService diagnosisService = new TaskDiagnosisService(taskViewMapper);
-        service = new TaskQueryService(taskRepository, taskViewMapper, executionCoordinator, diagnosisService, new JiandouTaskOpsProperties());
+        service = new TaskQueryService(
+            taskRepository,
+            taskViewMapper,
+            executionCoordinator,
+            diagnosisService,
+            new JiandouTaskOpsProperties(),
+            fakeAuthRepository()
+        );
     }
 
     /**
@@ -124,6 +133,15 @@ class TaskQueryServiceTest {
         JiandouStorageProperties properties = new JiandouStorageProperties();
         properties.setRootDir(rootDir);
         return properties;
+    }
+
+    private MybatisAuthRepository fakeAuthRepository() {
+        return new MybatisAuthRepository(null) {
+            @Override
+            public Map<Long, SysUserEntity> findUsersByIds(Collection<Long> ids) {
+                return Map.of();
+            }
+        };
     }
 
     private static final class RecordingTaskExecutionCoordinator extends TaskExecutionCoordinator {

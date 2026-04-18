@@ -85,6 +85,15 @@ public class TaskApplicationServiceImpl implements TaskApplicationService {
     }
 
     /**
+     * 返回公开案例展示。
+     * @return 处理结果
+     */
+    @Override
+    public Map<String, Object> showcaseCases() {
+        return taskQueryService.showcaseCases();
+    }
+
+    /**
      * 返回任务。
      * @param taskId 任务标识
      * @return 处理结果

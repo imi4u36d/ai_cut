@@ -1,5 +1,7 @@
 package com.jiandou.api.task.application;
 
+import com.jiandou.api.auth.infrastructure.mybatis.MybatisAuthRepository;
+import com.jiandou.api.auth.infrastructure.mybatis.SysUserEntity;
 import com.jiandou.api.config.JiandouTaskOpsProperties;
 import com.jiandou.api.task.TaskRecord;
 import com.jiandou.api.task.domain.TaskStatus;
@@ -11,9 +13,11 @@ import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.LinkedHashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 
@@ -23,11 +27,14 @@ import org.springframework.stereotype.Service;
 @Service
 public class TaskQueryService {
 
+    private static final int SHOWCASE_LIMIT = 8;
+
     private final TaskRepository taskRepository;
     private final TaskViewMapper taskViewMapper;
     private final TaskExecutionCoordinator executionCoordinator;
     private final TaskDiagnosisService taskDiagnosisService;
     private final JiandouTaskOpsProperties taskOpsProperties;
+    private final MybatisAuthRepository authRepository;
 
     /**
      * 创建新的任务查询服务。
@@ -41,13 +48,15 @@ public class TaskQueryService {
         TaskViewMapper taskViewMapper,
         TaskExecutionCoordinator executionCoordinator,
         TaskDiagnosisService taskDiagnosisService,
-        JiandouTaskOpsProperties taskOpsProperties
+        JiandouTaskOpsProperties taskOpsProperties,
+        MybatisAuthRepository authRepository
     ) {
         this.taskRepository = taskRepository;
         this.taskViewMapper = taskViewMapper;
         this.executionCoordinator = executionCoordinator;
         this.taskDiagnosisService = taskDiagnosisService;
         this.taskOpsProperties = taskOpsProperties;
+        this.authRepository = authRepository;
     }
 
     /**
@@ -60,12 +69,38 @@ public class TaskQueryService {
     public List<Map<String, Object>> listTasks(String q, String status, String sort) {
         List<TaskRecord> tasks = new ArrayList<>(taskRepository.findAll());
         executionCoordinator.recomputeQueuePositions(tasks);
-        return tasks.stream()
+        List<TaskRecord> filteredTasks = tasks.stream()
             .sorted(taskComparator(sort))
             .filter(item -> q == null || q.isBlank() || containsIgnoreCase(item.title(), q) || containsIgnoreCase(item.creativePrompt(), q))
             .filter(item -> matchesStatus(item, status))
+            .toList();
+        List<Map<String, Object>> rows = filteredTasks.stream()
             .map(taskViewMapper::toListItem)
             .collect(Collectors.toList());
+        return enrichTaskRows(filteredTasks, rows);
+    }
+
+    /**
+     * 返回官网与工作台共用的公开案例数据。
+     * 仅返回已完成且具备可公开预览结果的任务摘要。
+     * @return 处理结果
+     */
+    public Map<String, Object> showcaseCases() {
+        List<TaskRecord> tasks = new ArrayList<>(taskRepository.findAll());
+        executionCoordinator.recomputeQueuePositions(tasks);
+        List<Map<String, Object>> items = tasks.stream()
+            .filter(this::eligibleForShowcase)
+            .sorted(showcaseComparator())
+            .map(taskViewMapper::toShowcaseItem)
+            .filter(item -> !stringValue(item.get("previewUrl")).isBlank())
+            .limit(SHOWCASE_LIMIT)
+            .toList();
+
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("generatedAt", nowIso());
+        payload.put("totalCompletedTasks", tasks.stream().filter(item -> TaskStatus.COMPLETED.matches(item.status())).count());
+        payload.put("items", items);
+        return payload;
     }
 
     /**
@@ -76,7 +111,7 @@ public class TaskQueryService {
     public Map<String, Object> getTask(String taskId) {
         TaskRecord task = requireTask(taskId);
         executionCoordinator.recomputeQueuePositions(List.of(task));
-        return taskViewMapper.toDetail(task);
+        return enrichTaskRow(task, taskViewMapper.toDetail(task));
     }
 
     /**
@@ -149,18 +184,24 @@ public class TaskQueryService {
             .sorted(Comparator.comparing((TaskRecord item) -> item.createdAt()).reversed())
             .toList();
         int total = values.size();
-        List<Map<String, Object>> listItems = values.stream().map(taskViewMapper::toListItem).toList();
+        List<Map<String, Object>> listItems = enrichTaskRows(values, values.stream().map(taskViewMapper::toListItem).toList());
         List<Map<String, Object>> recentTasks = listItems.stream().limit(8).toList();
-        List<Map<String, Object>> recentFailures = values.stream()
+        List<TaskRecord> recentFailureRecords = values.stream()
             .filter(item -> TaskStatus.FAILED.matches(item.status()))
             .limit(6)
-            .map(taskViewMapper::toListItem)
             .toList();
-        List<Map<String, Object>> recentRunning = values.stream()
+        List<Map<String, Object>> recentFailures = enrichTaskRows(
+            recentFailureRecords,
+            recentFailureRecords.stream().map(taskViewMapper::toListItem).toList()
+        );
+        List<TaskRecord> recentRunningRecords = values.stream()
             .filter(item -> isRunningStatus(item.status()))
             .limit(6)
-            .map(taskViewMapper::toListItem)
             .toList();
+        List<Map<String, Object>> recentRunning = enrichTaskRows(
+            recentRunningRecords,
+            recentRunningRecords.stream().map(taskViewMapper::toListItem).toList()
+        );
 
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("generatedAt", nowIso());
@@ -189,6 +230,36 @@ public class TaskQueryService {
         payload.put("recentRunningTasks", recentRunning);
         payload.put("recentTraceCount", taskRepository.listTraces(null, null, null, null, taskOpsProperties.getRecentTraceScanLimit()).size());
         return payload;
+    }
+
+    private List<Map<String, Object>> enrichTaskRows(List<TaskRecord> tasks, List<Map<String, Object>> rows) {
+        Map<Long, SysUserEntity> ownerMap = loadOwners(tasks);
+        for (int index = 0; index < Math.min(tasks.size(), rows.size()); index++) {
+            appendOwnerInfo(rows.get(index), tasks.get(index), ownerMap);
+        }
+        return rows;
+    }
+
+    private Map<String, Object> enrichTaskRow(TaskRecord task, Map<String, Object> row) {
+        appendOwnerInfo(row, task, loadOwners(List.of(task)));
+        return row;
+    }
+
+    private Map<Long, SysUserEntity> loadOwners(List<TaskRecord> tasks) {
+        Set<Long> ownerIds = tasks.stream()
+            .map(TaskRecord::ownerUserId)
+            .filter(item -> item != null && item > 0)
+            .collect(Collectors.toCollection(LinkedHashSet::new));
+        return authRepository.findUsersByIds(ownerIds);
+    }
+
+    private void appendOwnerInfo(Map<String, Object> row, TaskRecord task, Map<Long, SysUserEntity> ownerMap) {
+        Long ownerUserId = task.ownerUserId();
+        SysUserEntity owner = ownerUserId == null ? null : ownerMap.get(ownerUserId);
+        row.put("ownerUserId", ownerUserId);
+        row.put("ownerUsername", owner == null ? "" : stringValue(owner.getUsername()));
+        row.put("ownerDisplayName", owner == null ? "" : stringValue(owner.getDisplayName()));
+        row.put("ownerRole", owner == null ? "" : stringValue(owner.getRole()));
     }
 
     /**
@@ -331,6 +402,23 @@ public class TaskQueryService {
     }
 
     /**
+     * 处理公开案例排序。
+     * 优先展示评分更高、产出更完整且更近的已完成任务。
+     * @return 处理结果
+     */
+    private Comparator<TaskRecord> showcaseComparator() {
+        Comparator<TaskRecord> updatedDesc = Comparator.comparing(
+            (TaskRecord item) -> stringValue(item.updatedAt()),
+            Comparator.nullsLast(String::compareTo)
+        ).reversed();
+        return Comparator
+            .comparingInt((TaskRecord item) -> item.effectRating() == null ? Integer.MIN_VALUE : item.effectRating())
+            .reversed()
+            .thenComparing(Comparator.comparingInt(TaskRecord::completedOutputCount).reversed())
+            .thenComparing(updatedDesc);
+    }
+
+    /**
      * 处理tail。
      * @param items items值
      * @param limit 返回的最大条目数
@@ -371,6 +459,16 @@ public class TaskQueryService {
      */
     private boolean matchesStatus(TaskRecord task, String statusFilter) {
         return TaskStatus.matchesFilter(task.status(), task.isQueued(), statusFilter);
+    }
+
+    /**
+     * 检查任务是否适合公开案例展示。
+     * @param task 要处理的任务对象
+     * @return 是否满足条件
+     */
+    private boolean eligibleForShowcase(TaskRecord task) {
+        return TaskStatus.COMPLETED.matches(task.status())
+            && (task.completedOutputCount() > 0 || !task.outputs().isEmpty());
     }
 
     /**

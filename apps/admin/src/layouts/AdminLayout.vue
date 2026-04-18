@@ -13,6 +13,14 @@
       </div>
 
       <el-menu :default-active="activeMenu" class="admin-layout__menu" router>
+        <el-menu-item index="/dashboard">
+          <el-icon><DataAnalysis /></el-icon>
+          <span>首页概览</span>
+        </el-menu-item>
+        <el-menu-item index="/tasks">
+          <el-icon><Tickets /></el-icon>
+          <span>任务管理</span>
+        </el-menu-item>
         <el-menu-item index="/users">
           <el-icon><UserFilled /></el-icon>
           <span>用户管理</span>
@@ -60,6 +68,12 @@ const authState = useAuthSessionState();
 
 const currentUser = computed(() => authState.user.value);
 const activeMenu = computed(() => {
+  if (route.path.startsWith("/dashboard")) {
+    return "/dashboard";
+  }
+  if (route.path.startsWith("/tasks")) {
+    return "/tasks";
+  }
   if (route.path.startsWith("/users")) {
     return "/users";
   }

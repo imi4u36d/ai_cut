@@ -70,8 +70,8 @@ services:
       context: .
       dockerfile: apps/web/Dockerfile.prod
       args:
-        NODE_IMAGE: ${JIANDOU_NODE_IMAGE:-docker.1ms.run/library/node:20-bookworm-slim}
-        NGINX_IMAGE: ${JIANDOU_NGINX_IMAGE:-docker.1ms.run/library/nginx:1.27-alpine}
+        NODE_IMAGE: ${JIANDOU_NODE_IMAGE:-node:20-bookworm-slim}
+        NGINX_IMAGE: ${JIANDOU_NGINX_IMAGE:-nginx:1.27-alpine}
     container_name: jiandou-web-prod
     restart: unless-stopped
     environment:
@@ -95,8 +95,8 @@ services:
       context: .
       dockerfile: apps/admin/Dockerfile.prod
       args:
-        NODE_IMAGE: ${JIANDOU_NODE_IMAGE:-docker.1ms.run/library/node:20-bookworm-slim}
-        NGINX_IMAGE: ${JIANDOU_NGINX_IMAGE:-docker.1ms.run/library/nginx:1.27-alpine}
+        NODE_IMAGE: ${JIANDOU_NODE_IMAGE:-node:20-bookworm-slim}
+        NGINX_IMAGE: ${JIANDOU_NGINX_IMAGE:-nginx:1.27-alpine}
     container_name: jiandou-admin-prod
     restart: unless-stopped
     environment:

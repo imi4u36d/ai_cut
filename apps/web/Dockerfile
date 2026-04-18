@@ -1,5 +1,5 @@
 # 允许在 CI 或本地镜像环境中覆盖 Node 基础镜像。
-ARG NODE_IMAGE=docker.1ms.run/library/node:20-bookworm
+ARG NODE_IMAGE=node:20-bookworm
 FROM ${NODE_IMAGE}
 
 WORKDIR /app/apps/web

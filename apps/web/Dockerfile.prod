@@ -1,5 +1,5 @@
-ARG NODE_IMAGE=docker.1ms.run/library/node:20-bookworm-slim
-ARG NGINX_IMAGE=docker.1ms.run/library/nginx:1.27-alpine
+ARG NODE_IMAGE=node:20-bookworm-slim
+ARG NGINX_IMAGE=nginx:1.27-alpine
 FROM ${NODE_IMAGE} AS builder
 
 WORKDIR /build/apps/web

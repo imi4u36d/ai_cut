@@ -36,6 +36,12 @@ public interface TaskApplicationService {
     List<Map<String, Object>> listTasks(String q, String status, String sort);
 
     /**
+     * 返回公开案例展示。
+     * @return 处理结果
+     */
+    Map<String, Object> showcaseCases();
+
+    /**
      * 返回任务。
      * @param taskId 任务标识
      * @return 处理结果

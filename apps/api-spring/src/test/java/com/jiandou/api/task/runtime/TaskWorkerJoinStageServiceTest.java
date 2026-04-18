@@ -12,20 +12,28 @@ import org.junit.jupiter.api.Test;
 class TaskWorkerJoinStageServiceTest {
 
     @Test
-    void scheduleJoinIgnoresInvalidOrInsufficientTasks() {
+    void scheduleJoinIgnoresInvalidTasks() {
         JoinOutputService joinOutputService = mock(JoinOutputService.class);
         TaskWorkerJoinStageService service = new TaskWorkerJoinStageService(joinOutputService);
         TaskRecord blankIdTask = new TaskRecord();
         blankIdTask.setId(" ");
-        TaskRecord singleClipTask = new TaskRecord();
-        singleClipTask.setId("task_1");
-        singleClipTask.addOutput(Map.of("resultType", TaskResultTypes.VIDEO, "clipIndex", 1));
-
         service.scheduleJoin(null);
         service.scheduleJoin(blankIdTask);
-        service.scheduleJoin(singleClipTask);
 
         verify(joinOutputService, never()).scheduleJoin(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.anyInt());
+    }
+
+    @Test
+    void scheduleJoinUsesSingleClipAsFirstJoinTarget() {
+        JoinOutputService joinOutputService = mock(JoinOutputService.class);
+        TaskWorkerJoinStageService service = new TaskWorkerJoinStageService(joinOutputService);
+        TaskRecord task = new TaskRecord();
+        task.setId("task_single");
+        task.addOutput(Map.of("resultType", TaskResultTypes.VIDEO, "clipIndex", 1));
+
+        service.scheduleJoin(task);
+
+        verify(joinOutputService).scheduleJoin("task_single", 1);
     }
 
     @Test

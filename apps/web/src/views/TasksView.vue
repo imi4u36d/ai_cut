@@ -38,8 +38,9 @@
             <label class="toolbar-select">
               <span class="toolbar-select__icon">↻</span>
               <select v-model="sortMode">
-                <option value="updated_desc">按状态</option>
+                <option value="status_desc">按状态</option>
                 <option value="created_desc">按创建时间</option>
+                <option value="updated_desc">按最近刷新</option>
                 <option value="progress_desc">按进度</option>
                 <option value="semantic_desc">按文本输入</option>
                 <option value="effect_rating_desc">按评分</option>
@@ -154,35 +155,51 @@
         </div>
       </div>
 
-      <aside class="surface-panel task-details-panel">
-        <div class="task-details-panel__head">
-          <h2>任务详情</h2>
-          <button class="task-details-panel__close" type="button" @click="clearSelectedTask">×</button>
-        </div>
+    </div>
 
-        <div v-if="!selectedTaskId" class="task-details-panel__empty">
-          从左侧任务看板选择一个任务，即可查看详情、追踪记录和创建参数。
-        </div>
-
-        <template v-else>
-          <div class="task-details-panel__title">
-            <p>{{ selectedTaskDetail?.title || selectedTaskSummary?.title || "任务" }}</p>
-            <strong>任务编号 · {{ selectedTaskDetail?.id || selectedTaskId }}</strong>
-          </div>
-
-          <div class="detail-stage-line">
-            <div v-for="stage in selectedTaskStages" :key="stage.key" class="detail-stage-line__item">
-              <div class="detail-stage-line__bar" :class="stageStateClass(stage.state)"></div>
-              <p>{{ stage.label }}</p>
+    <div
+      v-if="selectedTaskId"
+      class="task-details-dialog-backdrop"
+      @click="clearSelectedTask"
+    >
+      <section
+        class="surface-panel task-details-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="task-details-dialog-title"
+        @click.stop
+      >
+        <div class="task-details-dialog__head">
+          <div class="task-details-dialog__title-wrap">
+            <p class="task-details-dialog__eyebrow">Task Detail</p>
+            <h2 id="task-details-dialog-title">{{ selectedTaskDetail?.title || selectedTaskSummary?.title || "任务详情" }}</h2>
+            <div class="task-details-dialog__meta">
+              <span class="surface-chip">任务编号 · {{ selectedTaskDetail?.id || selectedTaskId }}</span>
+              <span class="surface-chip">{{ selectedTaskStageLabel }}</span>
+              <span v-if="selectedTaskLoading" class="surface-chip">加载中</span>
             </div>
           </div>
+          <button class="task-details-dialog__close" type="button" @click="clearSelectedTask">×</button>
+        </div>
 
-          <section class="detail-section">
+        <div class="detail-stage-line">
+          <div v-for="stage in selectedTaskStages" :key="stage.key" class="detail-stage-line__item">
+            <div class="detail-stage-line__bar" :class="stageStateClass(stage.state)"></div>
+            <p>{{ stage.label }}</p>
+          </div>
+        </div>
+
+        <div class="task-details-dialog__grid">
+          <section class="detail-section detail-section-card">
             <h3>结果概览</h3>
             <div class="detail-overview">
               <div class="detail-overview__row">
                 <span>执行实例</span>
                 <strong>{{ selectedTaskWorkerLabel }}</strong>
+              </div>
+              <div class="detail-overview__row">
+                <span>最新拼接结果</span>
+                <strong>{{ selectedTaskJoinLabel }}</strong>
               </div>
               <div class="detail-overview__row detail-overview__row-progress">
                 <span>拼接进度</span>
@@ -202,72 +219,101 @@
             </div>
           </section>
 
-          <section class="detail-section">
+          <section class="detail-section detail-section-card">
             <div class="detail-section__head">
               <h3>创建参数</h3>
               <span class="surface-chip">{{ selectedTaskDurationModeLabel }}</span>
             </div>
             <div class="detail-params">
-              <div v-for="item in selectedTaskCompactParameterRows" :key="item.label" class="detail-params__row">
+              <div v-for="item in selectedTaskParameterRows" :key="item.label" class="detail-params__row">
+                <span>{{ item.label }}</span>
+                <strong>{{ item.value }}</strong>
+              </div>
+            </div>
+            <div v-if="selectedTaskTranscriptPreview" class="detail-note-block">
+              <span>文本输入预览</span>
+              <p>{{ selectedTaskTranscriptPreview }}</p>
+            </div>
+          </section>
+        </div>
+
+        <div v-if="selectedTaskMonitoringRows.length || selectedTaskArtifactRows.length" class="task-details-dialog__grid">
+          <section v-if="selectedTaskMonitoringRows.length" class="detail-section detail-section-card">
+            <h3>运行监控</h3>
+            <div class="detail-params">
+              <div v-for="item in selectedTaskMonitoringRows" :key="item.label" class="detail-params__row">
                 <span>{{ item.label }}</span>
                 <strong>{{ item.value }}</strong>
               </div>
             </div>
           </section>
 
-          <section class="detail-section">
+          <section v-if="selectedTaskArtifactRows.length" class="detail-section detail-section-card">
             <div class="detail-section__head">
-              <h3>最近追踪</h3>
-              <span class="surface-chip">{{ selectedTaskTrace.length }}</span>
+              <h3>产物目录</h3>
+              <span class="surface-chip">{{ selectedTaskArtifactDirectoryHint }}</span>
             </div>
-            <div v-if="selectedTaskError" class="task-details-panel__error">{{ selectedTaskError }}</div>
-            <div v-else class="detail-traces">
-              <div v-if="selectedTaskTrace.length === 0" class="detail-traces__empty">暂时还没有追踪记录。</div>
-              <div
-                v-for="event in selectedTaskTrace.slice(0, 12)"
-                :key="`${event.timestamp}-${event.event}-${event.stage}`"
-                class="detail-traces__item"
-              >
-                <p>{{ event.message }}</p>
-                <small>[{{ event.stage }}] {{ formatDateTime(event.timestamp) }}</small>
+            <div class="detail-params">
+              <div v-for="item in selectedTaskArtifactRows" :key="item.label" class="detail-params__row">
+                <span>{{ item.label }}</span>
+                <strong>{{ item.value }}</strong>
               </div>
             </div>
           </section>
+        </div>
 
-          <div class="detail-actions">
-            <button
-              v-if="selectedTaskActionTask && ['PENDING', 'ANALYZING', 'PLANNING'].includes(selectedTaskActionTask.status)"
-              class="btn-secondary btn-sm"
-              type="button"
-              :disabled="selectedTaskLoading || managingTaskId === selectedTaskActionTask.id"
-              @click="handlePause(selectedTaskActionTask)"
-            >
-              暂停
-            </button>
-            <button
-              v-if="selectedTaskActionTask && ['PENDING', 'ANALYZING', 'PLANNING', 'RENDERING'].includes(selectedTaskActionTask.status)"
-              class="btn-warning btn-sm"
-              type="button"
-              :disabled="selectedTaskLoading || managingTaskId === selectedTaskActionTask.id"
-              @click="handleTerminate(selectedTaskActionTask)"
-            >
-              终止
-            </button>
-            <button
-              v-if="selectedTaskActionTask?.status === 'PAUSED'"
-              class="btn-primary btn-sm"
-              type="button"
-              :disabled="selectedTaskLoading || managingTaskId === selectedTaskActionTask.id"
-              @click="handleContinueTask(selectedTaskActionTask)"
-            >
-              继续
-            </button>
-            <button class="btn-secondary btn-sm" type="button" :disabled="selectedTaskLoading" @click="refreshSelectedTask">
-              刷新
-            </button>
+        <section class="detail-section detail-section-card">
+          <div class="detail-section__head">
+            <h3>最近追踪</h3>
+            <span class="surface-chip">{{ selectedTaskTrace.length }}</span>
           </div>
-        </template>
-      </aside>
+          <div v-if="selectedTaskError" class="task-details-panel__error">{{ selectedTaskError }}</div>
+          <div v-else class="detail-traces">
+            <div v-if="selectedTaskTrace.length === 0" class="detail-traces__empty">暂时还没有追踪记录。</div>
+            <div
+              v-for="event in selectedTaskTrace.slice(0, 16)"
+              :key="`${event.timestamp}-${event.event}-${event.stage}`"
+              class="detail-traces__item"
+            >
+              <p>{{ event.message }}</p>
+              <small>[{{ event.stage }}] {{ formatDateTime(event.timestamp) }}</small>
+            </div>
+          </div>
+        </section>
+
+        <div class="detail-actions">
+          <button
+            v-if="selectedTaskActionTask && ['PENDING', 'ANALYZING', 'PLANNING'].includes(selectedTaskActionTask.status)"
+            class="btn-secondary btn-sm"
+            type="button"
+            :disabled="selectedTaskLoading || managingTaskId === selectedTaskActionTask.id"
+            @click="handlePause(selectedTaskActionTask)"
+          >
+            暂停
+          </button>
+          <button
+            v-if="selectedTaskActionTask && ['PENDING', 'ANALYZING', 'PLANNING', 'RENDERING'].includes(selectedTaskActionTask.status)"
+            class="btn-warning btn-sm"
+            type="button"
+            :disabled="selectedTaskLoading || managingTaskId === selectedTaskActionTask.id"
+            @click="handleTerminate(selectedTaskActionTask)"
+          >
+            终止
+          </button>
+          <button
+            v-if="selectedTaskActionTask?.status === 'PAUSED'"
+            class="btn-primary btn-sm"
+            type="button"
+            :disabled="selectedTaskLoading || managingTaskId === selectedTaskActionTask.id"
+            @click="handleContinueTask(selectedTaskActionTask)"
+          >
+            继续
+          </button>
+          <button class="btn-secondary btn-sm" type="button" :disabled="selectedTaskLoading" @click="refreshSelectedTask">
+            刷新
+          </button>
+        </div>
+      </section>
     </div>
   </section>
 </template>
@@ -299,13 +345,26 @@ import { formatTaskStatus, getTaskLifecycleGroup, TASK_LIFECYCLE_GROUP_LABELS } 
 const route = useRoute();
 const router = useRouter();
 
+type TaskSortMode = "status_desc" | "updated_desc" | "created_desc" | "progress_desc" | "semantic_desc" | "effect_rating_desc";
+
+const DEFAULT_SORT_MODE: TaskSortMode = "status_desc";
+const STATUS_SORT_PRIORITY: Record<TaskStatus, number> = {
+  RENDERING: 0,
+  ANALYZING: 1,
+  PLANNING: 2,
+  PENDING: 3,
+  PAUSED: 4,
+  FAILED: 5,
+  COMPLETED: 6,
+};
+
 const tasks = ref<TaskListItem[]>([]);
 const loading = ref(true);
 const errorMessage = ref("");
 const lastLoadedAt = ref("尚未刷新");
 const searchText = ref("");
 const statusFilter = ref<TaskStatus | "all">("all");
-const sortMode = ref<"updated_desc" | "created_desc" | "progress_desc" | "semantic_desc" | "effect_rating_desc">("updated_desc");
+const sortMode = ref<TaskSortMode>(DEFAULT_SORT_MODE);
 const viewMode = ref<"rows" | "cards">("rows");
 const managingTaskId = ref("");
 const collapsedGroups = ref<Record<string, boolean>>({});
@@ -334,6 +393,43 @@ function normalizeQueryValue(value: unknown) {
   return value == null ? "" : String(value);
 }
 
+function toTimestamp(value?: string | null) {
+  const timestamp = value ? new Date(value).getTime() : Number.NaN;
+  return Number.isFinite(timestamp) ? timestamp : 0;
+}
+
+function compareByUpdatedAtDesc(left: Pick<TaskListItem, "updatedAt">, right: Pick<TaskListItem, "updatedAt">) {
+  return toTimestamp(right.updatedAt) - toTimestamp(left.updatedAt);
+}
+
+function compareByCreatedAtDesc(left: Pick<TaskListItem, "createdAt">, right: Pick<TaskListItem, "createdAt">) {
+  return toTimestamp(right.createdAt) - toTimestamp(left.createdAt);
+}
+
+function compareByStatus(left: TaskListItem, right: TaskListItem) {
+  const priorityDiff = STATUS_SORT_PRIORITY[left.status] - STATUS_SORT_PRIORITY[right.status];
+  if (priorityDiff !== 0) {
+    return priorityDiff;
+  }
+  const createdDiff = compareByCreatedAtDesc(left, right);
+  if (createdDiff !== 0) {
+    return createdDiff;
+  }
+  return compareByUpdatedAtDesc(left, right);
+}
+
+function reconcileTaskList(currentTasks: TaskListItem[], nextTasks: TaskListItem[]) {
+  const currentTaskMap = new Map(currentTasks.map((task) => [task.id, task]));
+  return nextTasks.map((task) => {
+    const currentTask = currentTaskMap.get(task.id);
+    if (!currentTask) {
+      return task;
+    }
+    Object.assign(currentTask, task);
+    return currentTask;
+  });
+}
+
 /**
  * 应用路由筛选条件。
  */
@@ -346,9 +442,9 @@ function applyRouteFilters() {
     : "all";
 
   const nextSort = normalizeQueryValue(route.query.sort);
-  sortMode.value = ["updated_desc", "created_desc", "progress_desc", "semantic_desc", "effect_rating_desc"].includes(nextSort)
+  sortMode.value = ["status_desc", "updated_desc", "created_desc", "progress_desc", "semantic_desc", "effect_rating_desc"].includes(nextSort)
     ? (nextSort as typeof sortMode.value)
-    : "updated_desc";
+    : DEFAULT_SORT_MODE;
 
   const nextView = normalizeQueryValue(route.query.view);
   viewMode.value = nextView === "cards" ? "cards" : "rows";
@@ -539,8 +635,12 @@ const filteredTasks = computed(() => {
 const sortedFilteredTasks = computed(() => {
   const items = [...filteredTasks.value];
   switch (sortMode.value) {
+    case "status_desc":
+      return items.sort(compareByStatus);
     case "created_desc":
-      return items.sort((left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime());
+      return items.sort(compareByCreatedAtDesc);
+    case "updated_desc":
+      return items.sort(compareByUpdatedAtDesc);
     case "progress_desc":
       return items.sort((left, right) => (right.progress ?? 0) - (left.progress ?? 0));
     case "semantic_desc":
@@ -555,10 +655,10 @@ const sortedFilteredTasks = computed(() => {
         if (ratedAtDiff !== 0) {
           return ratedAtDiff;
         }
-        return new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime();
+        return compareByUpdatedAtDesc(left, right);
       });
     default:
-      return items.sort((left, right) => new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime());
+      return items.sort(compareByUpdatedAtDesc);
   }
 });
 
@@ -635,9 +735,10 @@ async function loadTasks() {
   loading.value = tasks.value.length === 0;
   try {
     // 将筛选保留在前端本地，避免输入和视图切换时额外触发请求。
-    tasks.value = await fetchTasks({
+    const nextTasks = await fetchTasks({
       sort: sortMode.value,
     });
+    tasks.value = reconcileTaskList(tasks.value, nextTasks);
     lastLoadedAt.value = new Date().toLocaleString();
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : "加载任务列表失败";
@@ -646,7 +747,7 @@ async function loadTasks() {
   }
 }
 
-async function loadSelectedTaskDetails() {
+async function loadSelectedTaskDetails(options: { silent?: boolean } = {}) {
   if (!selectedTaskId.value) {
     selectedTaskDetail.value = null;
     selectedTaskTrace.value = [];
@@ -655,8 +756,10 @@ async function loadSelectedTaskDetails() {
     selectedTaskRatingNote.value = "";
     return;
   }
-  selectedTaskLoading.value = true;
-  selectedTaskError.value = "";
+  if (!options.silent) {
+    selectedTaskLoading.value = true;
+    selectedTaskError.value = "";
+  }
   try {
     const [detail, trace] = await Promise.all([
       fetchTask(selectedTaskId.value),
@@ -668,9 +771,13 @@ async function loadSelectedTaskDetails() {
     selectedTaskRatingDraft.value = typeof detail.effectRating === "number" && detail.effectRating > 0 ? Math.trunc(detail.effectRating) : null;
     selectedTaskRatingNote.value = detail.effectRatingNote?.trim() || "";
   } catch (error) {
-    selectedTaskError.value = error instanceof Error ? error.message : "任务详情加载失败";
+    if (!options.silent) {
+      selectedTaskError.value = error instanceof Error ? error.message : "任务详情加载失败";
+    }
   } finally {
-    selectedTaskLoading.value = false;
+    if (!options.silent) {
+      selectedTaskLoading.value = false;
+    }
   }
 }
 
@@ -708,7 +815,7 @@ function writeQuery() {
   if (statusFilter.value !== "all") {
     query.status = statusFilter.value;
   }
-  if (sortMode.value !== "updated_desc") {
+  if (sortMode.value !== DEFAULT_SORT_MODE) {
     query.sort = sortMode.value;
   }
   if (viewMode.value !== "rows") {
@@ -751,7 +858,7 @@ function scheduleWriteQuery() {
 function clearFilters() {
   searchText.value = "";
   statusFilter.value = "all";
-  sortMode.value = "updated_desc";
+  sortMode.value = DEFAULT_SORT_MODE;
 }
 
 function clearSelectedTask() {
@@ -760,6 +867,12 @@ function clearSelectedTask() {
   selectedTaskTrace.value = [];
   selectedTaskError.value = "";
   writeQuery();
+}
+
+function handleWindowKeydown(event: KeyboardEvent) {
+  if (event.key === "Escape" && selectedTaskId.value) {
+    clearSelectedTask();
+  }
 }
 
 /**
@@ -964,7 +1077,7 @@ function stageStateClass(state: "pending" | "active" | "paused" | "done" | "fail
 
 const { start } = usePolling(async () => {
   await loadTasks();
-  await loadSelectedTaskDetails();
+  await loadSelectedTaskDetails({ silent: true });
 }, 5000);
 
 watch(
@@ -981,6 +1094,7 @@ watch([searchText, statusFilter, sortMode, viewMode], () => {
 });
 
 onMounted(async () => {
+  window.addEventListener("keydown", handleWindowKeydown);
   await start();
 });
 
@@ -989,6 +1103,7 @@ onUnmounted(() => {
     window.clearTimeout(querySyncTimer);
     querySyncTimer = null;
   }
+  window.removeEventListener("keydown", handleWindowKeydown);
 });
 
 </script>
@@ -1001,11 +1116,9 @@ onUnmounted(() => {
 }
 
 .tasks-layout {
-  display: grid;
-  gap: 0;
+  display: block;
   height: 100%;
   min-height: 0;
-  grid-template-columns: minmax(0, 1fr) 310px;
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 0 0 24px 24px;
   overflow: hidden;
@@ -1015,7 +1128,6 @@ onUnmounted(() => {
   min-width: 0;
   min-height: 0;
   padding: 18px 18px 18px 24px;
-  border-right: 1px solid rgba(255, 255, 255, 0.08);
   overflow: auto;
 }
 
@@ -1353,39 +1465,69 @@ onUnmounted(() => {
   color: #ffc559;
 }
 
-.task-details-panel {
+.task-details-dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
   display: grid;
-  min-height: 0;
+  place-items: center;
+  padding: 28px;
+  background: rgba(4, 6, 10, 0.72);
+  backdrop-filter: blur(18px);
+}
+
+.task-details-dialog {
+  width: min(1080px, 100%);
+  max-height: min(88vh, 920px);
+  display: grid;
   gap: 18px;
-  align-content: start;
-  padding: 16px 16px 20px;
-  border-radius: 0;
-  border: 0;
-  box-shadow: none;
+  padding: 24px;
+  border-radius: 28px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.02)),
-    rgba(7, 10, 16, 0.92);
+    linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.02)),
+    rgba(7, 10, 16, 0.96);
   overflow: auto;
 }
 
-.task-details-panel__head {
+.task-details-dialog__head {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
 }
 
-.task-details-panel__head h2 {
+.task-details-dialog__title-wrap {
+  display: grid;
+  gap: 8px;
+}
+
+.task-details-dialog__eyebrow {
   margin: 0;
-  font-size: 1rem;
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+}
+
+.task-details-dialog__head h2 {
+  margin: 0;
+  font-size: clamp(1.25rem, 2vw, 1.7rem);
   font-weight: 700;
   color: rgba(255, 255, 255, 0.96);
 }
 
-.task-details-panel__close {
+.task-details-dialog__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.task-details-dialog__close {
   color: rgba(255, 255, 255, 0.54);
   font-size: 1.5rem;
   line-height: 1;
+  flex: 0 0 auto;
 }
 
 .task-details-panel__empty,
@@ -1486,6 +1628,13 @@ onUnmounted(() => {
   gap: 12px;
 }
 
+.detail-section-card {
+  padding: 16px;
+  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.03);
+}
+
 .detail-section h3 {
   margin: 0;
   font-size: 0.88rem;
@@ -1566,10 +1715,38 @@ onUnmounted(() => {
   font-weight: 500;
 }
 
+.task-details-dialog__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.detail-note-block {
+  display: grid;
+  gap: 8px;
+  padding: 14px;
+  border-radius: 14px;
+  background: rgba(0, 0, 0, 0.24);
+}
+
+.detail-note-block span {
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 0.74rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.detail-note-block p {
+  margin: 0;
+  color: rgba(255, 255, 255, 0.82);
+  line-height: 1.7;
+  white-space: pre-wrap;
+}
+
 .detail-traces {
   display: grid;
   gap: 8px;
-  max-height: 300px;
+  max-height: 360px;
   overflow: auto;
 }
 
@@ -1612,21 +1789,8 @@ onUnmounted(() => {
 }
 
 @media (max-width: 1200px) {
-  .tasks-layout {
-    grid-template-columns: 1fr;
-  }
-
-  .tasks-board {
-    border-right: 0;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-  }
-
   .board-columns {
     grid-template-columns: 1fr;
-  }
-
-  .task-details-panel {
-    border-radius: 0 0 24px 24px;
   }
 }
 
@@ -1642,6 +1806,18 @@ onUnmounted(() => {
   .detail-stage-line {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+
+  .task-details-dialog-backdrop {
+    padding: 16px;
+  }
+
+  .task-details-dialog {
+    padding: 18px;
+  }
+
+  .task-details-dialog__grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 640px) {
@@ -1655,6 +1831,18 @@ onUnmounted(() => {
 
   .detail-overview__row-progress {
     grid-template-columns: 1fr;
+  }
+
+  .task-details-dialog-backdrop {
+    padding: 0;
+  }
+
+  .task-details-dialog {
+    width: 100%;
+    height: 100%;
+    max-height: none;
+    border-radius: 0;
+    padding: 16px;
   }
 }
 </style>

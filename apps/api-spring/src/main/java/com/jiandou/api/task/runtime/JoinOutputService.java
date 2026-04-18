@@ -69,7 +69,7 @@ public class JoinOutputService {
      * @param endClipIndex end片段索引值
      */
     public void scheduleJoin(String taskId, int endClipIndex) {
-        if (taskId == null || taskId.isBlank() || endClipIndex < 2) {
+        if (taskId == null || taskId.isBlank() || endClipIndex < 1) {
             return;
         }
         pendingTargets.merge(taskId, endClipIndex, Math::max);
@@ -94,7 +94,7 @@ public class JoinOutputService {
         try {
             while (true) {
                 Integer target = pendingTargets.remove(taskId);
-                if (target == null || target < 2) {
+                if (target == null || target < 1) {
                     return;
                 }
                 try {
@@ -133,7 +133,7 @@ public class JoinOutputService {
      */
     private void buildJoinOutput(String taskId, int endClipIndex) {
         TaskRecord task = taskRepository.findById(taskId);
-        if (task == null || endClipIndex < 2) {
+        if (task == null || endClipIndex < 1) {
             return;
         }
         if (!shouldProcessJoin(task)) {
@@ -153,11 +153,13 @@ public class JoinOutputService {
         if (segmentUrls.size() < endClipIndex) {
             return;
         }
-        LocalMediaArtifactService.StoredArtifact artifact = localMediaArtifactService.concatVideos(
-            TaskArtifactNaming.taskJoinedRelativeDir(task),
-            outputFileName,
-            segmentUrls
-        );
+        LocalMediaArtifactService.StoredArtifact artifact = segmentUrls.size() == 1
+            ? localMediaArtifactService.copyArtifact(segmentUrls.get(0), TaskArtifactNaming.taskJoinedRelativeDir(task), outputFileName)
+            : localMediaArtifactService.concatVideos(
+                TaskArtifactNaming.taskJoinedRelativeDir(task),
+                outputFileName,
+                segmentUrls
+            );
         int joinClipIndex = JOIN_OUTPUT_CLIP_INDEX_BASE + endClipIndex;
         double durationSeconds = clipResults.stream().mapToDouble(item -> doubleValue(item.get("durationSeconds"), 0.0)).sum();
         int width = intValue(clipResults.get(0).get("width"), 0);
@@ -504,7 +506,7 @@ public class JoinOutputService {
      */
     private String stableJoinSuffix(String taskId, int endClipIndex) {
         String shortTaskId = taskId == null ? "" : taskId.substring(Math.max(0, taskId.length() - 12));
-        return shortTaskId + "_" + Math.max(2, endClipIndex);
+        return shortTaskId + "_" + Math.max(1, endClipIndex);
     }
 
     /**
