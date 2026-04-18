@@ -4,6 +4,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.options;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.cookie;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
@@ -120,13 +121,24 @@ class SecurityAccessTest {
             .andExpect(jsonPath("$.code").value("admin_forbidden"));
     }
 
+    @Test
+    void adminPreflightRequestAllowsConfiguredAdminOrigin() throws Exception {
+        mockMvc.perform(options("/api/v2/admin/users")
+                .header("Origin", "http://localhost:5174")
+                .header("Access-Control-Request-Method", "POST")
+                .header("Access-Control-Request-Headers", "content-type,x-xsrf-token"))
+            .andExpect(status().isOk())
+            .andExpect(header().string("Access-Control-Allow-Origin", "http://localhost:5174"))
+            .andExpect(header().string("Access-Control-Allow-Credentials", "true"));
+    }
+
     @TestConfiguration
     static class TestConfig {
 
         @Bean
         JiandouAppProperties jiandouAppProperties() {
             JiandouAppProperties properties = new JiandouAppProperties();
-            properties.setWebOrigin("http://localhost:5173");
+            properties.setWebOrigin("http://localhost:5173,http://localhost:5174");
             return properties;
         }
 

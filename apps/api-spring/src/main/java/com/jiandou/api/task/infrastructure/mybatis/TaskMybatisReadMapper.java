@@ -20,6 +20,7 @@ final class TaskMybatisReadMapper {
     TaskRow toTaskRow(TaskEntity entity) {
         return new TaskRow(
             entity.getTaskId(),
+            entity.getOwnerUserId(),
             entity.getTaskType(),
             entity.getTitle(),
             entity.getDescription(),

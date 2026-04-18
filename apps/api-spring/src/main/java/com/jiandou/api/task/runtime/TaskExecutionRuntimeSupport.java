@@ -120,16 +120,17 @@ class TaskExecutionRuntimeSupport {
      */
     Map<String, Object> buildScriptRunRequest(TaskRecord task) {
         String sourceText = !task.transcriptText().isBlank() ? task.transcriptText() : (!task.creativePrompt().isBlank() ? task.creativePrompt() : task.title());
-        return Map.of(
-            "kind", GenerationRunKinds.SCRIPT,
-            "input", Map.of("text", sourceText),
-            "model", Map.of("textAnalysisModel", textAnalysisModel(task)),
-            "options", Map.of("visualStyle", "AI 自动决策"),
-            "storage", Map.of(
-                "relativeDir", TaskArtifactNaming.taskRunningRelativeDir(task),
-                "fileName", TaskArtifactNaming.storyboardFileName(task, "md")
-            )
-        );
+        Map<String, Object> request = new LinkedHashMap<>();
+        request.put("kind", GenerationRunKinds.SCRIPT);
+        request.put("input", Map.of("text", sourceText));
+        request.put("model", Map.of("textAnalysisModel", textAnalysisModel(task)));
+        request.put("options", Map.of("visualStyle", "AI 自动决策"));
+        request.put("storage", Map.of(
+            "relativeDir", TaskArtifactNaming.taskRunningRelativeDir(task),
+            "fileName", TaskArtifactNaming.storyboardFileName(task, "md")
+        ));
+        putUserAuth(request, task);
+        return Map.copyOf(request);
     }
 
     /**
@@ -184,10 +185,10 @@ class TaskExecutionRuntimeSupport {
         if (referenceImageUrl != null && !referenceImageUrl.isBlank()) {
             input.put("referenceImageUrl", referenceImageUrl);
         }
-        return Map.of(
-            "kind", GenerationRunKinds.IMAGE,
-            "input", input,
-            "model", Map.of(
+        Map<String, Object> request = new LinkedHashMap<>();
+        request.put("kind", GenerationRunKinds.IMAGE);
+        request.put("input", input);
+        request.put("model", Map.of(
                 /**
                  * 处理文本分析模型。
                  * @param task 要处理的任务对象
@@ -200,13 +201,14 @@ class TaskExecutionRuntimeSupport {
                  * @return 处理结果
                  */
                 "providerModel", imageModel(task)
-            ),
-            "options", Map.of("stylePreset", stylePreset(task)),
-            "storage", Map.of(
-                "relativeDir", TaskArtifactNaming.taskRunningRelativeDir(task),
-                "fileStem", "clip" + Math.max(1, clipIndex) + "-" + normalizedFrameRole
-            )
-        );
+            ));
+        request.put("options", Map.of("stylePreset", stylePreset(task)));
+        request.put("storage", Map.of(
+            "relativeDir", TaskArtifactNaming.taskRunningRelativeDir(task),
+            "fileStem", "clip" + Math.max(1, clipIndex) + "-" + normalizedFrameRole
+        ));
+        putUserAuth(request, task);
+        return Map.copyOf(request);
     }
 
     /**
@@ -249,10 +251,10 @@ class TaskExecutionRuntimeSupport {
         if (taskSeed != null) {
             input.put("seed", taskSeed);
         }
-        return Map.of(
-            "kind", GenerationRunKinds.VIDEO,
-            "input", input,
-            "model", Map.of(
+        Map<String, Object> request = new LinkedHashMap<>();
+        request.put("kind", GenerationRunKinds.VIDEO);
+        request.put("input", input);
+        request.put("model", Map.of(
                 /**
                  * 处理文本分析模型。
                  * @param task 要处理的任务对象
@@ -271,13 +273,14 @@ class TaskExecutionRuntimeSupport {
                  * @return 处理结果
                  */
                 "providerModel", videoModel(task)
-            ),
-            "options", Map.of("stylePreset", stylePreset(task)),
-            "storage", Map.of(
-                "relativeDir", TaskArtifactNaming.taskRunningRelativeDir(task),
-                "fileStem", "clip" + Math.max(1, clipIndex)
-            )
-        );
+            ));
+        request.put("options", Map.of("stylePreset", stylePreset(task)));
+        request.put("storage", Map.of(
+            "relativeDir", TaskArtifactNaming.taskRunningRelativeDir(task),
+            "fileStem", "clip" + Math.max(1, clipIndex)
+        ));
+        putUserAuth(request, task);
+        return Map.copyOf(request);
     }
 
     /**
@@ -350,6 +353,13 @@ class TaskExecutionRuntimeSupport {
     private String stylePreset(TaskRecord task) {
         String configured = task.requestSnapshot() == null ? "" : stringValue(task.requestSnapshot().stylePreset());
         return configured.isBlank() ? "cinematic" : configured;
+    }
+
+    private void putUserAuth(Map<String, Object> request, TaskRecord task) {
+        if (task == null || task.ownerUserId() == null) {
+            return;
+        }
+        request.put("auth", Map.of("userId", task.ownerUserId()));
     }
 
     /**

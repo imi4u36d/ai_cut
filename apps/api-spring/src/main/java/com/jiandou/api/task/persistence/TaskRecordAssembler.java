@@ -22,6 +22,7 @@ public class TaskRecordAssembler {
     public TaskRecord fromTaskRow(TaskRow row) {
         TaskRecord task = new TaskRecord();
         task.setId(row.taskId());
+        task.setOwnerUserId(row.ownerUserId());
         task.setTitle(row.title());
         task.setStatus(row.status());
         task.setProgress(row.progress());
@@ -100,6 +101,7 @@ public class TaskRecordAssembler {
             : List.of(task.sourceFileName());
         return new TaskWriteModel(
             task.id(),
+            task.ownerUserId(),
             task.title(),
             task.aspectRatio(),
             task.minDurationSeconds(),
@@ -223,6 +225,7 @@ public class TaskRecordAssembler {
      */
     public record TaskWriteModel(
         String taskId,
+        Long ownerUserId,
         String title,
         String aspectRatio,
         int minDurationSeconds,

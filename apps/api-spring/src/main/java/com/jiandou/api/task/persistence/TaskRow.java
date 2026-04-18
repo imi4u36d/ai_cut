@@ -9,6 +9,7 @@ import java.util.Map;
  */
 public record TaskRow(
     String taskId,
+    Long ownerUserId,
     String taskType,
     String title,
     String description,

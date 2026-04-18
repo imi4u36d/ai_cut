@@ -13,6 +13,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
  */
 public final class TaskRecord {
     String id;
+    Long ownerUserId;
     String title;
     String status;
     int progress;
@@ -61,6 +62,14 @@ public final class TaskRecord {
 
     public void setId(String id) {
         this.id = id;
+    }
+
+    public Long ownerUserId() {
+        return ownerUserId;
+    }
+
+    public void setOwnerUserId(Long ownerUserId) {
+        this.ownerUserId = ownerUserId;
     }
 
     public String title() {

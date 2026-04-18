@@ -32,11 +32,11 @@ class WebMvcConfigTest {
         assertEquals(2, configs.size());
         assertEquals(
             java.util.List.of("https://a.example.com", "https://b.example.com"),
-            configs.get(ApiPathConstants.API_V2_PATTERN).getAllowedOrigins()
+            configs.get(ApiPathConstants.API_V2_PATTERN).getAllowedOriginPatterns()
         );
         assertEquals(
             java.util.List.of("https://a.example.com", "https://b.example.com"),
-            configs.get(ApiPathConstants.STORAGE_PATTERN).getAllowedOrigins()
+            configs.get(ApiPathConstants.STORAGE_PATTERN).getAllowedOriginPatterns()
         );
         assertEquals(java.util.List.of("*"), configs.get(ApiPathConstants.API_V2_PATTERN).getAllowedMethods());
         assertTrue(Boolean.TRUE.equals(configs.get(ApiPathConstants.API_V2_PATTERN).getAllowCredentials()));

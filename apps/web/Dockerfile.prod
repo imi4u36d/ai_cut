@@ -1,12 +1,13 @@
-ARG NODE_IMAGE=docker.m.daocloud.io/library/node:20-bookworm-slim
-ARG NGINX_IMAGE=docker.m.daocloud.io/library/nginx:1.27-alpine
+ARG NODE_IMAGE=docker.1ms.run/library/node:20-bookworm-slim
+ARG NGINX_IMAGE=docker.1ms.run/library/nginx:1.27-alpine
 FROM ${NODE_IMAGE} AS builder
 
 WORKDIR /build/apps/web
 
+COPY apps/web/.npmrc /build/apps/web/.npmrc
 COPY apps/web/package.json /build/apps/web/package.json
 COPY apps/web/package-lock.json /build/apps/web/package-lock.json
-RUN npm install --registry=https://registry.npmjs.org
+RUN npm ci --registry=https://registry.npmjs.org
 
 COPY apps/web /build/apps/web
 RUN npm run build

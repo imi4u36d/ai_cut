@@ -7,6 +7,8 @@
     "dev:spring": "bash scripts/dev-spring.sh",
     "web:dev": "npm --prefix apps/web run dev",
     "web:build": "npm --prefix apps/web run build",
+    "admin:dev": "npm --prefix apps/admin run dev",
+    "admin:build": "npm --prefix apps/admin run build",
     "api:dev": "mvn -f apps/api-spring/pom.xml spring-boot:run",
     "api:spring:dev": "mvn -f apps/api-spring/pom.xml spring-boot:run"
   }

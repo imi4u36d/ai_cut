@@ -4,7 +4,10 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
+import com.jiandou.api.auth.infrastructure.mybatis.MybatisUserModelCredentialRepository;
 import com.jiandou.api.generation.exception.GenerationConfigurationException;
 import com.jiandou.api.generation.runtime.GenerationConfigPathLocator;
 import com.jiandou.api.generation.runtime.ModelRuntimePropertiesResolver;
@@ -118,6 +121,39 @@ class ModelRuntimePropertiesResolverTest {
         assertEquals("aliyun", items.get(0).get("vendor"));
     }
 
+    @Test
+    void userScopedProfilesUseDatabaseApiKeysWithoutFallingBackToSharedSecrets() throws Exception {
+        Path configDir = tempDir.resolve("config");
+        writeConfig(configDir, "0.20");
+        Path secretsFile = configDir.resolve("model").resolve("providers.secrets.yml");
+        Files.createDirectories(secretsFile.getParent());
+        Files.writeString(
+            secretsFile,
+            """
+                model:
+                  providers:
+                    qwen:
+                      api_key: "shared-text-key"
+                    seedance:
+                      api_key: "shared-video-key"
+                """
+        );
+
+        MockEnvironment env = new MockEnvironment().withProperty("JIANDOU_CONFIG_DIR", configDir.toString());
+        MybatisUserModelCredentialRepository repository = mock(MybatisUserModelCredentialRepository.class);
+        when(repository.findApiKey(42L, "qwen")).thenReturn("user-text-key");
+        when(repository.findApiKey(42L, "seedance")).thenReturn("user-video-key");
+
+        ModelRuntimePropertiesResolver resolver = new ModelRuntimePropertiesResolver(env, new GenerationConfigPathLocator(env), repository);
+
+        assertEquals("shared-text-key", resolver.resolveTextProfile("qwen-plus").apiKey());
+        assertEquals("shared-video-key", resolver.resolveVideoProfile("seedance-v1").apiKey());
+        assertEquals("user-text-key", resolver.resolveTextProfile("qwen-plus", 42L).apiKey());
+        assertEquals("user-video-key", resolver.resolveVideoProfile("seedance-v1", 42L).apiKey());
+        assertEquals("user-db", resolver.resolveTextProfile("qwen-plus", 42L).source());
+        assertEquals("user-db", resolver.resolveVideoProfile("seedance-v1", 42L).source());
+    }
+
     /**
      * 处理写入配置。
      * @param configDir 配置目录值
@@ -147,6 +183,12 @@ class ModelRuntimePropertiesResolverTest {
                       vendor: "aliyun"
                       api_key: "test-key"
                       base_url: "https://example.com/v1"
+                    seedance:
+                      vendor: "volcengine"
+                      api_key: "video-key"
+                      base_url: "https://video.example.com/api"
+                      extras:
+                        task_base_url: "https://video.example.com/tasks"
                 """
         );
         Files.writeString(
@@ -158,6 +200,10 @@ class ModelRuntimePropertiesResolverTest {
                       provider: "qwen"
                       vendor: "aliyun"
                       kind: "text"
+                    "seedance-v1":
+                      provider: "seedance"
+                      vendor: "volcengine"
+                      kind: "video"
                 """
         );
     }

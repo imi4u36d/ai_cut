@@ -47,13 +47,13 @@
             </div>
           </div>
           <div class="sidebar-user-card__actions">
-            <RouterLink
+            <a
               v-if="isAdmin"
               class="sidebar-user-card__link"
-              to="/admin/tasks"
+              :href="adminPortalUrl"
             >
               管理端
-            </RouterLink>
+            </a>
             <button class="sidebar-user-card__logout" type="button" @click="handleLogout">
               退出登录
             </button>
@@ -101,12 +101,14 @@
  */
 import { computed, reactive, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
+import { getRuntimeConfig } from "@/api/runtime-config";
 import { logoutAndClearSession, useAuthSessionState } from "@/auth/session";
 import { loadDeveloperSettings, saveDeveloperSettings } from "@/workbench/developer-settings";
 
 const route = useRoute();
 const router = useRouter();
 const authState = useAuthSessionState();
+const adminPortalUrl = getRuntimeConfig().adminBaseUrl;
 
 const navItems = [
   {

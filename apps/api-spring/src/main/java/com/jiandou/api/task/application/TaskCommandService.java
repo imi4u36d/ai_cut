@@ -1,5 +1,6 @@
 package com.jiandou.api.task.application;
 
+import com.jiandou.api.auth.security.SecurityCurrentUser;
 import com.jiandou.api.config.JiandouStorageProperties;
 import com.jiandou.api.config.JiandouTaskDefaultsProperties;
 import com.jiandou.api.generation.runtime.ModelRuntimePropertiesResolver;
@@ -73,6 +74,7 @@ public class TaskCommandService {
 
         TaskRecord task = new TaskRecord();
         task.setId("task_" + UUID.randomUUID().toString().replace("-", ""));
+        task.setOwnerUserId(SecurityCurrentUser.currentUserId());
         task.setTitle(trimmed(request.title(), "未命名任务"));
         task.setStatus(TaskStatus.PENDING);
         task.setProgress(0);

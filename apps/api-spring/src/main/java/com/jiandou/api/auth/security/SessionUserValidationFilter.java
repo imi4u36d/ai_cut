@@ -55,7 +55,9 @@ public class SessionUserValidationFilter extends OncePerRequestFilter {
             return;
         }
         SysUserEntity currentUser = authRepository.findUserById(principal.userId());
-        if (currentUser == null || !UserStatus.ACTIVE.value().equals(currentUser.getStatus())) {
+        if (currentUser == null
+            || !UserStatus.ACTIVE.value().equals(currentUser.getStatus())
+            || !principal.role().equals(currentUser.getRole())) {
             new SecurityContextLogoutHandler().logout(request, response, authentication);
             errorResponseWriter.write(
                 request,

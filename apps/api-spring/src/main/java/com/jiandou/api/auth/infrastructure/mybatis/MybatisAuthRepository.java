@@ -101,6 +101,33 @@ public class MybatisAuthRepository {
     }
 
     /**
+     * 按条件列出用户。
+     * @param keyword 关键词
+     * @param role 角色
+     * @param status 状态
+     * @return 处理结果
+     */
+    public List<SysUserEntity> listUsers(String keyword, String role, String status) {
+        String normalizedKeyword = keyword == null ? "" : keyword.trim();
+        String normalizedRole = role == null ? "" : role.trim().toUpperCase(Locale.ROOT);
+        String normalizedStatus = status == null ? "" : status.trim().toUpperCase(Locale.ROOT);
+        try (SqlSession session = sqlSessionFactory.openSession()) {
+            return session.getMapper(SysUserMapper.class).selectList(
+                Wrappers.<SysUserEntity>lambdaQuery()
+                    .and(!normalizedKeyword.isEmpty(), wrapper -> wrapper
+                        .like(SysUserEntity::getUsername, normalizeUsername(normalizedKeyword))
+                        .or()
+                        .like(SysUserEntity::getDisplayName, normalizedKeyword))
+                    .eq(!normalizedRole.isEmpty(), SysUserEntity::getRole, normalizedRole)
+                    .eq(!normalizedStatus.isEmpty(), SysUserEntity::getStatus, normalizedStatus)
+                    .orderByAsc(SysUserEntity::getRole)
+                    .orderByAsc(SysUserEntity::getStatus)
+                    .orderByDesc(SysUserEntity::getCreatedAt)
+            );
+        }
+    }
+
+    /**
      * 统计管理员数量。
      * @return 处理结果
      */
@@ -164,6 +191,78 @@ public class MybatisAuthRepository {
             );
         }
         return findUserById(id);
+    }
+
+    /**
+     * 创建用户。
+     * @param username 用户名
+     * @param displayName 显示名
+     * @param passwordHash 密码哈希
+     * @param role 角色
+     * @param status 状态
+     * @return 处理结果
+     */
+    public SysUserEntity createUser(String username, String displayName, String passwordHash, UserRole role, UserStatus status) {
+        try (SqlSession session = sqlSessionFactory.openSession(true)) {
+            SysUserEntity entity = new SysUserEntity();
+            entity.setUsername(normalizeUsername(username));
+            entity.setDisplayName(displayName);
+            entity.setPasswordHash(passwordHash);
+            entity.setRole(role.value());
+            entity.setStatus(status.value());
+            session.getMapper(SysUserMapper.class).insert(entity);
+            return session.getMapper(SysUserMapper.class).selectById(entity.getId());
+        }
+    }
+
+    /**
+     * 更新用户基础信息。
+     * @param id 用户ID
+     * @param displayName 显示名
+     * @param role 角色
+     * @param status 状态
+     * @return 处理结果
+     */
+    public SysUserEntity updateUser(Long id, String displayName, UserRole role, UserStatus status) {
+        try (SqlSession session = sqlSessionFactory.openSession(true)) {
+            SysUserEntity update = new SysUserEntity();
+            update.setDisplayName(displayName);
+            update.setRole(role.value());
+            update.setStatus(status.value());
+            session.getMapper(SysUserMapper.class).update(
+                update,
+                Wrappers.<SysUserEntity>lambdaUpdate().eq(SysUserEntity::getId, id)
+            );
+        }
+        return findUserById(id);
+    }
+
+    /**
+     * 更新用户密码。
+     * @param id 用户ID
+     * @param passwordHash 密码哈希
+     * @return 处理结果
+     */
+    public SysUserEntity updateUserPassword(Long id, String passwordHash) {
+        try (SqlSession session = sqlSessionFactory.openSession(true)) {
+            SysUserEntity update = new SysUserEntity();
+            update.setPasswordHash(passwordHash);
+            session.getMapper(SysUserMapper.class).update(
+                update,
+                Wrappers.<SysUserEntity>lambdaUpdate().eq(SysUserEntity::getId, id)
+            );
+        }
+        return findUserById(id);
+    }
+
+    /**
+     * 删除用户。
+     * @param id 用户ID
+     */
+    public void deleteUser(Long id) {
+        try (SqlSession session = sqlSessionFactory.openSession(true)) {
+            session.getMapper(SysUserMapper.class).deleteById(id);
+        }
     }
 
     /**

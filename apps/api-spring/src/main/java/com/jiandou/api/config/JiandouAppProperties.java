@@ -13,7 +13,7 @@ public class JiandouAppProperties {
 
     private String env = "dev";
     private String executionMode = "queue";
-    private String webOrigin = "http://127.0.0.1:5173,http://localhost:5173";
+    private String webOrigin = "http://127.0.0.1:5173,http://localhost:5173,http://127.0.0.1:5174,http://localhost:5174";
     private boolean cookieSecure = false;
 
     public String getEnv() {

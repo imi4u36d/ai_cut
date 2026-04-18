@@ -1,6 +1,7 @@
 CREATE TABLE IF NOT EXISTS `biz_tasks` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT COMMENT '主键ID',
   `task_id` varchar(64) NOT NULL COMMENT '任务业务ID',
+  `owner_user_id` bigint unsigned DEFAULT NULL COMMENT '归属用户ID',
   `task_type` varchar(32) NOT NULL DEFAULT 'generation' COMMENT '任务类型',
   `title` varchar(255) NOT NULL DEFAULT '' COMMENT '任务标题',
   `description` text COMMENT '任务描述',
@@ -39,6 +40,7 @@ CREATE TABLE IF NOT EXISTS `biz_tasks` (
   `remark` varchar(255) NOT NULL DEFAULT '' COMMENT '备注',
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_task_id` (`task_id`),
+  KEY `idx_biz_tasks_owner_user_id` (`owner_user_id`),
   KEY `idx_biz_tasks_status_create_time` (`status`, `create_time`),
   KEY `idx_biz_tasks_effect_rating` (`effect_rating`, `create_time`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='任务主表';
@@ -320,6 +322,18 @@ CREATE TABLE IF NOT EXISTS `sys_user` (
   UNIQUE KEY `uk_sys_user_username` (`username`),
   KEY `idx_sys_user_role_status` (`role`, `status`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='系统用户表';
+
+CREATE TABLE IF NOT EXISTS `sys_user_model_credential` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+  `user_id` bigint unsigned NOT NULL COMMENT '用户ID',
+  `provider_key` varchar(64) NOT NULL COMMENT '模型接入标识',
+  `encrypted_api_key` text NOT NULL COMMENT '加密后的 API Key',
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_sys_user_model_credential_user_provider` (`user_id`, `provider_key`),
+  KEY `idx_sys_user_model_credential_provider` (`provider_key`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='用户模型接入凭证表';
 
 CREATE TABLE IF NOT EXISTS `sys_invite_code` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT COMMENT '主键ID',

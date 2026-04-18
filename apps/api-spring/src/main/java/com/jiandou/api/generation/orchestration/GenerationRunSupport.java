@@ -97,6 +97,7 @@ public class GenerationRunSupport {
         run.put("model", mapValue(request.get("model")));
         run.put("options", mapValue(request.get("options")));
         run.put("storage", mapValue(request.get("storage")));
+        run.put("auth", mapValue(request.get("auth")));
         run.put("result", result);
         run.put(specificResultKey, result);
         return run;
@@ -708,6 +709,7 @@ public class GenerationRunSupport {
      */
     public TextGenerationAttempt generateTextWithFallback(
         ModelRuntimeProfile primaryProfile,
+        Long userId,
         String stage,
         String systemPrompt,
         String userPrompt,
@@ -739,7 +741,7 @@ public class GenerationRunSupport {
                  */
                 "error", truncateText(primaryEx.getMessage(), 240)
             )));
-            ModelRuntimeProfile fallbackProfile = modelResolver.resolveTextProfile(fallbackModel);
+            ModelRuntimeProfile fallbackProfile = modelResolver.resolveTextProfile(fallbackModel, userId);
             return new TextGenerationAttempt(
                 fallbackProfile,
                 textModelProviderRegistry.resolve(fallbackProfile).generate(

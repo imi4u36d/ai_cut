@@ -1,5 +1,6 @@
 package com.jiandou.api.generation.runtime;
 
+import com.jiandou.api.auth.infrastructure.mybatis.MybatisUserModelCredentialRepository;
 import com.jiandou.api.generation.GenerationModelKinds;
 import com.jiandou.api.generation.exception.GenerationConfigurationException;
 import java.nio.file.Files;
@@ -28,6 +29,7 @@ public class ModelRuntimePropertiesResolver {
 
     private final Environment environment;
     private final GenerationConfigPathLocator configPathLocator;
+    private final MybatisUserModelCredentialRepository userModelCredentialRepository;
     private final long cacheTtlMillis;
     private final boolean failFastOnConfigError;
     private volatile CachedSnapshot cachedSnapshot;
@@ -37,7 +39,7 @@ public class ModelRuntimePropertiesResolver {
      * @param environment environment值
      */
     public ModelRuntimePropertiesResolver(Environment environment) {
-        this(environment, new GenerationConfigPathLocator(environment));
+        this(environment, new GenerationConfigPathLocator(environment), null);
     }
 
     /**
@@ -45,10 +47,25 @@ public class ModelRuntimePropertiesResolver {
      * @param environment environment值
      * @param configPathLocator 配置路径Locator值
      */
-    @Autowired
     public ModelRuntimePropertiesResolver(Environment environment, GenerationConfigPathLocator configPathLocator) {
+        this(environment, configPathLocator, null);
+    }
+
+    /**
+     * 创建新的模型运行时Properties解析器。
+     * @param environment environment值
+     * @param configPathLocator 配置路径Locator值
+     * @param userModelCredentialRepository 用户模型凭证仓储值
+     */
+    @Autowired
+    public ModelRuntimePropertiesResolver(
+        Environment environment,
+        GenerationConfigPathLocator configPathLocator,
+        MybatisUserModelCredentialRepository userModelCredentialRepository
+    ) {
         this.environment = environment;
         this.configPathLocator = configPathLocator;
+        this.userModelCredentialRepository = userModelCredentialRepository;
         this.cacheTtlMillis = resolveCacheTtlMillis();
         this.failFastOnConfigError = resolveConfigFailFast();
     }
@@ -59,7 +76,18 @@ public class ModelRuntimePropertiesResolver {
      * @return 处理结果
      */
     public ModelRuntimeProfile resolveTextProfile(String requestedModel) {
+        return resolveTextProfile(requestedModel, null);
+    }
+
+    /**
+     * 处理解析文本Profile。
+     * @param requestedModel requested模型值
+     * @param userId 用户ID值
+     * @return 处理结果
+     */
+    public ModelRuntimeProfile resolveTextProfile(String requestedModel, Long userId) {
         ConfigSnapshot current = snapshot();
+        boolean userScoped = userId != null;
         String modelName = trimToEmpty(requestedModel);
         if (modelName.isBlank()) {
             return new ModelRuntimeProfile(
@@ -93,12 +121,14 @@ public class ModelRuntimePropertiesResolver {
             current.value(modelSection, "fallback"),
             ""
         );
-        String apiKey = firstNonBlank(
-            property("JIANDOU_MODEL_API_KEY"),
-            providerProperty(provider, "API_KEY"),
-            current.value(providerSection, "api_key"),
-            ""
-        );
+        String apiKey = userScoped
+            ? resolveUserApiKey(userId, provider)
+            : firstNonBlank(
+                property("JIANDOU_MODEL_API_KEY"),
+                providerProperty(provider, "API_KEY"),
+                current.value(providerSection, "api_key"),
+                ""
+            );
         String baseUrl = normalizeBaseUrl(firstNonBlank(
             property("JIANDOU_MODEL_BASE_URL"),
             property("JIANDOU_MODEL_ENDPOINT"),
@@ -136,16 +166,7 @@ public class ModelRuntimePropertiesResolver {
             ),
             2000
         );
-        String source = current.source();
-        if (
-            !property("JIANDOU_MODEL_API_KEY").isBlank()
-                || !providerProperty(provider, "API_KEY").isBlank()
-                || !property("JIANDOU_MODEL_BASE_URL").isBlank()
-                || !providerProperty(provider, "BASE_URL").isBlank()
-                || !property("JIANDOU_MODEL_PROVIDER").isBlank()
-        ) {
-            source = "env";
-        }
+        String source = resolveConfigSource(userScoped, apiKey, provider, current.source(), !property("JIANDOU_MODEL_PROVIDER").isBlank());
         return new ModelRuntimeProfile(
             new TextProviderConfig(
                 kind,
@@ -265,7 +286,7 @@ public class ModelRuntimePropertiesResolver {
                 continue;
             }
             MediaProviderProfile mediaProfile = (GenerationModelKinds.IMAGE.equals(targetKind) || GenerationModelKinds.VIDEO.equals(targetKind))
-                ? resolveMediaProfile(entry.getKey(), targetKind, current)
+                ? resolveMediaProfile(entry.getKey(), targetKind, current, null)
                 : null;
             item.put("supportsSeed", mediaProfile != null ? mediaProfile.supportsSeed() : boolValue(stringValue(section.get("supports_seed"))));
             if (mediaProfile != null) {
@@ -318,7 +339,17 @@ public class ModelRuntimePropertiesResolver {
      * @return 处理结果
      */
     public MediaProviderProfile resolveImageProfile(String requestedModel) {
-        return resolveMediaProfile(requestedModel, GenerationModelKinds.IMAGE);
+        return resolveImageProfile(requestedModel, null);
+    }
+
+    /**
+     * 处理解析图像Profile。
+     * @param requestedModel requested模型值
+     * @param userId 用户ID值
+     * @return 处理结果
+     */
+    public MediaProviderProfile resolveImageProfile(String requestedModel, Long userId) {
+        return resolveMediaProfile(requestedModel, GenerationModelKinds.IMAGE, userId);
     }
 
     /**
@@ -327,7 +358,17 @@ public class ModelRuntimePropertiesResolver {
      * @return 处理结果
      */
     public MediaProviderProfile resolveVideoProfile(String requestedModel) {
-        return resolveMediaProfile(requestedModel, GenerationModelKinds.VIDEO);
+        return resolveVideoProfile(requestedModel, null);
+    }
+
+    /**
+     * 处理解析视频Profile。
+     * @param requestedModel requested模型值
+     * @param userId 用户ID值
+     * @return 处理结果
+     */
+    public MediaProviderProfile resolveVideoProfile(String requestedModel, Long userId) {
+        return resolveMediaProfile(requestedModel, GenerationModelKinds.VIDEO, userId);
     }
 
     /**
@@ -338,7 +379,19 @@ public class ModelRuntimePropertiesResolver {
      */
     public MediaProviderProfile resolveMediaProfile(String requestedModel, String expectedKind) {
         ConfigSnapshot current = snapshot();
-        return resolveMediaProfile(requestedModel, expectedKind, current);
+        return resolveMediaProfile(requestedModel, expectedKind, current, null);
+    }
+
+    /**
+     * 统一解析媒体Profile。
+     * @param requestedModel requested模型值
+     * @param expectedKind 期望类型值
+     * @param userId 用户ID值
+     * @return 处理结果
+     */
+    public MediaProviderProfile resolveMediaProfile(String requestedModel, String expectedKind, Long userId) {
+        ConfigSnapshot current = snapshot();
+        return resolveMediaProfile(requestedModel, expectedKind, current, userId);
     }
 
     /**
@@ -349,10 +402,23 @@ public class ModelRuntimePropertiesResolver {
     public MediaProviderProfile resolveMediaProfile(String requestedModel) {
         ConfigSnapshot current = snapshot();
         String kind = trimToEmpty(current.value("model.models.\"" + trimToEmpty(requestedModel) + "\"", "kind")).toLowerCase(Locale.ROOT);
-        return resolveMediaProfile(requestedModel, kind, current);
+        return resolveMediaProfile(requestedModel, kind, current, null);
     }
 
-    private MediaProviderProfile resolveMediaProfile(String requestedModel, String expectedKind, ConfigSnapshot current) {
+    /**
+     * 统一解析媒体Profile。
+     * @param requestedModel requested模型值
+     * @param userId 用户ID值
+     * @return 处理结果
+     */
+    public MediaProviderProfile resolveMediaProfile(String requestedModel, Long userId) {
+        ConfigSnapshot current = snapshot();
+        String kind = trimToEmpty(current.value("model.models.\"" + trimToEmpty(requestedModel) + "\"", "kind")).toLowerCase(Locale.ROOT);
+        return resolveMediaProfile(requestedModel, kind, current, userId);
+    }
+
+    private MediaProviderProfile resolveMediaProfile(String requestedModel, String expectedKind, ConfigSnapshot current, Long userId) {
+        boolean userScoped = userId != null;
         String modelName = trimToEmpty(requestedModel);
         String normalizedExpectedKind = trimToEmpty(expectedKind).toLowerCase(Locale.ROOT);
         if (modelName.isBlank()) {
@@ -376,21 +442,17 @@ public class ModelRuntimePropertiesResolver {
             current.value(providerSection + ".extras", "task_base_url"),
             defaultTaskBaseUrl(actualKind, provider, baseUrl)
         ));
-        String source = current.source();
-        if (
-            !providerProperty(provider, "API_KEY").isBlank()
-                || !providerProperty(provider, "BASE_URL").isBlank()
-                || !providerProperty(provider, "TASK_BASE_URL").isBlank()
-        ) {
-            source = "env";
-        }
+        String apiKey = userScoped
+            ? resolveUserApiKey(userId, provider)
+            : firstNonBlank(providerProperty(provider, "API_KEY"), current.value(providerSection, "api_key"));
+        String source = resolveConfigSource(userScoped, apiKey, provider, current.source(), false);
         return new MediaProviderProfile(
             new MediaProviderConfig(
                 actualKind,
                 modelName,
                 provider,
                 modelName,
-                firstNonBlank(providerProperty(provider, "API_KEY"), current.value(providerSection, "api_key")),
+                apiKey,
                 baseUrl,
                 taskBaseUrl,
                 intValue(
@@ -588,6 +650,36 @@ public class ModelRuntimePropertiesResolver {
             return "";
         }
         return property("JIANDOU_MODEL_" + normalizedProvider + "_" + suffix);
+    }
+
+    private String resolveUserApiKey(Long userId, String provider) {
+        if (userId == null || userModelCredentialRepository == null) {
+            return "";
+        }
+        return trimToEmpty(userModelCredentialRepository.findApiKey(userId, provider));
+    }
+
+    private String resolveConfigSource(
+        boolean userScoped,
+        String apiKey,
+        String provider,
+        String defaultSource,
+        boolean providerOverridden
+    ) {
+        if (userScoped) {
+            return apiKey.isBlank() ? defaultSource : "user-db";
+        }
+        if (
+            !property("JIANDOU_MODEL_API_KEY").isBlank()
+                || !providerProperty(provider, "API_KEY").isBlank()
+                || !property("JIANDOU_MODEL_BASE_URL").isBlank()
+                || !providerProperty(provider, "BASE_URL").isBlank()
+                || !providerProperty(provider, "TASK_BASE_URL").isBlank()
+                || providerOverridden
+        ) {
+            return "env";
+        }
+        return defaultSource;
     }
 
     /**

@@ -20,6 +20,7 @@ final class TaskMybatisWriteMapper {
     TaskEntity toTaskEntity(TaskRecordAssembler.TaskWriteModel model) {
         TaskEntity entity = new TaskEntity();
         entity.setTaskId(model.taskId());
+        entity.setOwnerUserId(model.ownerUserId());
         entity.setTaskType("generation");
         entity.setTitle(model.title());
         entity.setDescription("");

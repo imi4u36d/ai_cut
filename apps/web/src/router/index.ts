@@ -2,7 +2,6 @@
  * 前端路由注册入口。
  */
 import { createRouter, createWebHistory } from "vue-router";
-import AdminShell from "@/components/AdminShell.vue";
 import WorkspaceShell from "@/components/layout/WorkspaceShell.vue";
 import { ensureAuthSession, useAuthSessionState } from "@/auth/session";
 import ActivateInviteView from "@/views/ActivateInviteView.vue";
@@ -13,11 +12,6 @@ import NewTaskView from "@/views/NewTaskView.vue";
 import OfficialSiteView from "@/views/OfficialSiteView.vue";
 import SettingsView from "@/views/SettingsView.vue";
 import TasksView from "@/views/TasksView.vue";
-import AdminInvitesView from "@/views/admin/AdminInvitesView.vue";
-import AdminSystemView from "@/views/admin/AdminSystemView.vue";
-import AdminTaskDetailView from "@/views/admin/AdminTaskDetailView.vue";
-import AdminTasksView from "@/views/admin/AdminTasksView.vue";
-import AdminUsersView from "@/views/admin/AdminUsersView.vue";
 
 function normalizeRedirectTarget(value: unknown) {
   if (typeof value !== "string" || !value.startsWith("/") || value.startsWith("//")) {
@@ -110,64 +104,6 @@ const router = createRouter({
           component: SettingsView,
           meta: {
             title: "设置"
-          }
-        }
-      ]
-    },
-    {
-      path: "/admin",
-      component: AdminShell,
-      meta: {
-        requiresAuth: true,
-        requiresAdmin: true
-      },
-      children: [
-        {
-          path: "",
-          redirect: "/admin/tasks"
-        },
-        {
-          path: "dashboard",
-          redirect: "/admin/tasks"
-        },
-        {
-          path: "tasks",
-          name: "admin-tasks",
-          component: AdminTasksView,
-          meta: {
-            title: "管理任务"
-          }
-        },
-        {
-          path: "tasks/:taskId",
-          name: "admin-task-detail",
-          component: AdminTaskDetailView,
-          meta: {
-            title: "任务详情"
-          }
-        },
-        {
-          path: "system",
-          name: "admin-system",
-          component: AdminSystemView,
-          meta: {
-            title: "系统配置"
-          }
-        },
-        {
-          path: "users",
-          name: "admin-users",
-          component: AdminUsersView,
-          meta: {
-            title: "用户管理"
-          }
-        },
-        {
-          path: "invites",
-          name: "admin-invites",
-          component: AdminInvitesView,
-          meta: {
-            title: "邀请码管理"
           }
         }
       ]

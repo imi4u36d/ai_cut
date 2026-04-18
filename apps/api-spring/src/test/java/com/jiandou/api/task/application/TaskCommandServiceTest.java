@@ -15,6 +15,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.jiandou.api.config.JiandouStorageProperties;
+import com.jiandou.api.auth.security.CurrentUserPrincipal;
 import com.jiandou.api.config.JiandouTaskDefaultsProperties;
 import com.jiandou.api.generation.runtime.ModelRuntimePropertiesResolver;
 import com.jiandou.api.task.TaskRecord;
@@ -32,9 +33,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.mockito.ArgumentCaptor;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
 
 class TaskCommandServiceTest {
 
@@ -80,6 +84,11 @@ class TaskCommandServiceTest {
         when(requestSnapshotFactory.create(any(), any())).thenReturn(GenerationRequestSnapshot.empty());
     }
 
+    @AfterEach
+    void tearDown() {
+        SecurityContextHolder.clearContext();
+    }
+
     @Test
     void createGenerationTaskPopulatesTaskPersistsDirectoriesAndCoordinates() throws Exception {
         CreateGenerationTaskRequest request = validRequest();
@@ -122,6 +131,21 @@ class TaskCommandServiceTest {
         assertEquals("vision-model", payload.get("visionModel"));
         assertEquals("image-model", payload.get("imageModel"));
         assertEquals("video-model", payload.get("videoModel"));
+    }
+
+    @Test
+    void createGenerationTaskCapturesAuthenticatedOwnerUserId() {
+        SecurityContextHolder.getContext().setAuthentication(
+            UsernamePasswordAuthenticationToken.authenticated(
+                new CurrentUserPrincipal(88L, "tester", "Tester", "USER", "ACTIVE"),
+                null,
+                List.of()
+            )
+        );
+
+        TaskRecord task = service.createGenerationTask(validRequest());
+
+        assertEquals(88L, task.ownerUserId());
     }
 
     @Test

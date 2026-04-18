@@ -19,7 +19,23 @@
         </label>
         <label class="auth-form__field">
           <span>密码</span>
-          <input v-model="password" autocomplete="current-password" placeholder="请输入密码" type="password" />
+          <div class="auth-form__password-wrap">
+            <input
+              v-model="password"
+              :type="showPassword ? 'text' : 'password'"
+              autocomplete="current-password"
+              placeholder="请输入密码"
+            />
+            <button
+              :aria-label="showPassword ? '隐藏密码' : '显示密码'"
+              :title="showPassword ? '隐藏密码' : '显示密码'"
+              class="auth-form__password-toggle"
+              type="button"
+              @click="showPassword = !showPassword"
+            >
+              {{ showPassword ? "隐藏" : "显示" }}
+            </button>
+          </div>
         </label>
 
         <div v-if="redirectHint" class="auth-form__hint">
@@ -55,6 +71,7 @@ const router = useRouter();
 
 const username = ref("");
 const password = ref("");
+const showPassword = ref(false);
 const submitting = ref(false);
 const errorMessage = ref("");
 
@@ -199,6 +216,34 @@ async function handleSubmit() {
   border: 1px solid rgba(255, 255, 255, 0.1);
   background: rgba(4, 7, 13, 0.72);
   color: #fff;
+}
+
+.auth-form__password-wrap {
+  position: relative;
+}
+
+.auth-form__password-wrap input {
+  padding-right: 72px;
+}
+
+.auth-form__password-toggle {
+  position: absolute;
+  top: 50%;
+  right: 10px;
+  transform: translateY(-50%);
+  min-width: 48px;
+  padding: 6px 10px;
+  border: 0;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 234, 197, 0.92);
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.auth-form__password-toggle:hover {
+  background: rgba(255, 255, 255, 0.14);
 }
 
 .auth-form__field input::placeholder {

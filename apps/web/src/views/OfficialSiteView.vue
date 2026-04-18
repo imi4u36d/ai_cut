@@ -22,7 +22,7 @@
           <a href="#solutions" @click.prevent="scrollToSection('solutions')">解决方案</a>
           <a href="#pricing" @click.prevent="scrollToSection('pricing')">定价</a>
           <a href="#footer" @click.prevent="scrollToSection('footer')">博客</a>
-          <RouterLink to="/admin/tasks">管理后台</RouterLink>
+          <a :href="adminPortalUrl">管理后台</a>
         </nav>
 
         <RouterLink class="official-site__nav-cta" to="/generate">立即开始</RouterLink>
@@ -327,12 +327,14 @@
 
 <script setup lang="ts">
 import { nextTick, onBeforeUnmount, onMounted, ref } from "vue";
+import { getRuntimeConfig } from "@/api/runtime-config";
 
 const scrollRoot = ref<HTMLElement | null>(null);
 const typedHeadline = ref("");
 const contactDialogOpen = ref(false);
 const selectedPlanName = ref("方案");
 const fullHeadline = "煎豆：从文本到视频，\n一键直达";
+const adminPortalUrl = getRuntimeConfig().adminBaseUrl;
 
 let typingTimer: number | null = null;
 let revealObserver: IntersectionObserver | null = null;

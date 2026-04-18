@@ -13,6 +13,8 @@ public class TaskEntity {
 
     @TableId("task_id")
     private String taskId;
+    @TableField("owner_user_id")
+    private Long ownerUserId;
     @TableField("task_type")
     private String taskType;
     @TableField
@@ -98,6 +100,22 @@ public class TaskEntity {
      */
     public void setTaskId(String taskId) {
         this.taskId = taskId;
+    }
+
+    /**
+     * 返回归属用户ID。
+     * @return 处理结果
+     */
+    public Long getOwnerUserId() {
+        return ownerUserId;
+    }
+
+    /**
+     * 处理set归属用户ID。
+     * @param ownerUserId 归属用户ID值
+     */
+    public void setOwnerUserId(Long ownerUserId) {
+        this.ownerUserId = ownerUserId;
     }
 
     /**

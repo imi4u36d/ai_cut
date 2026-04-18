@@ -3,15 +3,15 @@
     <div class="settings-main">
       <header class="settings-page-head">
         <p class="panel-eyebrow">模型设置</p>
-        <h2 class="page-title">运行时模型配置</h2>
-        <p class="settings-page-head__summary">端点和模型目录由后端维护，前端只负责补充各模型接入的 API Key。</p>
+        <h2 class="page-title">我的模型配置</h2>
+        <p class="settings-page-head__summary">端点和模型目录由系统维护，这里只保存你自己的模型接入 API Key。</p>
       </header>
 
       <section class="settings-section">
         <div class="settings-section__head">
           <div>
             <h3>模型接入密钥</h3>
-            <p>输入新 key 后可先校验，再保存到后端 secrets 覆盖文件并立即刷新运行时。</p>
+                    <p>输入新 key 后可先校验，再保存到数据库，并立即用于你后续的生成任务。</p>
           </div>
           <div class="settings-actions">
             <HintBell
@@ -272,7 +272,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
 import HintBell from "@/components/HintBell.vue";
-import { fetchAdminModelConfig, saveAdminModelConfigKeys, validateAdminModelConfig } from "@/api/admin";
+import { fetchUserModelConfig, saveUserModelConfigKeys, validateUserModelConfig } from "@/api/auth";
 import type {
   AdminModelConfigKeyUpdateRequest,
   AdminModelConfigProviderItem,
@@ -518,7 +518,7 @@ async function loadConfig() {
   errorMessage.value = "";
   successMessage.value = "";
   try {
-    const response = await fetchAdminModelConfig();
+    const response = await fetchUserModelConfig();
     runtimeConfig.value = response;
     providerDrafts.value = toKeyDraft(response);
     validationResult.value = null;
@@ -537,7 +537,7 @@ async function validateDraft() {
   errorMessage.value = "";
   successMessage.value = "";
   try {
-    validationResult.value = await validateAdminModelConfig(buildRequest());
+    validationResult.value = await validateUserModelConfig(buildRequest());
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : "密钥校验失败";
   } finally {
@@ -553,7 +553,7 @@ async function saveDraft() {
   errorMessage.value = "";
   successMessage.value = "";
   try {
-    const response = await saveAdminModelConfigKeys(buildRequest());
+    const response = await saveUserModelConfigKeys(buildRequest());
     runtimeConfig.value = response;
     providerDrafts.value = toKeyDraft(response);
     validationResult.value = null;

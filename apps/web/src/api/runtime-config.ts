@@ -9,15 +9,55 @@ export interface RuntimeConfig {
   apiBaseUrl: string;
   // 加载上传文件和生成资源时使用的基础路径。
   storageBaseUrl: string;
+  // 独立管理端访问地址。
+  adminBaseUrl: string;
+}
+
+function resolveDefaultAdminBaseUrl() {
+  if (typeof window === "undefined") {
+    return "http://127.0.0.1:5174";
+  }
+  try {
+    const url = new URL(window.location.origin);
+    url.port = "5174";
+    return url.toString().replace(/\/$/, "");
+  } catch {
+    return "http://127.0.0.1:5174";
+  }
+}
+
+function normalizeAdminBaseUrl(value: string, fallbackValue: string) {
+  const normalizedValue = value.trim();
+  if (!normalizedValue) {
+    return fallbackValue;
+  }
+  if (typeof window === "undefined") {
+    return normalizedValue;
+  }
+  try {
+    const configuredUrl = new URL(normalizedValue, window.location.origin);
+    const configuredPath = configuredUrl.pathname.replace(/\/+$/, "") || "/";
+    const currentUrl = new URL(window.location.href);
+    const currentPort = currentUrl.port || (currentUrl.protocol === "https:" ? "443" : "80");
+    if (configuredUrl.origin === currentUrl.origin && configuredPath === "/" && currentPort !== "5174") {
+      return fallbackValue;
+    }
+    return configuredUrl.toString().replace(/\/$/, "");
+  } catch {
+    return fallbackValue;
+  }
 }
 
 // 在 runtime-config.json 未加载或不可用时使用的安全默认值。
-const defaultRuntimeConfig: RuntimeConfig = {
-  apiBaseUrl: "/api/v2",
-  storageBaseUrl: "/storage"
-};
+function createDefaultRuntimeConfig(): RuntimeConfig {
+  return {
+    apiBaseUrl: "/api/v2",
+    storageBaseUrl: "/storage",
+    adminBaseUrl: resolveDefaultAdminBaseUrl()
+  };
+}
 
-let runtimeConfig: RuntimeConfig = { ...defaultRuntimeConfig };
+let runtimeConfig: RuntimeConfig = createDefaultRuntimeConfig();
 
 /**
  * 检查是否非EmptyString。
@@ -35,9 +75,14 @@ function isNonEmptyString(value: unknown): value is string {
  * @return 处理结果
  */
 function normalizeRuntimeConfig(config: Partial<RuntimeConfig>): RuntimeConfig {
+  const defaultRuntimeConfig = createDefaultRuntimeConfig();
   return {
     apiBaseUrl: isNonEmptyString(config.apiBaseUrl) ? config.apiBaseUrl : defaultRuntimeConfig.apiBaseUrl,
-    storageBaseUrl: isNonEmptyString(config.storageBaseUrl) ? config.storageBaseUrl : defaultRuntimeConfig.storageBaseUrl
+    storageBaseUrl: isNonEmptyString(config.storageBaseUrl) ? config.storageBaseUrl : defaultRuntimeConfig.storageBaseUrl,
+    adminBaseUrl: normalizeAdminBaseUrl(
+      isNonEmptyString(config.adminBaseUrl) ? config.adminBaseUrl : "",
+      defaultRuntimeConfig.adminBaseUrl
+    )
   };
 }
 

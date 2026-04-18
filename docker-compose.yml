@@ -36,7 +36,7 @@ services:
       # Spring 端改用 JDBC 连接 MySQL。
       JIANDOU_DATABASE_URL: jdbc:mysql://mysql:3306/jiandou?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai
       JIANDOU_EXECUTION_MODE: queue
-      JIANDOU_WEB_ORIGIN: http://127.0.0.1:5173
+      JIANDOU_WEB_ORIGIN: http://127.0.0.1:5173,http://localhost:5173,http://127.0.0.1:5174,http://localhost:5174
       SERVER_PORT: 8000
     command:
       [
@@ -78,7 +78,28 @@ services:
       api:
         condition: service_started
 
+  # Element Plus 管理后台的 Vite 开发服务器。
+  admin:
+    build:
+      context: .
+      dockerfile: apps/admin/Dockerfile
+    container_name: jiandou-admin
+    working_dir: /app/apps/admin
+    environment:
+      CHOKIDAR_USEPOLLING: "true"
+      VITE_API_PROXY_TARGET: http://api:8000
+    command: ["npm", "run", "dev", "--", "--host", "0.0.0.0", "--port", "5174"]
+    ports:
+      - "5174:5174"
+    volumes:
+      - ./apps/admin:/app/apps/admin
+      - admin_node_modules:/app/apps/admin/node_modules
+    depends_on:
+      api:
+        condition: service_started
+
 # 命名卷用于保留本地状态，同时避免污染仓库目录。
 volumes:
   mysql_data:
   web_node_modules:
+  admin_node_modules:

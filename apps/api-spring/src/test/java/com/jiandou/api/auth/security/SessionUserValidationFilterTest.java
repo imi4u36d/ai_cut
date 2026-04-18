@@ -56,6 +56,34 @@ class SessionUserValidationFilterTest {
         assertTrue(response.getContentAsString().contains("session_invalid"));
     }
 
+    @Test
+    void roleChangedSessionReturnsUnauthorizedOnNextRequest() throws Exception {
+        MybatisAuthRepository repository = mock(MybatisAuthRepository.class);
+        ApiErrorResponseWriter writer = new ApiErrorResponseWriter(new ObjectMapper().registerModule(new JavaTimeModule()));
+        SessionUserValidationFilter filter = new SessionUserValidationFilter(repository, writer);
+        SysUserEntity principalUser = user(UserStatus.ACTIVE);
+        SysUserEntity repositoryUser = user(UserStatus.ACTIVE);
+        repositoryUser.setRole(UserRole.USER.value());
+        MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api/v2/admin/users");
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        AtomicBoolean chainInvoked = new AtomicBoolean(false);
+
+        when(repository.findUserById(1L)).thenReturn(repositoryUser);
+        SecurityContextHolder.getContext().setAuthentication(
+            UsernamePasswordAuthenticationToken.authenticated(
+                CurrentUserPrincipal.from(principalUser),
+                null,
+                CurrentUserPrincipal.from(principalUser).getAuthorities()
+            )
+        );
+
+        filter.doFilter(request, response, (servletRequest, servletResponse) -> chainInvoked.set(true));
+
+        assertFalse(chainInvoked.get());
+        assertEquals(401, response.getStatus());
+        assertTrue(response.getContentAsString().contains("session_invalid"));
+    }
+
     private SysUserEntity user(UserStatus status) {
         SysUserEntity user = new SysUserEntity();
         user.setId(1L);

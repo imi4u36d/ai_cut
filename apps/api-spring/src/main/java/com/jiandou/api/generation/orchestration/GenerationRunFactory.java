@@ -76,8 +76,9 @@ public class GenerationRunFactory {
      * @return 处理结果
      */
     public Map<String, Object> createProbeRun(String runId, Map<String, Object> request) {
+        Long userId = userIdFromRequest(request);
         String requestedModel = support.requiredModel(support.nestedValue(request, "model", "textAnalysisModel", ""), "textAnalysisModel", "文本模型");
-        ModelRuntimeProfile profile = modelResolver.resolveTextProfile(requestedModel);
+        ModelRuntimeProfile profile = modelResolver.resolveTextProfile(requestedModel, userId);
         List<Map<String, Object>> callChain = new ArrayList<>();
         Map<String, Object> metadata = new LinkedHashMap<>();
         metadata.put("requestedModel", requestedModel);
@@ -148,10 +149,11 @@ public class GenerationRunFactory {
      * @return 处理结果
      */
     public Map<String, Object> createScriptRun(String runId, Map<String, Object> request) {
+        Long userId = userIdFromRequest(request);
         String sourceText = support.nestedValue(request, "input", "text", "");
         String visualStyle = support.nestedValue(request, "options", "visualStyle", "AI 自动决策");
         String requestedModel = support.requiredModel(support.nestedValue(request, "model", "textAnalysisModel", ""), "textAnalysisModel", "文本模型");
-        ModelRuntimeProfile profile = modelResolver.resolveTextProfile(requestedModel);
+        ModelRuntimeProfile profile = modelResolver.resolveTextProfile(requestedModel, userId);
         if (sourceText.isBlank()) {
             throw new IllegalArgumentException("脚本输入文本不能为空");
         }
@@ -159,6 +161,7 @@ public class GenerationRunFactory {
         List<Map<String, Object>> callChain = new ArrayList<>();
         GenerationRunSupport.TextGenerationAttempt scriptAttempt = support.generateTextWithFallback(
             profile,
+            userId,
             "script",
             buildScriptSystemPrompt(),
             prompt,
@@ -215,6 +218,7 @@ public class GenerationRunFactory {
      * @return 处理结果
      */
     public Map<String, Object> createImageRun(String runId, Map<String, Object> request) {
+        Long userId = userIdFromRequest(request);
         String prompt = support.nestedValue(request, "input", "prompt", "");
         String referenceImageUrl = support.nestedValue(request, "input", "referenceImageUrl", "");
         String frameRole = support.normalizeFrameRole(support.nestedValue(request, "input", "frameRole", "first"));
@@ -224,8 +228,8 @@ public class GenerationRunFactory {
         String stylePreset = support.nestedValue(request, "options", "stylePreset", modelResolver.value("catalog.defaults", "style_preset", "cinematic"));
         String textModel = support.requiredModel(support.nestedValue(request, "model", "textAnalysisModel", ""), "textAnalysisModel", "文本模型");
         String requestedImageModel = support.requiredModel(support.nestedValue(request, "model", "providerModel", ""), "providerModel", "关键帧模型");
-        ModelRuntimeProfile textProfile = modelResolver.resolveTextProfile(textModel);
-        MediaProviderProfile imageProfile = modelResolver.resolveMediaProfile(requestedImageModel, GenerationModelKinds.IMAGE);
+        ModelRuntimeProfile textProfile = modelResolver.resolveTextProfile(textModel, userId);
+        MediaProviderProfile imageProfile = modelResolver.resolveMediaProfile(requestedImageModel, GenerationModelKinds.IMAGE, userId);
         Integer appliedImageSeed = imageProfile.supportsSeed() ? requestedSeed : null;
         List<Map<String, Object>> callChain = new ArrayList<>();
         GenerationRunSupport.TextGenerationAttempt keyframeAttempt = null;
@@ -317,6 +321,7 @@ public class GenerationRunFactory {
      * @return 处理结果
      */
     public Map<String, Object> createVideoRun(String runId, Map<String, Object> request) {
+        Long userId = userIdFromRequest(request);
         String prompt = support.nestedValue(request, "input", "prompt", "");
         int[] dimensions = support.parseDimensions(
             support.nestedValue(request, "input", "videoSize", ""),
@@ -333,7 +338,7 @@ public class GenerationRunFactory {
         String textModel = support.requiredModel(support.nestedValue(request, "model", "textAnalysisModel", ""), "textAnalysisModel", "文本模型");
         String requestedVisionModel = support.requiredModel(support.nestedValue(request, "model", "visionModel", ""), "visionModel", "视觉模型");
         String requestedVideoModel = support.requiredModel(support.nestedValue(request, "model", "providerModel", ""), "providerModel", "视频模型");
-        MediaProviderProfile videoProfile = modelResolver.resolveMediaProfile(requestedVideoModel, GenerationModelKinds.VIDEO);
+        MediaProviderProfile videoProfile = modelResolver.resolveMediaProfile(requestedVideoModel, GenerationModelKinds.VIDEO, userId);
         int durationSeconds = normalizeVideoDurationSeconds(
             videoProfile,
             requestedDurationSeconds,
@@ -344,8 +349,8 @@ public class GenerationRunFactory {
         String lastFrameUrl = support.nestedValue(request, "input", "lastFrameUrl", "");
         boolean generateAudio = support.nestedBoolean(request, "input", "generateAudio", true);
         boolean returnLastFrame = support.nestedBoolean(request, "input", "returnLastFrame", true);
-        ModelRuntimeProfile textProfile = modelResolver.resolveTextProfile(textModel);
-        ModelRuntimeProfile visionProfile = modelResolver.resolveTextProfile(requestedVisionModel);
+        ModelRuntimeProfile textProfile = modelResolver.resolveTextProfile(textModel, userId);
+        ModelRuntimeProfile visionProfile = modelResolver.resolveTextProfile(requestedVisionModel, userId);
         Integer appliedVisionSeed = visionProfile.supportsSeed() ? requestedSeed : null;
         Integer appliedVideoSeed = videoProfile.supportsSeed() ? requestedSeed : null;
         List<Map<String, Object>> callChain = new ArrayList<>();
@@ -505,7 +510,8 @@ public class GenerationRunFactory {
         if (nextPollAt > now) {
             return run;
         }
-        MediaProviderProfile profile = modelResolver.resolveVideoProfile(requestedModel);
+        Long userId = userIdFromRun(run);
+        MediaProviderProfile profile = modelResolver.resolveVideoProfile(requestedModel, userId);
         VideoModelProvider videoModelProvider = videoModelProviderRegistry.resolve(profile);
         RemoteTaskQueryResult query = videoModelProvider.query(profile, taskId);
         String remoteStatus = support.stringValue(query.status()).toUpperCase(Locale.ROOT);
@@ -832,6 +838,26 @@ public class GenerationRunFactory {
             }
         }
         return items;
+    }
+
+    private Long userIdFromRequest(Map<String, Object> request) {
+        return parseNullableLong(support.mapValue(request.get("auth")).get("userId"));
+    }
+
+    private Long userIdFromRun(Map<String, Object> run) {
+        return parseNullableLong(support.mapValue(run.get("auth")).get("userId"));
+    }
+
+    private Long parseNullableLong(Object value) {
+        if (value instanceof Number number) {
+            return number.longValue();
+        }
+        try {
+            String normalized = String.valueOf(value).trim();
+            return normalized.isBlank() ? null : Long.parseLong(normalized);
+        } catch (Exception ignored) {
+            return null;
+        }
     }
 
     /**

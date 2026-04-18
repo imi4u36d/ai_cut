@@ -1,5 +1,6 @@
 package com.jiandou.api.generation.web;
 
+import com.jiandou.api.auth.security.SecurityCurrentUser;
 import com.jiandou.api.config.ApiPathConstants;
 import com.jiandou.api.config.JiandouTaskOpsProperties;
 import com.jiandou.api.generation.application.GenerationApplicationService;
@@ -55,7 +56,7 @@ public class GenerationController {
     @PostMapping("/runs")
     public Map<String, Object> createRun(@RequestBody Map<String, Object> request) {
         try {
-            return generationService.createRun(request);
+            return generationService.createRun(attachCurrentUser(request));
         } catch (IllegalArgumentException ex) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, ex.getMessage(), ex);
         } catch (UnsupportedGenerationKindException ex) {
@@ -66,6 +67,23 @@ public class GenerationController {
             throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, ex.getMessage(), ex);
         } catch (GenerationNotImplementedException ex) {
             throw new ResponseStatusException(HttpStatus.NOT_IMPLEMENTED, ex.getMessage(), ex);
+        }
+    }
+
+    private Map<String, Object> attachCurrentUser(Map<String, Object> request) {
+        Long userId = SecurityCurrentUser.currentUserId();
+        if (userId == null) {
+            return request;
+        }
+        try {
+            @SuppressWarnings("unchecked")
+            Map<String, Object> payload = request == null ? new java.util.LinkedHashMap<>() : (Map<String, Object>) request;
+            payload.put("auth", Map.of("userId", userId));
+            return payload;
+        } catch (UnsupportedOperationException ex) {
+            Map<String, Object> payload = new java.util.LinkedHashMap<>(request == null ? Map.of() : request);
+            payload.put("auth", Map.of("userId", userId));
+            return payload;
         }
     }
 

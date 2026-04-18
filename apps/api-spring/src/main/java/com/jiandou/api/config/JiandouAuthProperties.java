@@ -9,6 +9,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 public class JiandouAuthProperties {
 
     private int inviteDefaultExpiryDays = 7;
+    private String credentialSecret = "dev-user-credential-secret-change-me";
     private final Bootstrap bootstrap = new Bootstrap();
 
     public int getInviteDefaultExpiryDays() {
@@ -17,6 +18,14 @@ public class JiandouAuthProperties {
 
     public void setInviteDefaultExpiryDays(int inviteDefaultExpiryDays) {
         this.inviteDefaultExpiryDays = inviteDefaultExpiryDays <= 0 ? 7 : inviteDefaultExpiryDays;
+    }
+
+    public String getCredentialSecret() {
+        return credentialSecret;
+    }
+
+    public void setCredentialSecret(String credentialSecret) {
+        this.credentialSecret = credentialSecret == null ? "" : credentialSecret.trim();
     }
 
     public Bootstrap getBootstrap() {

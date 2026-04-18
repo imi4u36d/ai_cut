@@ -1,5 +1,6 @@
 package com.jiandou.api.task.application;
 
+import com.jiandou.api.auth.security.SecurityCurrentUser;
 import com.jiandou.api.config.JiandouTaskDefaultsProperties;
 import com.jiandou.api.generation.RemoteTaskQueryResult;
 import com.jiandou.api.generation.runtime.ModelRuntimePropertiesResolver;
@@ -164,7 +165,10 @@ public class TaskApplicationServiceImpl implements TaskApplicationService {
      */
     @Override
     public Map<String, Object> getSeedanceTaskResult(String remoteTaskId) {
-        var profile = modelResolver.resolveVideoProfile(taskDefaultsProperties.getSeedanceQueryModel());
+        Long userId = SecurityCurrentUser.currentUserId();
+        var profile = userId == null
+            ? modelResolver.resolveVideoProfile(taskDefaultsProperties.getSeedanceQueryModel())
+            : modelResolver.resolveVideoProfile(taskDefaultsProperties.getSeedanceQueryModel(), userId);
         RemoteTaskQueryResult queryResult = videoModelProviderRegistry.resolve(profile).query(profile, remoteTaskId);
         Map<String, Object> row = new LinkedHashMap<>();
         row.put("taskId", queryResult.taskId());
