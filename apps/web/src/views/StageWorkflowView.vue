@@ -496,11 +496,25 @@
                 <span class="surface-chip">{{ selectedWorkflow.aspectRatio }}</span>
               </div>
             </div>
-            <div class="workflow-summary__actions">
-              <button class="btn-primary btn-sm" type="button" :disabled="busyActionKey === 'storyboard'" @click="handleGenerateStoryboard">
-                {{ busyActionKey === "storyboard" ? "生成中..." : "生成分镜版本" }}
-              </button>
-              <span class="surface-chip">{{ selectedWorkflow.storyboardVersions.length }} 个版本</span>
+            <div class="workflow-stage-panel__actions">
+              <div class="stage-switch-row">
+                <button
+                  v-for="stage in createStageOptions"
+                  :key="`detail-${stage.key}`"
+                  type="button"
+                  class="stage-switch-btn"
+                  :class="{ 'stage-switch-btn-active': activeCreateStage === stage.key }"
+                  @click="activeCreateStage = stage.key"
+                >
+                  {{ stage.shortLabel }}
+                </button>
+              </div>
+              <div class="workflow-summary__actions">
+                <button class="btn-primary btn-sm" type="button" :disabled="busyActionKey === 'storyboard'" @click="handleGenerateStoryboard">
+                  {{ busyActionKey === "storyboard" ? "生成中..." : "生成分镜版本" }}
+                </button>
+                <span class="surface-chip">{{ selectedWorkflow.storyboardVersions.length }} 个版本</span>
+              </div>
             </div>
           </div>
 
@@ -620,7 +634,23 @@
               <p class="workflow-eyebrow">Stage 2 / 3</p>
               <h2>关键帧模块</h2>
             </div>
-            <span class="surface-chip">{{ selectedWorkflow.clipSlots.length }} 个镜头</span>
+            <div class="workflow-stage-panel__actions">
+              <div class="stage-switch-row">
+                <button
+                  v-for="stage in createStageOptions"
+                  :key="`detail-${stage.key}`"
+                  type="button"
+                  class="stage-switch-btn"
+                  :class="{ 'stage-switch-btn-active': activeCreateStage === stage.key }"
+                  @click="activeCreateStage = stage.key"
+                >
+                  {{ stage.shortLabel }}
+                </button>
+              </div>
+              <div class="workflow-summary__actions">
+                <span class="surface-chip">{{ selectedWorkflow.clipSlots.length }} 个镜头</span>
+              </div>
+            </div>
           </div>
 
           <div v-if="!selectedWorkflow.clipSlots.length" class="workflow-empty">
@@ -710,16 +740,30 @@
               <p class="workflow-eyebrow">Stage 3 / Finalize</p>
               <h2>视频生成模块</h2>
             </div>
-            <div class="workflow-summary__actions">
-              <button
-                class="btn-primary btn-sm"
-                type="button"
-                :disabled="!canFinalize || busyActionKey === 'finalize'"
-                @click="handleFinalize"
-              >
-                {{ busyActionKey === "finalize" ? "拼接中..." : "生成最终结果" }}
-              </button>
-              <span class="surface-chip">{{ selectedWorkflow.clipSlots.length }} 个镜头</span>
+            <div class="workflow-stage-panel__actions">
+              <div class="stage-switch-row">
+                <button
+                  v-for="stage in createStageOptions"
+                  :key="`detail-${stage.key}`"
+                  type="button"
+                  class="stage-switch-btn"
+                  :class="{ 'stage-switch-btn-active': activeCreateStage === stage.key }"
+                  @click="activeCreateStage = stage.key"
+                >
+                  {{ stage.shortLabel }}
+                </button>
+              </div>
+              <div class="workflow-summary__actions">
+                <button
+                  class="btn-primary btn-sm"
+                  type="button"
+                  :disabled="!canFinalize || busyActionKey === 'finalize'"
+                  @click="handleFinalize"
+                >
+                  {{ busyActionKey === "finalize" ? "拼接中..." : "生成最终结果" }}
+                </button>
+                <span class="surface-chip">{{ selectedWorkflow.clipSlots.length }} 个镜头</span>
+              </div>
             </div>
           </div>
 
@@ -977,7 +1021,7 @@ const createStageOptions = [
   {
     key: "storyboard" as const,
     label: "文本分镜卡片",
-    shortLabel: "文本分镜",
+    shortLabel: "分镜脚本",
     description: "文本模型、时长、Seed",
   },
   {
@@ -1704,6 +1748,10 @@ onMounted(async () => {
   transform: rotateY(180deg);
 }
 
+.workflow-rail-flip__face-back.workflow-rail-panel {
+  padding-top: 18px;
+}
+
 .workflow-rail-flip-active .workflow-rail-flip__face-front {
   pointer-events: none;
 }
@@ -1728,7 +1776,7 @@ onMounted(async () => {
   max-height: calc(100vh - 132px);
   overflow-y: auto;
   overscroll-behavior: contain;
-  padding-top: 56px;
+  padding-top: 28px;
 }
 
 .workflow-rail__hero {
@@ -2318,6 +2366,13 @@ onMounted(async () => {
   align-items: center;
 }
 
+.workflow-stage-panel__actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 10px;
+}
+
 .workflow-eyebrow {
   margin: 0;
   font-size: 0.72rem;
@@ -2779,6 +2834,7 @@ onMounted(async () => {
 
   .stage-slider__meta,
   .stage-progress-form__actions,
+  .workflow-stage-panel__actions,
   .workflow-review-item,
   .workflow-review-actions,
   .workflow-panel__head,
