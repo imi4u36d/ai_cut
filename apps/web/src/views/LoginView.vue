@@ -5,7 +5,7 @@
 
     <div class="auth-screen__panel">
       <div class="auth-screen__hero">
-        <p class="auth-screen__eyebrow">Session Access</p>
+        <p class="auth-screen__eyebrow">把灵感煎成镜头</p>
         <h1>登录后进入煎豆工作台</h1>
       </div>
 

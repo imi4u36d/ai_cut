@@ -6,17 +6,6 @@
           <section class="surface-panel workflow-panel workflow-rail-panel workflow-rail-flip__face workflow-rail-flip__face-front">
             <p v-if="createError" class="workflow-error">{{ createError }}</p>
 
-            <div class="workflow-rail__stats">
-              <div class="surface-tile workflow-mini-stat">
-                <span>总工作流</span>
-                <strong>{{ workflows.length }}</strong>
-              </div>
-              <div class="surface-tile workflow-mini-stat">
-                <span>当前选中</span>
-                <strong>{{ selectedWorkflowSummary?.title || "未选择" }}</strong>
-              </div>
-            </div>
-
             <div class="workflow-rail__actions workflow-rail__actions-inline">
               <button class="btn-secondary btn-sm" type="button" :disabled="loadingWorkflows" @click="loadWorkflows">
                 {{ loadingWorkflows ? "刷新中..." : "刷新" }}
@@ -1066,10 +1055,6 @@ const selectedWorkflowId = computed(() => {
   return typeof workflowId === "string" ? workflowId : "";
 });
 
-const selectedWorkflowSummary = computed(() =>
-  workflows.value.find((item) => item.id === selectedWorkflowId.value) ?? null
-);
-
 const filteredWorkflows = computed(() => {
   const keyword = workflowSearch.value.trim().toLowerCase();
   if (!keyword) {
@@ -1418,8 +1403,14 @@ function openCreateReview() {
   createReviewFlipped.value = true;
 }
 
-function closeCreateReview() {
+async function closeCreateReview() {
+  createError.value = "";
   createReviewFlipped.value = false;
+  createComposerVisible.value = false;
+  selectedWorkflow.value = null;
+  if (selectedWorkflowId.value) {
+    await router.push("/workflows");
+  }
 }
 
 function startCreateWorkflow() {
@@ -1806,29 +1797,6 @@ onMounted(async () => {
 
 .workflow-rail__actions-inline {
   justify-content: flex-start;
-}
-
-.workflow-rail__stats {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
-}
-
-.workflow-mini-stat {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: 14px;
-}
-
-.workflow-mini-stat span {
-  font-size: 0.82rem;
-  color: rgba(255, 255, 255, 0.58);
-}
-
-.workflow-mini-stat strong {
-  font-size: 1rem;
-  line-height: 1.4;
 }
 
 .workflow-rail__search {
@@ -2828,10 +2796,6 @@ onMounted(async () => {
 }
 
 @media (max-width: 720px) {
-  .workflow-rail__stats {
-    grid-template-columns: 1fr;
-  }
-
   .stage-slider__meta,
   .stage-progress-form__actions,
   .workflow-stage-panel__actions,

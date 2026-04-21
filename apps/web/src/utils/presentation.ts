@@ -106,6 +106,31 @@ export function formatAspectRatioLabel(value?: string | null) {
 }
 
 /**
+ * 格式化视频尺寸标签，仅保留清晰度级别。
+ * @param value 待处理的值
+ * @param fallback 空值时回退文案
+ */
+export function formatVideoSizeLabel(value?: string | null, fallback = "未选择") {
+  const normalized = String(value ?? "").trim();
+  if (!normalized) {
+    return fallback;
+  }
+  const pMatch = normalized.match(/(\d{3,4})\s*[pP]\b/);
+  if (pMatch) {
+    return `${Math.trunc(Number(pMatch[1]))}P`;
+  }
+  const dimensionMatch = normalized.match(/(\d+)\s*[xX*]\s*(\d+)/);
+  if (dimensionMatch) {
+    const width = Number(dimensionMatch[1]);
+    const height = Number(dimensionMatch[2]);
+    if (Number.isFinite(width) && Number.isFinite(height) && width > 0 && height > 0) {
+      return `${Math.min(Math.trunc(width), Math.trunc(height))}P`;
+    }
+  }
+  return normalized;
+}
+
+/**
  * 格式化任务Outputs。
  * @param task 要处理的任务对象
  */

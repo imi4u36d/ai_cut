@@ -35,17 +35,7 @@
               <span class="toolbar-pill__dot toolbar-pill__dot-rendering"></span>
               生成中
             </button>
-            <label class="toolbar-select">
-              <span class="toolbar-select__icon">↻</span>
-              <select v-model="sortMode">
-                <option value="status_desc">按状态</option>
-                <option value="created_desc">按创建时间</option>
-                <option value="updated_desc">按最近刷新</option>
-                <option value="progress_desc">按进度</option>
-                <option value="semantic_desc">按文本输入</option>
-                <option value="effect_rating_desc">按评分</option>
-              </select>
-            </label>
+            <AppSelect v-model="sortMode" :options="sortModeOptions" variant="toolbar" prefix="↻" />
             <button
               class="toolbar-pill"
               :class="{ 'toolbar-pill-active': statusFilter === 'COMPLETED' }"
@@ -324,6 +314,8 @@
  */
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
+import AppSelect from "@/components/common/AppSelect.vue";
+import type { AppSelectOption } from "@/components/common/app-select";
 import { continueTask, deleteTask, fetchTask, fetchTaskTrace, fetchTasks, pauseTask, rateTaskEffect, retryTask, terminateTask } from "@/api/tasks";
 import type { TaskDetail, TaskListItem, TaskStatus, TaskTraceEvent } from "@/types";
 import { usePolling } from "@/composables/usePolling";
@@ -348,6 +340,14 @@ const router = useRouter();
 type TaskSortMode = "status_desc" | "updated_desc" | "created_desc" | "progress_desc" | "semantic_desc" | "effect_rating_desc";
 
 const DEFAULT_SORT_MODE: TaskSortMode = "status_desc";
+const sortModeOptions: AppSelectOption[] = [
+  { label: "按状态", value: "status_desc" },
+  { label: "按创建时间", value: "created_desc" },
+  { label: "按最近刷新", value: "updated_desc" },
+  { label: "按进度", value: "progress_desc" },
+  { label: "按文本输入", value: "semantic_desc" },
+  { label: "按评分", value: "effect_rating_desc" },
+];
 const STATUS_SORT_PRIORITY: Record<TaskStatus, number> = {
   RENDERING: 0,
   ANALYZING: 1,
@@ -1199,8 +1199,7 @@ onUnmounted(() => {
   gap: 10px;
 }
 
-.toolbar-pill,
-.toolbar-select {
+.toolbar-pill {
   display: inline-flex;
   align-items: center;
   gap: 8px;
@@ -1233,20 +1232,6 @@ onUnmounted(() => {
 
 .toolbar-pill__dot-completed {
   background: #63dc97;
-}
-
-.toolbar-select {
-  padding-right: 10px;
-}
-
-.toolbar-select select {
-  border: 0;
-  background: transparent;
-  color: inherit;
-}
-
-.toolbar-select__icon {
-  color: rgba(255, 255, 255, 0.44);
 }
 
 .toolbar-actions {

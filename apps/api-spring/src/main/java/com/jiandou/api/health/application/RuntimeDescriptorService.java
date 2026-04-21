@@ -69,8 +69,6 @@ public class RuntimeDescriptorService {
             "",
             "",
             "",
-            "",
-            "",
             hasReadyTextModel || hasReadyVisionModel || hasReadyImageModel || hasReadyVideoModel,
             ready,
             doubleValue(modelResolver.value("model", "temperature", "0.15"), 0.15),
@@ -246,7 +244,6 @@ public class RuntimeDescriptorService {
         String family,
         String description,
         String kind,
-        String fallbackModel,
         boolean supportsSeed
     ) {
 
@@ -257,7 +254,7 @@ public class RuntimeDescriptorService {
          */
         private static ModelCatalogItem from(Map<String, Object> row) {
             if (row == null || row.isEmpty()) {
-                return new ModelCatalogItem("", "", "", "", "", "", "", false);
+                return new ModelCatalogItem("", "", "", "", "", "", false);
             }
             return new ModelCatalogItem(
                 stringValue(row.get("value")),
@@ -266,7 +263,6 @@ public class RuntimeDescriptorService {
                 stringValue(row.get("family")),
                 stringValue(row.get("description")),
                 stringValue(row.get("kind")),
-                stringValue(row.get("fallbackModel")),
                 booleanValue(row.get("supportsSeed"))
             );
         }

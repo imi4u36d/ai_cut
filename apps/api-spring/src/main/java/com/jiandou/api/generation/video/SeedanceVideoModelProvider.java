@@ -22,10 +22,6 @@ import org.springframework.stereotype.Component;
 @Component
 public class SeedanceVideoModelProvider implements VideoModelProvider {
 
-    private static final Map<String, String> SEEDANCE_MODEL_ALIASES = Map.of(
-        "seedance-1.5-pro", "doubao-seedance-1-5-pro-251215"
-    );
-
     private final VideoProviderTransport transport;
 
     public SeedanceVideoModelProvider(VideoProviderTransport transport) {
@@ -46,7 +42,7 @@ public class SeedanceVideoModelProvider implements VideoModelProvider {
         if (request.firstFrameUrl() == null || request.firstFrameUrl().isBlank()) {
             throw new GenerationProviderException("seedance video requires firstFrameUrl");
         }
-        String providerModel = normalizeSeedanceModelName(blankTo(profile.modelName(), request.requestedModel()));
+        String providerModel = blankTo(profile.modelName(), request.requestedModel());
         Map<String, Object> body = buildSeedanceVideoRequestBody(
             providerModel,
             request.prompt(),
@@ -159,11 +155,6 @@ public class SeedanceVideoModelProvider implements VideoModelProvider {
         body.put("return_last_frame", returnLastFrame);
         body.put("generate_audio", generateAudio);
         return body;
-    }
-
-    private String normalizeSeedanceModelName(String raw) {
-        String normalized = raw == null ? "" : raw.trim().toLowerCase(Locale.ROOT);
-        return SEEDANCE_MODEL_ALIASES.getOrDefault(normalized, raw);
     }
 
     private String aspectRatio(int width, int height) {

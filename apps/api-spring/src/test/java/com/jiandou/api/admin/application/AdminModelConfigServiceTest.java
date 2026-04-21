@@ -36,7 +36,6 @@ class AdminModelConfigServiceTest {
                 "vendor", "openai",
                 "family", "gpt",
                 "description", "text",
-                "fallbackModel", "gpt-4o",
                 "supportsSeed", true,
                 "supportsResponsesApi", true
             )
@@ -57,11 +56,11 @@ class AdminModelConfigServiceTest {
             )
         ));
         when(resolver.resolveTextProfile("gpt-4.1")).thenReturn(new ModelRuntimeProfile(
-            new TextProviderConfig("text", "gpt-4.1", "openai", "gpt-4.1", "gpt-4o", "key", "https://api.openai.com/v1", 30, 0.2, 2000, "cfg"),
+            new TextProviderConfig("text", "gpt-4.1", "openai", "gpt-4.1", "key", "https://api.openai.com/v1", 30, 0.2, 2000, "cfg"),
             new TextProviderCapabilities(true, true, false)
         ));
         when(resolver.resolveTextProfile("gpt-4.1-vision")).thenReturn(new ModelRuntimeProfile(
-            new TextProviderConfig("vision", "gpt-4.1-vision", "openai", "gpt-4.1-vision", "", "", "", 30, 0.2, 2000, "cfg"),
+            new TextProviderConfig("vision", "gpt-4.1-vision", "openai", "gpt-4.1-vision", "", "", 30, 0.2, 2000, "cfg"),
             new TextProviderCapabilities(false, false, true)
         ));
         when(resolver.resolveMediaProfile("seedance", GenerationModelKinds.VIDEO)).thenReturn(new MediaProviderProfile(
@@ -119,7 +118,7 @@ class AdminModelConfigServiceTest {
         when(resolver.listModelsByKind(GenerationModelKinds.IMAGE)).thenReturn(List.of());
         when(resolver.listModelsByKind(GenerationModelKinds.VIDEO)).thenReturn(List.of());
         when(resolver.resolveTextProfile("qwen-plus")).thenReturn(new ModelRuntimeProfile(
-            new TextProviderConfig("text", "qwen-plus", "qwen", "qwen-plus", "", "", "https://dashscope.aliyuncs.com/compatible-mode/v1", 30, 0.2, 2000, "cfg"),
+            new TextProviderConfig("text", "qwen-plus", "qwen", "qwen-plus", "", "https://dashscope.aliyuncs.com/compatible-mode/v1", 30, 0.2, 2000, "cfg"),
             new TextProviderCapabilities(false, true, false)
         ));
         when(resolver.listSections("model.providers")).thenReturn(List.of(
@@ -155,7 +154,7 @@ class AdminModelConfigServiceTest {
         when(resolver.listModelsByKind(GenerationModelKinds.IMAGE)).thenReturn(List.of());
         when(resolver.listModelsByKind(GenerationModelKinds.VIDEO)).thenReturn(List.of());
         when(resolver.resolveTextProfile("qwen-plus")).thenReturn(new ModelRuntimeProfile(
-            new TextProviderConfig("text", "qwen-plus", "qwen", "qwen-plus", "", "", "https://dashscope.aliyuncs.com/compatible-mode/v1", 30, 0.2, 2000, "cfg"),
+            new TextProviderConfig("text", "qwen-plus", "qwen", "qwen-plus", "", "https://dashscope.aliyuncs.com/compatible-mode/v1", 30, 0.2, 2000, "cfg"),
             new TextProviderCapabilities(false, true, false)
         ));
         when(resolver.listSections("model.providers")).thenReturn(List.of(

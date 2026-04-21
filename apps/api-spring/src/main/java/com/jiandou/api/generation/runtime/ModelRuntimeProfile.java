@@ -16,7 +16,6 @@ public record ModelRuntimeProfile(
      * 为兼容旧调用点保留的便捷构造。
      * @param provider provider值
      * @param modelName 模型Name值
-     * @param fallbackModel 兜底模型值
      * @param apiKey APIKey值
      * @param baseUrl 基础 URL
      * @param timeoutSeconds timeoutSeconds值
@@ -27,7 +26,6 @@ public record ModelRuntimeProfile(
     public ModelRuntimeProfile(
         String provider,
         String modelName,
-        String fallbackModel,
         String apiKey,
         String baseUrl,
         int timeoutSeconds,
@@ -36,7 +34,7 @@ public record ModelRuntimeProfile(
         String source
     ) {
         this(
-            new TextProviderConfig("", modelName, provider, modelName, fallbackModel, apiKey, baseUrl, timeoutSeconds, temperature, maxTokens, source),
+            new TextProviderConfig("", modelName, provider, modelName, apiKey, baseUrl, timeoutSeconds, temperature, maxTokens, source),
             new TextProviderCapabilities(false, false, false)
         );
     }
@@ -59,10 +57,6 @@ public record ModelRuntimeProfile(
 
     public String modelName() {
         return config == null ? "" : blankTo(config.providerModel());
-    }
-
-    public String fallbackModel() {
-        return config == null ? "" : blankTo(config.fallbackModel());
     }
 
     public String apiKey() {

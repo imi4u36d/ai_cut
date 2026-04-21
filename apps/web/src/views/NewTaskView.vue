@@ -27,37 +27,25 @@
             <label class="model-rail__item">
               <span class="model-rail__dot"></span>
               <span class="model-rail__label">文本模型</span>
-              <select v-model="form.textAnalysisModel" class="field-select field-select-compact">
-                <option :value="null">请选择文本模型</option>
-                <option v-for="item in textModelOptions" :key="item.value" :value="item.value">{{ item.label }}</option>
-              </select>
+              <AppSelect v-model="form.textAnalysisModel" :options="textModelSelectOptions" compact />
             </label>
 
             <label class="model-rail__item">
               <span class="model-rail__dot"></span>
               <span class="model-rail__label">视觉模型</span>
-              <select v-model="form.visionModel" class="field-select field-select-compact">
-                <option :value="null">请选择视觉模型</option>
-                <option v-for="item in visionModelOptions" :key="item.value" :value="item.value">{{ item.label }}</option>
-              </select>
+              <AppSelect v-model="form.visionModel" :options="visionModelSelectOptions" compact />
             </label>
 
             <label class="model-rail__item">
               <span class="model-rail__dot"></span>
               <span class="model-rail__label">关键帧模型</span>
-              <select v-model="form.imageModel" class="field-select field-select-compact">
-                <option :value="null">请选择关键帧模型</option>
-                <option v-for="item in imageModelOptions" :key="item.value" :value="item.value">{{ item.label }}</option>
-              </select>
+              <AppSelect v-model="form.imageModel" :options="imageModelSelectOptions" compact />
             </label>
 
             <label class="model-rail__item">
               <span class="model-rail__dot"></span>
               <span class="model-rail__label">视频模型</span>
-              <select v-model="form.videoModel" class="field-select field-select-compact">
-                <option :value="null">请选择视频模型</option>
-                <option v-for="item in videoModelOptions" :key="item.value" :value="item.value">{{ item.label }}</option>
-              </select>
+              <AppSelect v-model="form.videoModel" :options="videoModelSelectOptions" compact />
             </label>
           </div>
 
@@ -86,25 +74,17 @@
             <div class="control-grid">
               <label class="studio-field">
                 <span>清晰度</span>
-                <select v-model="form.videoSize" class="field-select field-select-compact">
-                  <option v-for="item in videoSizeOptions" :key="item.value" :value="item.value">{{ item.label }}</option>
-                </select>
+                <AppSelect v-model="form.videoSize" :options="videoSizeSelectOptions" compact />
               </label>
 
               <label class="studio-field">
                 <span>输出数量</span>
-                <select v-model="form.outputCount" class="field-select field-select-compact">
-                  <option value="auto">自动</option>
-                  <option v-for="item in outputCountOptions" :key="item" :value="item">{{ item }}</option>
-                </select>
+                <AppSelect v-model="form.outputCount" :options="outputCountSelectOptions" compact />
               </label>
 
               <label class="studio-field">
                 <span>时长模式</span>
-                <select v-model="durationLimitMode" class="field-select field-select-compact">
-                  <option value="auto">自动</option>
-                  <option value="manual">手动</option>
-                </select>
+                <AppSelect v-model="durationLimitMode" :options="durationLimitModeOptions" compact />
               </label>
 
               <label v-if="durationLimitMode === 'manual'" class="studio-field">
@@ -127,6 +107,60 @@
             <p v-if="durationLimitMode === 'manual' && manualDurationValidationMessage" class="control-card__error">
               {{ manualDurationValidationMessage }}
             </p>
+
+            <div class="seed-control">
+              <div class="seed-control__head">
+                <span>种子</span>
+                <span class="surface-chip surface-chip-compact">{{ seedMode === "auto" ? "自动生成" : "手动输入" }}</span>
+              </div>
+
+              <div class="ratio-toggle seed-mode-toggle">
+                <button
+                  type="button"
+                  class="ratio-toggle__item"
+                  :class="{ 'ratio-toggle__item-active': seedMode === 'auto' }"
+                  @click="seedMode = 'auto'"
+                >
+                  自动
+                </button>
+                <button
+                  type="button"
+                  class="ratio-toggle__item"
+                  :class="{ 'ratio-toggle__item-active': seedMode === 'manual' }"
+                  @click="seedMode = 'manual'"
+                >
+                  手动
+                </button>
+              </div>
+
+              <div v-if="seedMode === 'auto'" class="seed-auto">
+                <label class="studio-field">
+                  <span>自动种子</span>
+                  <div class="seed-auto__row">
+                    <input :value="autoSeed" class="field-input field-input-compact seed-auto__value" type="text" readonly />
+                    <button type="button" class="btn-ghost btn-sm btn-compact seed-auto__refresh" @click="refreshAutoSeed">换一个</button>
+                  </div>
+                </label>
+                <p class="control-card__hint">自动模式会为本次任务使用随机种子。</p>
+              </div>
+
+              <label v-else class="studio-field">
+                <span>手动种子</span>
+                <input
+                  v-model="seedInput"
+                  class="field-input field-input-compact"
+                  type="number"
+                  min="0"
+                  step="1"
+                  placeholder="输入非负整数"
+                  @input="selectedSeedSourceTaskId = ''"
+                />
+              </label>
+
+              <p v-if="seedMode === 'manual' && seedValidationMessage" class="control-card__error">
+                {{ seedValidationMessage }}
+              </p>
+            </div>
           </section>
 
           <section class="surface-tile surface-tile-compact seed-library">
@@ -180,21 +214,12 @@
         <div class="core-topbar">
           <button
             type="button"
-            class="btn-primary btn-compact core-topbar__action"
-            :disabled="generatingPrompt || loadingOptions"
-            @click="handleGeneratePrompt"
-          >
-            {{ generatingPrompt ? "生成中..." : "智能生成提示词" }}
-          </button>
-          <button
-            type="button"
             class="btn-secondary btn-sm btn-compact"
             :disabled="uploadingText"
             @click="textFileInput?.click()"
           >
             {{ uploadingText ? "上传中..." : "上传文本" }}
           </button>
-          <span class="surface-chip surface-chip-compact core-topbar__meta">{{ promptSource }}</span>
           <input
             ref="textFileInput"
             type="file"
@@ -205,7 +230,7 @@
         </div>
 
         <div class="core-compose">
-          <label class="studio-field">
+          <label class="studio-field core-compose__field core-compose__field-transcript">
             <span>小说正文</span>
             <textarea
               v-model="form.transcriptText"
@@ -215,7 +240,7 @@
             ></textarea>
           </label>
 
-          <label class="studio-field">
+          <label class="studio-field core-compose__field core-compose__field-prompt">
             <span>全局创意提示词</span>
             <textarea
               v-model="form.creativePrompt"
@@ -227,27 +252,6 @@
         </div>
 
         <div class="core-footer">
-          <div class="core-bottom-grid">
-            <label class="studio-field">
-              <span>种子</span>
-              <input
-                v-model="seedInput"
-                class="field-input field-input-compact"
-                type="number"
-                min="0"
-                step="1"
-                placeholder="可选"
-              />
-            </label>
-
-            <div class="surface-tile surface-tile-compact core-status">
-              <p class="studio-eyebrow">提交检查</p>
-              <strong>{{ submitLabel }}</strong>
-              <p>{{ statusText }}</p>
-              <span class="core-status__meta">提示词来源：{{ promptSource }}</span>
-            </div>
-          </div>
-
           <div class="core-actions">
             <button class="btn-primary btn-compact core-actions__primary" type="submit" :disabled="submitting || !isFormReady || loadingOptions">{{ submitLabel }}</button>
             <button class="btn-secondary btn-compact" type="button" :disabled="submitting" @click="goToTasks">查看任务</button>
@@ -332,9 +336,12 @@
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 import { fetchGenerationOptions } from "@/api/generation";
-import { createGenerationTask, fetchTasks, generateCreativePrompt, uploadText } from "@/api/tasks";
+import { createGenerationTask, fetchTasks, uploadText } from "@/api/tasks";
+import AppSelect from "@/components/common/AppSelect.vue";
+import type { AppSelectOption } from "@/components/common/app-select";
 import { useTaskProgress } from "@/components/generate/useTaskProgress";
 import HintBell from "@/components/HintBell.vue";
+import { formatVideoSizeLabel } from "@/utils/presentation";
 import { shouldStopBeforeVideoGeneration } from "@/workbench/developer-settings";
 import type {
   CreateGenerationTaskRequest,
@@ -353,9 +360,7 @@ const router = useRouter();
 const options = ref<GenerationOptionsResponse | null>(null);
 const loadingOptions = ref(false);
 const submitting = ref(false);
-const generatingPrompt = ref(false);
 const uploadingText = ref(false);
-const promptSource = ref("手动输入");
 const statusText = ref("等待填写参数");
 const uploadedText = ref<UploadResponse | null>(null);
 const textFileInput = ref<HTMLInputElement | null>(null);
@@ -363,7 +368,9 @@ const durationLimitMode = ref<"auto" | "manual">("auto");
 const manualMaxDurationSeconds = ref("");
 const MANUAL_DURATION_MIN_SECONDS = 5;
 const MANUAL_DURATION_MAX_SECONDS = 12;
+const seedMode = ref<"auto" | "manual">("auto");
 const seedInput = ref("");
+const autoSeed = ref<number>(createRandomSeed());
 const reusableSeedTasks = ref<TaskListItem[]>([]);
 const loadingReusableSeeds = ref(false);
 const reusableSeedError = ref("");
@@ -459,6 +466,26 @@ function parseSeed(value: unknown): number | null {
 }
 
 /**
+ * 创建随机种子。
+ * @return 处理结果
+ */
+function createRandomSeed(): number {
+  if (typeof window !== "undefined" && window.crypto?.getRandomValues) {
+    const values = new Uint32Array(1);
+    window.crypto.getRandomValues(values);
+    return Math.max(1, values[0] % 2147483647);
+  }
+  return Math.max(1, Math.floor(Math.random() * 2147483647));
+}
+
+/**
+ * 刷新自动种子。
+ */
+function refreshAutoSeed() {
+  autoSeed.value = createRandomSeed();
+}
+
+/**
  * 格式化可复用种子。
  * @param value 待处理的值
  * @return 处理结果
@@ -490,26 +517,6 @@ function formatReusableDate(value: string | null | undefined): string {
     return value;
   }
   return new Date(parsed).toLocaleString("zh-CN", { hour12: false });
-}
-
-/**
- * 处理解析提示词时长Seconds。
- * @return 处理结果
- */
-function resolvePromptDurationSeconds(): number {
-  const manualMax = parseDurationSeconds(manualMaxDurationSeconds.value);
-  if (durationLimitMode.value === "manual" && manualMax !== null) {
-    return manualMax;
-  }
-  const defaultDuration = options.value?.defaultVideoDurationSeconds;
-  if (typeof defaultDuration === "number" && Number.isFinite(defaultDuration) && defaultDuration > 0) {
-    return Math.trunc(defaultDuration);
-  }
-  const firstOption = durationOptions.value.find((item) => Number.isFinite(item.value) && item.value > 0);
-  if (firstOption) {
-    return Math.trunc(firstOption.value);
-  }
-  return 5;
 }
 
 /**
@@ -583,6 +590,13 @@ function compareVideoSizeByArea(a: GenerationVideoSizeOption, b: GenerationVideo
 }
 
 const textModelOptions = computed<GenerationTextAnalysisModelInfo[]>(() => options.value?.textAnalysisModels ?? []);
+const textModelSelectOptions = computed<AppSelectOption[]>(() =>
+  textModelOptions.value.map((item) => ({
+    label: item.label,
+    value: item.value,
+    description: item.description || "",
+  })),
+);
 const aspectRatioOptions = computed<Array<GenerationAspectRatioOption & { value: CreateGenerationTaskRequest["aspectRatio"] }>>(() => {
   return (options.value?.aspectRatios ?? []).filter(
     (item): item is GenerationAspectRatioOption & { value: CreateGenerationTaskRequest["aspectRatio"] } => {
@@ -591,9 +605,38 @@ const aspectRatioOptions = computed<Array<GenerationAspectRatioOption & { value:
   );
 });
 const visionModelOptions = computed<GenerationTextAnalysisModelInfo[]>(() => options.value?.visionModels ?? []);
+const visionModelSelectOptions = computed<AppSelectOption[]>(() =>
+  visionModelOptions.value.map((item) => ({
+    label: item.label,
+    value: item.value,
+    description: item.description || "",
+  })),
+);
 const imageModelOptions = computed<GenerationTextAnalysisModelInfo[]>(() => options.value?.imageModels ?? []);
+const imageModelSelectOptions = computed<AppSelectOption[]>(() =>
+  imageModelOptions.value.map((item) => ({
+    label: item.label,
+    value: item.value,
+    description: item.description || "",
+  })),
+);
 const videoModelOptions = computed<GenerationVideoModelInfo[]>(() => options.value?.videoModels ?? []);
+const videoModelSelectOptions = computed<AppSelectOption[]>(() =>
+  videoModelOptions.value.map((item) => ({
+    label: item.label,
+    value: item.value,
+    description: item.description || "",
+  })),
+);
 const outputCountOptions = computed<number[]>(() => Array.from({ length: 20 }, (_, index) => index + 1));
+const outputCountSelectOptions = computed<AppSelectOption[]>(() => [
+  { label: "自动", value: "auto" },
+  ...outputCountOptions.value.map((item) => ({ label: String(item), value: item })),
+]);
+const durationLimitModeOptions: AppSelectOption[] = [
+  { label: "自动", value: "auto" },
+  { label: "手动", value: "manual" },
+];
 const selectedVisionModelOption = computed<GenerationTextAnalysisModelInfo | null>(() => {
   const selectedVisionModel = normalizeModelName(form.value.visionModel);
   if (!selectedVisionModel) {
@@ -635,6 +678,12 @@ const videoSizeOptions = computed<GenerationVideoSizeOption[]>(() => {
     });
   return [...filtered].sort(compareVideoSizeByArea);
 });
+const videoSizeSelectOptions = computed<AppSelectOption[]>(() =>
+  videoSizeOptions.value.map((item) => ({
+    label: formatVideoSizeLabel(item.label || item.value),
+    value: item.value,
+  })),
+);
 const durationOptions = computed<GenerationVideoDurationOption[]>(() => {
   const modelDurations = Array.isArray(selectedVideoModelOption.value?.supportedDurations)
     ? selectedVideoModelOption.value?.supportedDurations ?? []
@@ -713,6 +762,22 @@ const seedCapabilityHint = computed(() => {
   }
   return "当前所选模型未声明支持种子，保存后仅做任务记录。";
 });
+const parsedManualSeed = computed(() => parseSeed(seedInput.value));
+const seedValidationMessage = computed(() => {
+  if (seedMode.value !== "manual") {
+    return "";
+  }
+  if (!seedInput.value.trim()) {
+    return "请先填写合法的种子值";
+  }
+  if (parsedManualSeed.value === null) {
+    return "种子需为非负整数";
+  }
+  return "";
+});
+const isSeedReady = computed(() => {
+  return seedMode.value === "auto" || !seedValidationMessage.value;
+});
 
 /**
  * 解析时间戳毫秒。
@@ -770,7 +835,8 @@ const isFormReady = computed(() => {
       form.value.visionModel &&
       form.value.imageModel &&
       form.value.videoModel &&
-      isDurationLimitValid.value,
+      isDurationLimitValid.value &&
+      isSeedReady.value,
   );
 });
 
@@ -844,6 +910,19 @@ const previewResultMeta = computed(() => {
 });
 
 watch(
+  seedMode,
+  (mode, previousMode) => {
+    if (mode !== "auto") {
+      return;
+    }
+    selectedSeedSourceTaskId.value = "";
+    if (previousMode !== "auto") {
+      refreshAutoSeed();
+    }
+  },
+);
+
+watch(
   () => progressState.value.status,
   (status) => {
     if (status === "running") {
@@ -887,10 +966,10 @@ async function loadOptions() {
     const result = await fetchGenerationOptions();
     options.value = result;
     form.value.aspectRatio = (result.defaultAspectRatio as "9:16" | "16:9" | null) || form.value.aspectRatio;
-    form.value.textAnalysisModel = null;
-    form.value.visionModel = null;
-    form.value.imageModel = null;
-    form.value.videoModel = null;
+    form.value.textAnalysisModel = result.textAnalysisModels?.[0]?.value ?? null;
+    form.value.visionModel = result.visionModels?.[0]?.value ?? null;
+    form.value.imageModel = result.imageModels?.[0]?.value ?? null;
+    form.value.videoModel = result.videoModels?.[0]?.value ?? null;
     form.value.outputCount = "auto";
     form.value.videoDurationSeconds = "auto";
     if (!manualMaxDurationSeconds.value.trim()) {
@@ -902,7 +981,7 @@ async function loadOptions() {
         Math.max(MANUAL_DURATION_MIN_SECONDS, Math.min(MANUAL_DURATION_MAX_SECONDS, fallbackDuration)),
       );
     }
-    statusText.value = "参数已加载，请先选择模型再创建任务";
+    statusText.value = "参数已加载，已自动选择默认模型";
   } catch (error) {
     statusText.value = error instanceof Error ? error.message : "加载模型配置失败";
   } finally {
@@ -935,6 +1014,7 @@ function applySeedFromTask(task: TaskListItem) {
   if (typeof seed !== "number" || !Number.isFinite(seed)) {
     return;
   }
+  seedMode.value = "manual";
   seedInput.value = String(Math.trunc(seed));
   selectedSeedSourceTaskId.value = task.id;
   statusText.value = `已复用任务 ${task.id} 的高分种子：${Math.trunc(seed)}`;
@@ -983,42 +1063,6 @@ async function handleTextFileChange(event: Event) {
   }
 }
 
-async function handleGeneratePrompt() {
-  if (!form.value.title.trim()) {
-    statusText.value = "请先填写任务标题";
-    return;
-  }
-  if (!isDurationLimitValid.value) {
-    statusText.value = manualDurationValidationMessage.value;
-    return;
-  }
-  generatingPrompt.value = true;
-  statusText.value = "正在生成提示词...";
-  try {
-    const seconds = resolvePromptDurationSeconds();
-    const result = await generateCreativePrompt({
-      title: form.value.title,
-      aspectRatio: form.value.aspectRatio,
-      minDurationSeconds: seconds,
-      maxDurationSeconds: seconds,
-      introTemplate: "none",
-      outroTemplate: "none",
-      transcriptText: form.value.transcriptText || undefined,
-      sourceFileNames: uploadedText.value?.fileName ? [uploadedText.value.fileName] : [],
-      editingMode: "drama",
-    });
-    if (result.prompt?.trim()) {
-      form.value.creativePrompt = result.prompt.trim();
-      promptSource.value = `智能生成（${result.source || "模型"}）`;
-      statusText.value = "提示词生成成功";
-    }
-  } catch (error) {
-    statusText.value = error instanceof Error ? error.message : "提示词生成失败";
-  } finally {
-    generatingPrompt.value = false;
-  }
-}
-
 async function submitTask() {
   if (!isFormReady.value) {
     statusText.value = "请先补全任务参数并选择全部模型";
@@ -1031,6 +1075,10 @@ async function submitTask() {
   }
   if (durationLimitMode.value === "manual" && manualDurationValidationMessage.value) {
     statusText.value = manualDurationValidationMessage.value;
+    return;
+  }
+  if (seedMode.value === "manual" && seedValidationMessage.value) {
+    statusText.value = seedValidationMessage.value;
     return;
   }
 
@@ -1058,7 +1106,7 @@ async function submitTask() {
       videoModel: form.value.videoModel || null,
       videoSize: form.value.videoSize || null,
       outputCount: form.value.outputCount ?? "auto",
-      seed: parseSeed(seedInput.value),
+      seed: seedMode.value === "manual" ? parsedManualSeed.value : autoSeed.value,
       videoDurationSeconds: "auto",
       minDurationSeconds,
       maxDurationSeconds,
@@ -1130,7 +1178,7 @@ onUnmounted(() => {
   align-items: stretch;
   height: 100%;
   min-height: 0;
-  grid-template-columns: 320px minmax(0, 1fr) 300px;
+  grid-template-columns: 340px minmax(0, 1fr) 300px;
   grid-template-areas: "rail core trace";
 }
 
@@ -1151,7 +1199,14 @@ onUnmounted(() => {
 
 .studio-panel-core {
   grid-area: core;
-  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  display: flex;
+  flex-direction: column;
+  align-content: normal;
+}
+
+.studio-panel-core > * {
+  flex: 0 0 auto;
+  min-width: 0;
 }
 
 .studio-panel-trace {
@@ -1207,41 +1262,22 @@ onUnmounted(() => {
 }
 
 .model-rail {
-  position: relative;
   display: grid;
   gap: 14px;
-  padding-left: 18px;
+  padding-left: 0;
 }
 
 .model-rail__line {
-  position: absolute;
-  top: 12px;
-  bottom: 12px;
-  left: 5px;
-  width: 2px;
-  background: linear-gradient(180deg, rgba(176, 92, 255, 0.9), rgba(78, 219, 255, 0.88), rgba(176, 92, 255, 0.9));
-  box-shadow:
-    0 0 16px rgba(176, 92, 255, 0.24),
-    0 0 22px rgba(78, 219, 255, 0.2);
+  display: none;
 }
 
 .model-rail__item {
-  position: relative;
   display: grid;
   gap: 0.42rem;
 }
 
 .model-rail__dot {
-  position: absolute;
-  left: -18px;
-  top: 12px;
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: linear-gradient(180deg, #b05cff, #4edbff);
-  box-shadow:
-    0 0 0 3px rgba(8, 11, 18, 0.96),
-    0 0 18px rgba(120, 147, 255, 0.32);
+  display: none;
 }
 
 .model-rail__label {
@@ -1307,6 +1343,44 @@ onUnmounted(() => {
   font-size: 0.78rem;
 }
 
+.seed-control {
+  display: grid;
+  gap: 10px;
+  padding-top: 4px;
+}
+
+.seed-control__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.seed-control__head > span:first-child {
+  color: rgba(255, 255, 255, 0.86);
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.seed-auto {
+  display: grid;
+  gap: 10px;
+}
+
+.seed-auto__row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.seed-auto__value {
+  flex: 1 1 auto;
+}
+
+.seed-auto__refresh {
+  flex: 0 0 auto;
+}
+
 .seed-library__list {
   display: grid;
   gap: 8px;
@@ -1354,71 +1428,68 @@ onUnmounted(() => {
 
 .core-topbar {
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
-}
-
-.core-topbar__action {
-  flex: 1 1 240px;
-}
-
-.core-topbar__meta {
-  margin-left: auto;
+  justify-content: flex-start;
+  gap: 10px;
 }
 
 .core-textarea {
-  min-height: clamp(280px, 42vh, 520px);
+  min-height: clamp(320px, 48vh, 560px);
 }
 
 .core-prompt-textarea {
-  min-height: 138px;
+  min-height: clamp(220px, 34vh, 560px);
 }
 
 .core-compose {
   min-height: 0;
   display: grid;
-  align-content: start;
-  gap: 14px;
+  grid-template-columns: minmax(0, 1.55fr) minmax(260px, 0.95fr);
+  align-items: stretch;
+  gap: 16px;
+}
+
+.core-compose__field {
+  min-height: 0;
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+.core-compose__field .field-textarea {
+  height: 100%;
 }
 
 .core-footer {
   display: grid;
-  gap: 12px;
-}
-
-.core-bottom-grid {
-  display: grid;
-  gap: 12px;
-  grid-template-columns: minmax(180px, 0.72fr) minmax(0, 1.28fr);
-  align-items: start;
-}
-
-.core-status strong {
-  color: rgba(255, 255, 255, 0.95);
-  font-size: 0.98rem;
-}
-
-.core-status p {
-  margin: 0;
-  color: var(--text-body);
-  line-height: 1.65;
-}
-
-.core-status__meta {
-  color: var(--text-muted);
-  font-size: 0.74rem;
-  line-height: 1.5;
+  padding-top: 4px;
 }
 
 .core-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  align-items: center;
+  gap: 10px;
 }
 
 .core-actions__primary {
-  flex: 1 1 220px;
+  flex: 0 1 320px;
+  width: min(100%, 320px);
+  max-width: 320px;
+}
+
+.core-actions > .btn-secondary,
+.core-actions > .btn-ghost {
+  flex: 0 0 auto;
+}
+
+@media (max-width: 1180px) {
+  .core-compose {
+    grid-template-columns: 1fr;
+  }
+
+  .core-compose__field .field-textarea {
+    height: auto;
+  }
+
 }
 
 .studio-panel-trace {
@@ -1610,7 +1681,7 @@ onUnmounted(() => {
 
 @media (max-width: 1380px) {
   .task-studio {
-    grid-template-columns: minmax(300px, 0.95fr) minmax(0, 1.05fr);
+    grid-template-columns: minmax(340px, 0.95fr) minmax(0, 1.05fr);
     grid-template-areas:
       "rail core"
       "trace trace";
@@ -1636,6 +1707,17 @@ onUnmounted(() => {
 
   .core-actions {
     flex-direction: column;
+    align-items: stretch;
+  }
+
+  .core-actions__primary {
+    width: 100%;
+    max-width: none;
+  }
+
+  .seed-auto__row {
+    flex-direction: column;
+    align-items: stretch;
   }
 }
 

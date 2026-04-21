@@ -243,7 +243,6 @@ export interface GenerationVideoModelInfo {
   generationMode?: "t2v" | "i2v" | "vl" | null;
   supportedSizes?: string[];
   supportedDurations?: number[];
-  aliases?: string[];
 }
 
 /**
@@ -257,7 +256,6 @@ export interface GenerationTextAnalysisModelInfo {
   provider?: string | null;
   family?: string | null;
   supportsSeed?: boolean;
-  aliases?: string[];
 }
 
 /**
@@ -417,7 +415,6 @@ export interface AdminModelConfigModelItem {
   vendor: string;
   family: string;
   description: string;
-  fallbackModel: string;
   supportsSeed: boolean;
   supportsResponsesApi: boolean;
   prefersChatCompletionsForVision: boolean;
@@ -866,11 +863,9 @@ export interface TaskShowcaseResponse {
 export interface HealthModelSummary {
   provider: string | null;
   primary_model: string | null;
-  fallback_model?: string | null;
   text_analysis_provider?: string | null;
   text_analysis_model?: string | null;
   vision_model?: string | null;
-  vision_fallback_model?: string | null;
   endpoint_host?: string;
   api_key_present: boolean;
   ready: boolean;

@@ -19,7 +19,7 @@ class GenerationCatalogServiceTest {
     @Test
     void catalogFallsBackToBuiltInDefaults() {
         ModelRuntimePropertiesResolver modelResolver = mock(ModelRuntimePropertiesResolver.class);
-        GenerationCatalogService service = new GenerationCatalogService(modelResolver, new GenerationRunSupport(null, null, null));
+        GenerationCatalogService service = new GenerationCatalogService(modelResolver, new GenerationRunSupport(null, null));
         when(modelResolver.value(anyString(), anyString(), anyString())).thenAnswer(invocation -> invocation.getArgument(2));
         when(modelResolver.intValue(anyString(), anyString(), eq(0))).thenReturn(0);
         when(modelResolver.listModelsByKind(anyString())).thenReturn(List.of());
@@ -44,7 +44,7 @@ class GenerationCatalogServiceTest {
     @Test
     void catalogUsesConfiguredSectionsAndMatchesVideoCapabilities() {
         ModelRuntimePropertiesResolver modelResolver = mock(ModelRuntimePropertiesResolver.class);
-        GenerationCatalogService service = new GenerationCatalogService(modelResolver, new GenerationRunSupport(null, null, null));
+        GenerationCatalogService service = new GenerationCatalogService(modelResolver, new GenerationRunSupport(null, null));
         when(modelResolver.value("pipeline", "default_aspect_ratio", "9:16")).thenReturn("16:9");
         when(modelResolver.value("catalog.defaults", "style_preset", "cinematic")).thenReturn("neo");
         when(modelResolver.value("catalog.defaults", "video_size", "720*1280")).thenReturn("720*1280");

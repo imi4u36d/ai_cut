@@ -12,8 +12,9 @@
     >
       <div class="workspace-sidebar__top">
         <div class="workspace-sidebar__topbar">
-          <div class="sidebar-avatar">
-            <span>{{ avatarInitials }}</span>
+          <div class="sidebar-brand">
+            <img alt="煎豆 Logo" class="sidebar-brand__logo" src="/brand/jiandou-mark.svg" />
+            <span class="sidebar-brand__time">{{ currentTimeLabel }}</span>
           </div>
           <button
             class="sidebar-collapse-btn"
@@ -91,16 +92,24 @@
       <header class="workspace-header">
         <h1 class="workspace-header__title">{{ currentTitle }}</h1>
         <div class="workspace-header__meta">
-          <div class="workspace-brand">
-            <div class="workspace-brand__mark">
-              <span class="workspace-brand__mark-j">j</span>
-              <span class="workspace-brand__mark-d">d</span>
+          <div class="workspace-header__identity">
+            <div class="workspace-header__avatar">{{ avatarInitials }}</div>
+            <div class="workspace-header__user">
+              <span class="workspace-header__user-name">{{ currentUser?.displayName || "未登录" }}</span>
+              <span class="workspace-header__user-role">{{ currentUser?.username || "-" }} · {{ currentUser?.role || "-" }}</span>
             </div>
-            <span>煎豆工作台</span>
           </div>
-          <div class="workspace-header__user">
-            <span class="workspace-header__user-name">{{ currentUser?.displayName || currentUser?.username }}</span>
-            <span class="workspace-header__user-role">{{ currentUser?.role }}</span>
+          <div class="workspace-header__actions">
+            <a
+              v-if="isAdmin"
+              class="workspace-header__link"
+              :href="adminPortalUrl"
+            >
+              管理端
+            </a>
+            <button class="workspace-header__logout" type="button" @click="handleLogout">
+              退出登录
+            </button>
           </div>
         </div>
       </header>
@@ -116,7 +125,7 @@
 /**
  * 工作区组件。
  */
-import { computed, reactive, ref, watch } from "vue";
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { getRuntimeConfig } from "@/api/runtime-config";
 import { logoutAndClearSession, useAuthSessionState } from "@/auth/session";
@@ -225,6 +234,8 @@ function saveSidebarCollapsed(value: boolean) {
 const sidebarOpen = ref(false);
 const sidebarCollapsed = ref(loadSidebarCollapsed());
 const developerSettings = reactive(loadDeveloperSettings());
+const currentTime = ref(Date.now());
+let clockTimer: number | null = null;
 
 const currentUser = computed(() => authState.user.value);
 const isAdmin = computed(() => authState.isAdmin.value);
@@ -232,6 +243,13 @@ const avatarInitials = computed(() => {
   const source = currentUser.value?.displayName || currentUser.value?.username || "JD";
   return source.slice(0, 2).toUpperCase();
 });
+const currentTimeLabel = computed(() =>
+  new Intl.DateTimeFormat("zh-CN", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(new Date(currentTime.value)),
+);
 
 function isActive(target: string) {
   return route.path === target || route.path.startsWith(`${target}/`);
@@ -264,6 +282,19 @@ watch(
 
 watch(sidebarCollapsed, (value) => {
   saveSidebarCollapsed(value);
+});
+
+onMounted(() => {
+  clockTimer = window.setInterval(() => {
+    currentTime.value = Date.now();
+  }, 1000);
+});
+
+onBeforeUnmount(() => {
+  if (clockTimer !== null) {
+    window.clearInterval(clockTimer);
+    clockTimer = null;
+  }
 });
 </script>
 
@@ -319,11 +350,17 @@ watch(sidebarCollapsed, (value) => {
   border-right: 1px solid rgba(255, 255, 255, 0.08);
   background: linear-gradient(180deg, rgba(9, 11, 17, 0.92), rgba(5, 7, 11, 0.84));
   backdrop-filter: blur(24px);
+  transition:
+    width 220ms linear,
+    flex-basis 220ms linear,
+    padding 220ms linear,
+    box-shadow 220ms linear;
 }
 
 .workspace-sidebar__top {
   display: grid;
   gap: 22px;
+  justify-items: stretch;
 }
 
 .workspace-sidebar__topbar {
@@ -331,26 +368,40 @@ watch(sidebarCollapsed, (value) => {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+  transition: gap 220ms linear;
 }
 
-.sidebar-avatar {
-  width: 38px;
-  height: 38px;
-  border-radius: 999px;
-  display: grid;
-  place-items: center;
-  background:
-    linear-gradient(135deg, rgba(132, 82, 255, 0.9), rgba(76, 219, 255, 0.88));
-  box-shadow:
-    0 0 0 2px rgba(255, 255, 255, 0.06),
-    0 16px 34px rgba(97, 104, 255, 0.24);
+.sidebar-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  transition: gap 220ms linear, width 220ms linear;
 }
 
-.sidebar-avatar span {
-  font-size: 0.72rem;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  color: #fff;
+.sidebar-brand__logo {
+  display: block;
+  width: 48px;
+  height: 48px;
+  flex: 0 0 48px;
+  filter: drop-shadow(0 0 18px rgba(104, 128, 255, 0.22));
+  object-fit: contain;
+  transition: filter 320ms ease;
+}
+
+.sidebar-brand__time {
+  display: inline-flex;
+  color: rgba(255, 255, 255, 0.92);
+  font-size: 1rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  max-width: 72px;
+  overflow: hidden;
+  opacity: 1;
+  transition:
+    max-width 180ms linear,
+    opacity 160ms linear;
 }
 
 .sidebar-collapse-btn {
@@ -378,6 +429,7 @@ watch(sidebarCollapsed, (value) => {
 .sidebar-nav {
   display: grid;
   gap: 8px;
+  justify-items: stretch;
 }
 
 .sidebar-nav__item {
@@ -394,7 +446,10 @@ watch(sidebarCollapsed, (value) => {
     border-color 180ms ease,
     background 180ms ease,
     box-shadow 180ms ease,
-    transform 180ms ease;
+    padding 220ms linear,
+    gap 220ms linear,
+    width 220ms linear,
+    min-height 220ms linear;
 }
 
 .sidebar-nav__item:hover {
@@ -413,14 +468,30 @@ watch(sidebarCollapsed, (value) => {
 
 .sidebar-nav__icon {
   display: inline-flex;
+  align-items: center;
+  justify-content: center;
   width: 20px;
   height: 20px;
   color: currentColor;
+  flex: 0 0 20px;
 }
 
 .sidebar-nav__icon :deep(svg) {
-  width: 20px;
-  height: 20px;
+  width: 100%;
+  height: 100%;
+  aspect-ratio: 1 / 1;
+}
+
+.sidebar-nav__label {
+  display: inline-block;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  max-width: 120px;
+  opacity: 1;
+  transition:
+    max-width 180ms linear,
+    opacity 160ms linear;
 }
 
 .sidebar-nav__label {
@@ -430,6 +501,17 @@ watch(sidebarCollapsed, (value) => {
 .sidebar-dev {
   display: grid;
   gap: 12px;
+  max-height: 320px;
+  margin-top: 0;
+  overflow: hidden;
+  opacity: 1;
+  transform: none;
+  transform-origin: left bottom;
+  transition:
+    max-height 220ms linear,
+    opacity 160ms linear,
+    transform 220ms linear,
+    margin-top 220ms linear;
 }
 
 .sidebar-dev__line {
@@ -504,7 +586,7 @@ watch(sidebarCollapsed, (value) => {
 }
 
 .sidebar-user-card {
-  display: grid;
+  display: none;
   gap: 12px;
   padding: 14px;
   border-radius: 16px;
@@ -606,6 +688,26 @@ watch(sidebarCollapsed, (value) => {
   background: rgba(255, 255, 255, 0.03);
 }
 
+.workspace-header__identity {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.workspace-header__avatar {
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: linear-gradient(135deg, rgba(255, 169, 77, 0.9), rgba(71, 193, 255, 0.88));
+  color: #06111a;
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
 .workspace-header__user {
   display: grid;
   justify-items: start;
@@ -624,30 +726,30 @@ watch(sidebarCollapsed, (value) => {
   font-size: 0.7rem;
 }
 
-.workspace-brand {
-  display: inline-flex;
+.workspace-header__actions {
+  display: flex;
   align-items: center;
   gap: 8px;
-  color: rgba(255, 255, 255, 0.92);
-  font-size: 0.8rem;
-  font-weight: 500;
 }
 
-.workspace-brand__mark {
+.workspace-header__link,
+.workspace-header__logout {
+  min-height: 34px;
   display: inline-flex;
-  align-items: flex-end;
-  gap: 1px;
-  font-size: 1.08rem;
-  font-weight: 800;
-  line-height: 1;
+  align-items: center;
+  justify-content: center;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(255, 255, 255, 0.84);
+  font-size: 0.76rem;
+  font-weight: 700;
+  white-space: nowrap;
 }
 
-.workspace-brand__mark-j {
-  color: #a55bff;
-}
-
-.workspace-brand__mark-d {
-  color: #55d9ff;
+.workspace-header__logout {
+  cursor: pointer;
 }
 
 .workspace-content {
@@ -666,23 +768,57 @@ watch(sidebarCollapsed, (value) => {
 
 .workspace-sidebar-collapsed .workspace-sidebar__top {
   gap: 20px;
+  justify-items: center;
 }
 
 .workspace-sidebar-collapsed .workspace-sidebar__topbar {
   flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 12px;
+}
+
+.workspace-sidebar-collapsed .sidebar-brand {
+  justify-content: center;
+  width: 48px;
+  gap: 0;
+}
+
+.workspace-sidebar-collapsed .sidebar-brand__time {
+  max-width: 0;
+  opacity: 0;
+}
+
+.workspace-sidebar-collapsed .sidebar-collapse-btn {
+  width: 48px;
+  height: 48px;
+  align-self: center;
+}
+
+.workspace-sidebar-collapsed .sidebar-nav {
+  justify-items: center;
 }
 
 .workspace-sidebar-collapsed .sidebar-nav__item {
   justify-content: center;
+  justify-self: center;
+  width: 48px;
+  min-height: 48px;
   padding: 0;
+  gap: 0;
 }
 
 .workspace-sidebar-collapsed .sidebar-nav__label {
-  display: none;
+  max-width: 0;
+  opacity: 0;
 }
 
 .workspace-sidebar-collapsed .sidebar-dev {
-  display: none;
+  max-height: 0;
+  opacity: 0;
+  margin-top: 0;
+  pointer-events: none;
+  transform: none;
 }
 
 .workspace-mobile-bar {
@@ -729,19 +865,39 @@ watch(sidebarCollapsed, (value) => {
 
   .workspace-sidebar-collapsed .workspace-sidebar__topbar {
     flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  .workspace-sidebar-collapsed .workspace-sidebar__top,
+  .workspace-sidebar-collapsed .sidebar-nav {
+    justify-items: stretch;
   }
 
   .workspace-sidebar-collapsed .sidebar-nav__item {
     justify-content: flex-start;
+    justify-self: stretch;
+    width: auto;
+    min-height: 46px;
     padding: 0 12px;
   }
 
-  .workspace-sidebar-collapsed .sidebar-nav__label,
   .workspace-sidebar-collapsed .sidebar-nav__label {
-    display: inline;
+    max-width: 120px;
+    opacity: 1;
   }
 
   .workspace-sidebar-collapsed .sidebar-dev {
+    display: grid;
+    max-height: 320px;
+    opacity: 1;
+    margin-top: 0;
+    pointer-events: auto;
+    transform: none;
+  }
+
+  .sidebar-user-card {
     display: grid;
   }
 

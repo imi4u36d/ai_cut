@@ -14,7 +14,7 @@ class TextModelTransportPolicyTest {
     @Test
     void capabilityChecksReflectProfileFlags() {
         ModelRuntimeProfile profile = new ModelRuntimeProfile(
-            new TextProviderConfig("text", "gpt-4.1", "openai", "gpt-4.1", "", "key", "https://api.example.com/v1", 30, 0.2, 1000, "cfg"),
+            new TextProviderConfig("text", "gpt-4.1", "openai", "gpt-4.1", "key", "https://api.example.com/v1", 30, 0.2, 1000, "cfg"),
             new TextProviderCapabilities(true, true, true)
         );
 

@@ -78,7 +78,6 @@ class OpenAiCompatibleTextModelProviderTest {
                 "gpt-text",
                 "openai",
                 "gpt-text",
-                "",
                 "k",
                 "https://api.example.com/v1",
                 60,
@@ -94,10 +93,9 @@ class OpenAiCompatibleTextModelProviderTest {
         return new ModelRuntimeProfile(
             new TextProviderConfig(
                 "vision",
-                "qwen3-vl-flash-2026-01-22",
+                "qwen3-vl-flash",
                 "qwen",
                 "qwen3-vl-flash-2026-01-22",
-                "",
                 "k",
                 "https://dashscope.aliyuncs.com/compatible-mode/v1",
                 60,

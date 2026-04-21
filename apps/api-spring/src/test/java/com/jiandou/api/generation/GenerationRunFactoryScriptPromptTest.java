@@ -151,7 +151,6 @@ class GenerationRunFactoryScriptPromptTest {
         ModelRuntimeProfile textProfile = new ModelRuntimeProfile(
             "openai",
             "gpt-text",
-            "",
             "k",
             "https://api.example.com/v1",
             60,
@@ -199,7 +198,7 @@ class GenerationRunFactoryScriptPromptTest {
             }
         };
         LocalMediaArtifactService localMediaArtifactService = new LocalMediaArtifactService(storageProperties(tempDir), "ffmpeg");
-        GenerationRunSupport support = new GenerationRunSupport(localMediaArtifactService, modelResolver, textModelProviderRegistry);
+        GenerationRunSupport support = new GenerationRunSupport(localMediaArtifactService, textModelProviderRegistry);
         ImageModelProviderRegistry imageModelProviderRegistry = new ImageModelProviderRegistry(java.util.List.of());
         VideoProviderTransport videoProviderTransport = new VideoProviderTransport(new ObjectMapper());
         VideoModelProviderRegistry videoModelProviderRegistry = new VideoModelProviderRegistry(java.util.List.of(

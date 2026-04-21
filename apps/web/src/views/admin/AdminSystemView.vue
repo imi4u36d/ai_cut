@@ -29,23 +29,11 @@
           </label>
           <label class="grid gap-1 text-xs text-slate-600">
             级别
-            <select v-model="levelFilter" class="admin-field">
-              <option value="">全部</option>
-              <option value="ERROR">ERROR</option>
-              <option value="WARN">WARN</option>
-              <option value="INFO">INFO</option>
-            </select>
+            <AppSelect v-model="levelFilter" :options="levelFilterOptions" variant="admin" />
           </label>
           <label class="grid gap-1 text-xs text-slate-600">
             阶段
-            <select v-model="stageFilter" class="admin-field">
-              <option value="">全部</option>
-              <option value="api">api</option>
-              <option value="worker">worker</option>
-              <option value="planning">planning</option>
-              <option value="render">render</option>
-              <option value="llm">llm</option>
-            </select>
+            <AppSelect v-model="stageFilter" :options="stageFilterOptions" variant="admin" />
           </label>
           <label class="grid gap-1 text-xs text-slate-600">
             关键词
@@ -99,7 +87,9 @@
  */
 import { onMounted, ref, watch } from "vue";
 import { fetchAdminTraces } from "@/api/admin";
+import AppSelect from "@/components/common/AppSelect.vue";
 import ModelStatusStrip from "@/components/ModelStatusStrip.vue";
+import type { AppSelectOption } from "@/components/common/app-select";
 import type { AdminTraceEvent } from "@/types";
 
 const traces = ref<AdminTraceEvent[]>([]);
@@ -110,6 +100,20 @@ const levelFilter = ref("");
 const stageFilter = ref("");
 const keywordFilter = ref("");
 let refreshDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+const levelFilterOptions: AppSelectOption[] = [
+  { label: "全部", value: "" },
+  { label: "ERROR", value: "ERROR" },
+  { label: "WARN", value: "WARN" },
+  { label: "INFO", value: "INFO" },
+];
+const stageFilterOptions: AppSelectOption[] = [
+  { label: "全部", value: "" },
+  { label: "api", value: "api" },
+  { label: "worker", value: "worker" },
+  { label: "planning", value: "planning" },
+  { label: "render", value: "render" },
+  { label: "llm", value: "llm" },
+];
 
 /**
  * 格式化时间。

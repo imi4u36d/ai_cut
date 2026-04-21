@@ -67,7 +67,7 @@ class SeedreamImageModelProviderTest {
                 "image",
                 "seedream-4.5",
                 "seedream",
-                "seedream-4.5",
+                "doubao-seedream-4-5-251128",
                 "k",
                 "https://api.example.com/v1/images",
                 "",

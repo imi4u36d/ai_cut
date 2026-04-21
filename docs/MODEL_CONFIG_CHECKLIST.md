@@ -8,6 +8,7 @@
 - Spring 后端会在运行时读取该文件中的 `model` 节点
 - 前端不直接配置 `provider`、`key`、`endpoint`
 - 前端只传业务层模型名，例如 `qwen3.6-plus`、`Doubao-Seedream-4.5`、`seedance-1.5-pro`
+- 如果上游真实模型名和业务层模型名不同，用 `provider_model` 配置真实值，不要在代码里做版本映射
 
 ## 2. 配置文件结构
 
@@ -45,12 +46,22 @@ model:
     "qwen3.6-plus":
       provider: "qwen"
       kind: "text"
+    "qwen3.6-flash":
+      provider: "qwen"
+      kind: "text"
+      provider_model: "qwen3.6-flash-2026-04-16"
+    "qwen3-vl-flash":
+      provider: "qwen"
+      kind: "vision"
+      provider_model: "qwen3-vl-flash-2026-01-22"
     "Doubao-Seedream-4.5":
       provider: "seedream"
       kind: "image"
+      provider_model: "doubao-seedream-4-5-251128"
     "seedance-1.5-pro":
       provider: "seedance"
       kind: "video"
+      provider_model: "doubao-seedance-1-5-pro-251215"
 ```
 
 ## 3. 必填参数清单
@@ -68,8 +79,8 @@ model:
 
 常用可选项：
 
-- `model.models.<模型名>.fallback_model`
 - `model.models.<模型名>.supports_seed`
+- `model.models.<模型名>.provider_model`
 - `model.models.<模型名>.vision_use_chat_completions`
 - `model.models.<模型名>.timeout_seconds`
 - `model.models.<模型名>.temperature`
@@ -82,6 +93,7 @@ model:
 - 文本模型只有在 `api_key` 和 `base_url` 都存在时才算 ready
 - `base_url` 这里配置的是基地址，不是最终接口地址
 - 运行时会自动拼接成 `/responses` 或 `/chat/completions`
+- `provider_model` 用于声明真正传给上游 provider 的模型名，适合把上游小版本号留在配置层
 
 ### 3.2 图片模型
 
@@ -97,6 +109,7 @@ model:
 常用可选项：
 
 - `model.models.<模型名>.supports_seed`
+- `model.models.<模型名>.provider_model`
 - `model.models.<模型名>.timeout_seconds`
 
 说明：
@@ -104,6 +117,7 @@ model:
 - 当前仓库实际实现的图片 provider 是 `seedream`
 - 图片模型要求 `api_key` 和 `base_url` 都存在
 - 图片模型的 `base_url` 是实际提交图片生成请求的地址，不会自动补 `/responses`
+- `provider_model` 建议直接写上游真实模型 ID
 
 ### 3.3 视频模型
 
@@ -120,6 +134,7 @@ model:
 常用可选项：
 
 - `model.models.<模型名>.supports_seed`
+- `model.models.<模型名>.provider_model`
 - `model.models.<模型名>.generation_mode`
 - `model.models.<模型名>.supported_sizes`
 - `model.models.<模型名>.supported_durations`
@@ -137,6 +152,7 @@ model:
 - `task_base_url` 用于查询任务状态
 - 对 `wan` 这类 DashScope 视频接口，如果未手动配置 `task_base_url`，代码会尝试从 `base_url` 推导
 - 对 `seedance`，建议明确写死 `task_base_url`
+- `provider_model` 建议写成上游真实模型 ID，避免把日期或小版本号暴露到业务层 key
 
 ## 4. 当前仓库已声明的 provider
 
@@ -164,7 +180,7 @@ model:
 
 ### 视觉模型
 
-- `qwen3-vl-flash-2026-01-22`
+- `qwen3-vl-flash`
 
 ### 图片模型
 
@@ -213,7 +229,6 @@ model:
 文本模型支持以下全局环境变量：
 
 - `JIANDOU_MODEL_PROVIDER`
-- `JIANDOU_MODEL_FALLBACK`
 - `JIANDOU_MODEL_API_KEY`
 - `JIANDOU_MODEL_BASE_URL`
 - `JIANDOU_MODEL_ENDPOINT`
@@ -343,18 +358,21 @@ model:
       provider: "qwen"
       kind: "text"
       label: "Qwen 3.6 Plus"
-    "qwen3-vl-flash-2026-01-22":
+    "qwen3-vl-flash":
       provider: "qwen"
       kind: "vision"
-      label: "Qwen 3 VL Flash 2026-01-22"
+      label: "Qwen 3 VL Flash"
+      provider_model: "qwen3-vl-flash-2026-01-22"
     "Doubao-Seedream-4.5":
       provider: "seedream"
       kind: "image"
       label: "Doubao Seedream 4.5"
+      provider_model: "doubao-seedream-4-5-251128"
     "seedance-1.5-pro":
       provider: "seedance"
       kind: "video"
       label: "Seedance 1.5 Pro"
+      provider_model: "doubao-seedance-1-5-pro-251215"
       generation_mode: "i2v"
       supported_sizes: "480*854,854*480,720*1280,1280*720"
       supported_durations: "4,6,8,10,12"
@@ -367,10 +385,10 @@ model:
 - `config/app.yml` 已被正确加载
 - `model.models` 中存在你要在前端选择的模型
 - 模型的 `provider` 能在 `model.providers` 中找到对应段
+- 如果业务名和上游名不同，模型项上已配置 `provider_model`
 - 文本模型已配置 `api_key` 和 `base_url`
 - 图片模型已配置 `api_key` 和 `base_url`
 - 视频模型已配置 `api_key`、`base_url`、`task_base_url`
 - 如果用了环境变量覆盖，变量名和 provider 名完全一致
 - 若视觉模型请求异常，检查是否需要切换为 Chat Completions
 - 若视频任务能提交但查不到状态，优先检查 `task_base_url`
-

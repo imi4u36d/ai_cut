@@ -32,7 +32,6 @@ class TextModelProviderRegistryTest {
                 "qwen-plus",
                 "qwen",
                 "qwen-plus",
-                "",
                 "k",
                 "https://api.example.com/v1",
                 60,

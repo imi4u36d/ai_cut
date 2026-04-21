@@ -110,7 +110,6 @@ public record AdminModelConfigResponse(
      * @param vendor vendor 值
      * @param family family 值
      * @param description 描述值
-     * @param fallbackModel 兜底模型值
      * @param supportsSeed 是否支持 seed
      * @param supportsResponsesApi 是否支持 responses api
      * @param prefersChatCompletionsForVision 是否视觉偏好 chat completions
@@ -131,7 +130,6 @@ public record AdminModelConfigResponse(
         String vendor,
         String family,
         String description,
-        String fallbackModel,
         boolean supportsSeed,
         boolean supportsResponsesApi,
         boolean prefersChatCompletionsForVision,

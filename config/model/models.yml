@@ -4,7 +4,7 @@ model:
       provider: "qwen"
       vendor: "aliyun"
       kind: "text"
-      label: "Qwen 3.6 Plus"
+      label: "qwen3.6-plus"
       family: "qwen"
       capabilities:
         - "text_analysis"
@@ -12,19 +12,19 @@ model:
         - "creative_prompt"
         - "script_generation"
       description: "阿里 Qwen 文本模型。"
-      fallback_model: "qwen3.5-flash"
-    "qwen-plus":
+    "qwen3.6-flash":
       provider: "qwen"
       vendor: "aliyun"
       kind: "text"
-      label: "Qwen Plus"
+      label: "qwen3.6-flash"
+      provider_model: "qwen3.6-flash-2026-04-16"
       family: "qwen"
       capabilities:
         - "text_analysis"
         - "planner_fusion"
         - "creative_prompt"
         - "script_generation"
-      description: "Qwen 通用文本模型。"
+      description: "Qwen 通用文本模型 qwen3.6-flash。"
     "qwen3.5-flash":
       provider: "qwen"
       vendor: "aliyun"
@@ -37,11 +37,12 @@ model:
         - "creative_prompt"
         - "script_generation"
       description: "Qwen 通用文本模型 qwen3.5-flash。"
-    "qwen3-vl-flash-2026-01-22":
+    "qwen3-vl-flash":
       provider: "qwen"
       vendor: "aliyun"
       kind: "vision"
-      label: "Qwen 3 VL Flash 2026-01-22"
+      label: "Qwen 3 VL Flash"
+      provider_model: "qwen3-vl-flash-2026-01-22"
       family: "qwen-vl"
       supports_seed: true
       capabilities:
@@ -53,6 +54,7 @@ model:
       vendor: "volcengine"
       kind: "image"
       label: "Doubao Seedream 4.5"
+      provider_model: "doubao-seedream-4-5-251128"
       family: "seedream"
       capabilities:
         - "image_generation"
@@ -62,6 +64,7 @@ model:
       vendor: "volcengine"
       kind: "video"
       label: "Seedance 1.5 Pro"
+      provider_model: "doubao-seedance-1-5-pro-251215"
       family: "seedance"
       supports_seed: true
       capabilities:

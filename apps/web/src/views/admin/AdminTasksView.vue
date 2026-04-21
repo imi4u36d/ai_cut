@@ -37,27 +37,12 @@
         </label>
         <label class="grid gap-1 text-xs text-slate-600">
           状态
-          <select v-model="statusFilter" class="admin-field">
-            <option value="all">全部状态</option>
-            <option value="PENDING">排队中</option>
-            <option value="PAUSED">已暂停</option>
-            <option value="ANALYZING">分析中</option>
-            <option value="PLANNING">编排中</option>
-            <option value="RENDERING">渲染中</option>
-            <option value="COMPLETED">已完成</option>
-            <option value="FAILED">失败</option>
-          </select>
+          <AppSelect v-model="statusFilter" :options="statusFilterOptions" variant="admin" />
         </label>
-          <label class="grid gap-1 text-xs text-slate-600">
-            排序
-            <select v-model="sortMode" class="admin-field">
-              <option value="updated_desc">最近更新</option>
-              <option value="created_desc">最新创建</option>
-              <option value="progress_desc">进度优先</option>
-              <option value="effect_rating_desc">评分最高</option>
-              <option value="status_desc">状态优先</option>
-            </select>
-          </label>
+        <label class="grid gap-1 text-xs text-slate-600">
+          排序
+          <AppSelect v-model="sortMode" :options="sortModeOptions" variant="admin" />
+        </label>
       </div>
 
       <div class="mt-4 flex flex-wrap items-center gap-2 text-sm">
@@ -201,6 +186,8 @@
  */
 import { computed, onMounted, ref, watch } from "vue";
 import { bulkDeleteAdminTasks, bulkRetryAdminTasks, deleteAdminTask, fetchAdminTasks, retryAdminTask } from "@/api/admin";
+import AppSelect from "@/components/common/AppSelect.vue";
+import type { AppSelectOption } from "@/components/common/app-select";
 import { usePolling } from "@/composables/usePolling";
 import type { TaskListItem, TaskStatus } from "@/types";
 
@@ -215,6 +202,23 @@ const statusFilter = ref<TaskStatus | "all">("all");
 const sortMode = ref<"updated_desc" | "created_desc" | "progress_desc" | "status_desc" | "effect_rating_desc">("updated_desc");
 const selectedIds = ref<string[]>([]);
 let refreshDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+const statusFilterOptions: AppSelectOption[] = [
+  { label: "全部状态", value: "all" },
+  { label: "排队中", value: "PENDING" },
+  { label: "已暂停", value: "PAUSED" },
+  { label: "分析中", value: "ANALYZING" },
+  { label: "编排中", value: "PLANNING" },
+  { label: "渲染中", value: "RENDERING" },
+  { label: "已完成", value: "COMPLETED" },
+  { label: "失败", value: "FAILED" },
+];
+const sortModeOptions: AppSelectOption[] = [
+  { label: "最近更新", value: "updated_desc" },
+  { label: "最新创建", value: "created_desc" },
+  { label: "进度优先", value: "progress_desc" },
+  { label: "评分最高", value: "effect_rating_desc" },
+  { label: "状态优先", value: "status_desc" },
+];
 
 const primaryButtonClass = "admin-btn-primary";
 const secondaryButtonClass = "admin-btn-secondary";

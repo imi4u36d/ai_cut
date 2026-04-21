@@ -39,6 +39,11 @@
   --shadow-raise-soft: var(--shadow-soft);
   --shadow-pressed: inset 0 1px 0 rgba(255, 255, 255, 0.05);
   --shadow-accent: var(--shadow-glow);
+  --scrollbar-track: rgba(255, 255, 255, 0.05);
+  --scrollbar-thumb: rgba(146, 176, 255, 0.42);
+  --scrollbar-thumb-hover: rgba(176, 92, 255, 0.58);
+  --select-arrow:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 14 14' fill='none'%3E%3Cpath d='M3 5.25L7 9.25L11 5.25' stroke='%23D7E8FF' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
 }
 
 html {
@@ -69,6 +74,34 @@ a {
 
 * {
   box-sizing: border-box;
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+}
+
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+*::-webkit-scrollbar-track {
+  background: var(--scrollbar-track);
+  border-radius: 999px;
+}
+
+*::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: linear-gradient(180deg, rgba(176, 92, 255, 0.76), rgba(78, 219, 255, 0.72));
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.08),
+    0 0 14px rgba(120, 140, 255, 0.16);
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, rgba(190, 114, 255, 0.88), rgba(96, 226, 255, 0.82));
+}
+
+*::-webkit-scrollbar-corner {
+  background: transparent;
 }
 
 button,
@@ -118,6 +151,7 @@ textarea {
   .page-header,
   .empty-state {
     position: relative;
+    scrollbar-gutter: stable;
     border: 1px solid var(--surface-border);
     background:
       linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.02)),
@@ -255,6 +289,28 @@ textarea {
       background 180ms ease;
   }
 
+  .field-select {
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    cursor: pointer;
+    color-scheme: dark;
+    padding-right: 3rem;
+    background-image:
+      var(--select-arrow),
+      linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.02)),
+      rgba(9, 12, 18, 0.96);
+    background-repeat: no-repeat, no-repeat, no-repeat;
+    background-position:
+      right 1rem center,
+      0 0,
+      0 0;
+    background-size:
+      14px 14px,
+      100% 100%,
+      100% 100%;
+  }
+
   .field-input-compact,
   .field-select-compact,
   .field-textarea-compact {
@@ -268,6 +324,14 @@ textarea {
   .field-input-compact,
   .field-select-compact {
     min-height: 44px;
+  }
+
+  .field-select-compact {
+    padding-right: 2.85rem;
+    background-position:
+      right 0.92rem center,
+      0 0,
+      0 0;
   }
 
   .field-textarea-compact {
@@ -291,6 +355,30 @@ textarea {
 
   .field-textarea {
     min-height: 128px;
+  }
+
+  .field-select:hover {
+    border-color: rgba(145, 180, 255, 0.3);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.05),
+      0 12px 28px rgba(0, 0, 0, 0.2),
+      0 0 18px rgba(78, 219, 255, 0.06);
+  }
+
+  .field-select:disabled {
+    cursor: not-allowed;
+    color: rgba(255, 255, 255, 0.42);
+    border-color: rgba(255, 255, 255, 0.08);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.03),
+      0 8px 18px rgba(0, 0, 0, 0.12);
+    opacity: 0.78;
+  }
+
+  .field-select option,
+  .field-select optgroup {
+    background: #10141e;
+    color: var(--text-strong);
   }
 
   .btn-primary,
@@ -339,8 +427,12 @@ textarea {
   }
 
   .btn-primary {
-    border-color: rgba(170, 145, 255, 0.36);
-    background: linear-gradient(90deg, #b05cff 0%, #4edbff 100%);
+    border-color: transparent;
+    background:
+      linear-gradient(90deg, #b05cff 0%, #4edbff 100%) padding-box,
+      linear-gradient(90deg, rgba(176, 92, 255, 0.42), rgba(78, 219, 255, 0.34)) border-box;
+    background-clip: padding-box, border-box;
+    background-origin: padding-box, border-box;
     color: #081018;
     box-shadow:
       0 0 0 1px rgba(255, 255, 255, 0.08),

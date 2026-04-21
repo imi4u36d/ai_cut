@@ -19,10 +19,7 @@
       <div class="grid gap-4 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,0.9fr)_auto]">
         <label class="grid gap-2 text-sm text-slate-700">
           邀请角色
-          <select v-model="inviteRole" class="rounded-2xl border border-slate-300 bg-white px-4 py-3">
-            <option value="USER">USER</option>
-            <option value="ADMIN">ADMIN</option>
-          </select>
+          <AppSelect v-model="inviteRole" :options="inviteRoleOptions" variant="admin" />
         </label>
         <label class="grid gap-2 text-sm text-slate-700">
           过期时间
@@ -130,6 +127,8 @@
  */
 import { onMounted, ref } from "vue";
 import { createAdminInvite, fetchAdminInvites, revokeAdminInvite } from "@/api/admin";
+import AppSelect from "@/components/common/AppSelect.vue";
+import type { AppSelectOption } from "@/components/common/app-select";
 import type { AdminInvite } from "@/types";
 
 const invites = ref<AdminInvite[]>([]);
@@ -140,6 +139,10 @@ const errorMessage = ref("");
 const successMessage = ref("");
 const inviteRole = ref<"USER" | "ADMIN">("USER");
 const expiresAtInput = ref("");
+const inviteRoleOptions: AppSelectOption[] = [
+  { label: "USER", value: "USER" },
+  { label: "ADMIN", value: "ADMIN" },
+];
 
 function formatDateTime(value?: string | null) {
   if (!value) {

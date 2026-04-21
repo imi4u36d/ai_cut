@@ -48,7 +48,6 @@ class GenerationRunFactoryImagePromptPassthroughTest {
         ModelRuntimeProfile textProfile = new ModelRuntimeProfile(
             "openai",
             "gpt-text",
-            "",
             "k",
             "https://api.example.com/v1",
             60,
@@ -59,7 +58,6 @@ class GenerationRunFactoryImagePromptPassthroughTest {
         ModelRuntimeProfile visionProfile = new ModelRuntimeProfile(
             "openai",
             "gpt-vision",
-            "",
             "k",
             "https://api.example.com/v1",
             60,
@@ -182,7 +180,7 @@ class GenerationRunFactoryImagePromptPassthroughTest {
                 );
             }
         };
-        GenerationRunSupport support = new GenerationRunSupport(localMediaArtifactService, modelResolver, textModelProviderRegistry);
+        GenerationRunSupport support = new GenerationRunSupport(localMediaArtifactService, textModelProviderRegistry);
         ImageModelProviderRegistry imageModelProviderRegistry = new ImageModelProviderRegistry(java.util.List.of(
             fakeImageModelProvider
         ));

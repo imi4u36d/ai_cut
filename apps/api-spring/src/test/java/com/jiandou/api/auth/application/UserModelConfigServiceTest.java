@@ -39,7 +39,7 @@ class UserModelConfigServiceTest {
             Map.of("value", "seedance-v1", "label", "Seedance", "provider", "seedance", "vendor", "volcengine")
         ));
         when(resolver.resolveTextProfile("qwen-plus", 7L)).thenReturn(new ModelRuntimeProfile(
-            new TextProviderConfig("text", "qwen-plus", "qwen", "qwen-plus", "", "user-secret", "https://dashscope.aliyuncs.com/compatible-mode/v1", 30, 0.2, 2000, "user-db"),
+            new TextProviderConfig("text", "qwen-plus", "qwen", "qwen-plus", "user-secret", "https://dashscope.aliyuncs.com/compatible-mode/v1", 30, 0.2, 2000, "user-db"),
             new TextProviderCapabilities(false, true, false)
         ));
         when(resolver.resolveMediaProfile("seedance-v1", GenerationModelKinds.VIDEO, 7L)).thenReturn(new MediaProviderProfile(
@@ -78,7 +78,7 @@ class UserModelConfigServiceTest {
         when(resolver.listModelsByKind(GenerationModelKinds.IMAGE)).thenReturn(List.of());
         when(resolver.listModelsByKind(GenerationModelKinds.VIDEO)).thenReturn(List.of());
         when(resolver.resolveTextProfile("qwen-plus", 7L)).thenReturn(new ModelRuntimeProfile(
-            new TextProviderConfig("text", "qwen-plus", "qwen", "qwen-plus", "", "", "https://dashscope.aliyuncs.com/compatible-mode/v1", 30, 0.2, 2000, "file"),
+            new TextProviderConfig("text", "qwen-plus", "qwen", "qwen-plus", "", "https://dashscope.aliyuncs.com/compatible-mode/v1", 30, 0.2, 2000, "file"),
             new TextProviderCapabilities(false, true, false)
         ));
         when(resolver.listSections("model.providers")).thenReturn(List.of(

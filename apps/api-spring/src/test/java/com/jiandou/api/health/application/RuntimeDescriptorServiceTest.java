@@ -100,7 +100,7 @@ class RuntimeDescriptorServiceTest {
 
     private ModelRuntimeProfile readyTextProfile(String modelName) {
         return new ModelRuntimeProfile(
-            new TextProviderConfig("text", modelName, "openai", modelName, "", "key", "https://api.example.com/v1", 30, 0.2, 1000, "cfg"),
+            new TextProviderConfig("text", modelName, "openai", modelName, "key", "https://api.example.com/v1", 30, 0.2, 1000, "cfg"),
             new TextProviderCapabilities(true, true, false)
         );
     }

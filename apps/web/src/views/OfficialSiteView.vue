@@ -8,10 +8,7 @@
 
       <header class="official-site__nav reveal-on-scroll is-visible">
         <RouterLink class="official-brand" to="/">
-          <span class="official-brand__mark">
-            <span>j</span>
-            <span>d</span>
-          </span>
+          <img alt="煎豆 Logo" class="official-brand__logo" src="/brand/jiandou-mark.svg" />
           <span>煎豆工作台</span>
         </RouterLink>
 
@@ -49,6 +46,7 @@
             <span class="hero-section__title-text">{{ typedHeadline }}</span>
             <span class="hero-section__caret" aria-hidden="true"></span>
           </h1>
+          <p class="hero-section__slogan">把灵感煎成镜头</p>
 
           <div class="hero-section__actions">
             <RouterLink class="hero-button hero-button-primary" to="/generate">开始创作</RouterLink>
@@ -222,9 +220,9 @@
             <div class="site-footer__top">
               <div>
                 <strong>煎豆</strong>
-                <p>从提示词到可发布视频的完整内容生产流程。</p>
+                <p>把灵感煎成镜头，把流程沉淀成产能。</p>
               </div>
-              <div class="site-footer__mark" aria-hidden="true"></div>
+              <img alt="" class="site-footer__logo" src="/brand/jiandou-mark.svg" aria-hidden="true" />
             </div>
 
             <div class="site-footer__links">
@@ -640,18 +638,11 @@ onBeforeUnmount(() => {
   font-weight: 800;
 }
 
-.official-brand__mark {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 1px;
+.official-brand__logo {
   width: 28px;
   height: 28px;
-  border-radius: 10px;
-  background: linear-gradient(135deg, rgba(182, 111, 255, 0.18), rgba(97, 223, 255, 0.18));
-  color: #7f53e2;
-  font-size: 0.92rem;
-  line-height: 1;
+  flex: 0 0 28px;
+  filter: drop-shadow(0 6px 14px rgba(112, 96, 255, 0.16));
 }
 
 .official-site__nav-links {
@@ -831,6 +822,14 @@ onBeforeUnmount(() => {
   max-width: 13ch;
   font-size: clamp(3rem, 6vw, 4.9rem);
   line-height: 0.98;
+}
+
+.hero-section__slogan {
+  margin: 14px 0 0;
+  font-size: 1rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: #5d6475;
 }
 
 .hero-section__title-text {
@@ -1450,14 +1449,10 @@ onBeforeUnmount(() => {
   font-size: 1.4rem;
 }
 
-.site-footer__mark {
+.site-footer__logo {
   width: 70px;
   height: 70px;
-  border-radius: 26px;
-  background:
-    radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.92), rgba(255, 255, 255, 0.06) 54%),
-    linear-gradient(135deg, rgba(167, 112, 255, 0.32), rgba(91, 214, 255, 0.26));
-  clip-path: polygon(50% 0%, 70% 30%, 100% 50%, 70% 70%, 50% 100%, 30% 70%, 0% 50%, 30% 30%);
+  filter: drop-shadow(0 12px 24px rgba(112, 96, 255, 0.14));
   animation: footer-pulse 4s ease-in-out infinite;
 }
 
@@ -1754,7 +1749,7 @@ onBeforeUnmount(() => {
   .hero-section::after,
   .showcase-card__map::before,
   .showcase-card__map::after,
-  .site-footer__mark,
+  .site-footer__logo,
   .floating-panel,
   .hero-section__caret {
     animation: none !important;

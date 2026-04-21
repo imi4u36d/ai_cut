@@ -7,12 +7,10 @@ import com.jiandou.api.generation.exception.GenerationNotImplementedException;
 import com.jiandou.api.generation.exception.GenerationProviderException;
 import com.jiandou.api.generation.runtime.MediaProviderProfile;
 import com.jiandou.api.generation.runtime.ModelRuntimeProfile;
-import com.jiandou.api.generation.runtime.ModelRuntimePropertiesResolver;
 import com.jiandou.api.media.LocalMediaArtifactService;
 import com.jiandou.api.media.LocalMediaArtifactService.ImageArtifact;
 import com.jiandou.api.media.LocalMediaArtifactService.StoredArtifact;
 import com.jiandou.api.media.LocalMediaArtifactService.TextArtifact;
-import com.jiandou.api.generation.text.TextCompletionInvocation;
 import com.jiandou.api.generation.text.TextModelProviderRegistry;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
@@ -30,22 +28,18 @@ import org.springframework.stereotype.Component;
 public class GenerationRunSupport {
 
     private final LocalMediaArtifactService localMediaArtifactService;
-    private final ModelRuntimePropertiesResolver modelResolver;
     private final TextModelProviderRegistry textModelProviderRegistry;
 
     /**
      * 创建新的生成运行支持。
      * @param localMediaArtifactService 本地媒体产物服务值
-     * @param modelResolver 模型解析器值
      * @param textModelClient 文本模型客户端值
      */
     public GenerationRunSupport(
         LocalMediaArtifactService localMediaArtifactService,
-        ModelRuntimePropertiesResolver modelResolver,
         TextModelProviderRegistry textModelProviderRegistry
     ) {
         this.localMediaArtifactService = localMediaArtifactService;
-        this.modelResolver = modelResolver;
         this.textModelProviderRegistry = textModelProviderRegistry;
     }
 
@@ -694,62 +688,6 @@ public class GenerationRunSupport {
             return true;
         }
         return fallback;
-    }
-
-    /**
-     * 生成文本With兜底。
-     * @param primaryProfile primaryProfile值
-     * @param stage 阶段名称
-     * @param systemPrompt 系统提示词值
-     * @param userPrompt user提示词值
-     * @param temperature temperature值
-     * @param maxTokens 最大Tokens值
-     * @param callChain 调用Chain值
-     * @return 处理结果
-     */
-    public TextGenerationAttempt generateTextWithFallback(
-        ModelRuntimeProfile primaryProfile,
-        Long userId,
-        String stage,
-        String systemPrompt,
-        String userPrompt,
-        double temperature,
-        int maxTokens,
-        List<Map<String, Object>> callChain
-    ) {
-        try {
-            return new TextGenerationAttempt(
-                primaryProfile,
-                textModelProviderRegistry.resolve(primaryProfile).generate(
-                    primaryProfile,
-                    new TextCompletionInvocation(systemPrompt, userPrompt, temperature, maxTokens)
-                )
-            );
-        } catch (RuntimeException primaryEx) {
-            String fallbackModel = primaryProfile.fallbackModel();
-            if (fallbackModel == null || fallbackModel.isBlank() || fallbackModel.equalsIgnoreCase(primaryProfile.modelName())) {
-                throw primaryEx;
-            }
-            callChain.add(callLog(stage, stage + ".fallback", "retry", "主文本模型失败，尝试回退到备用模型。", Map.of(
-                "requestedModel", primaryProfile.modelName(),
-                "fallbackModel", fallbackModel,
-                /**
-                 * 处理truncate文本。
-                 * @param primaryEx.getMessage( primaryEx.getMessage(值
-                 * @param 240 240值
-                 * @return 处理结果
-                 */
-                "error", truncateText(primaryEx.getMessage(), 240)
-            )));
-            ModelRuntimeProfile fallbackProfile = modelResolver.resolveTextProfile(fallbackModel, userId);
-            return new TextGenerationAttempt(
-                fallbackProfile,
-                textModelProviderRegistry.resolve(fallbackProfile).generate(
-                    fallbackProfile,
-                    new TextCompletionInvocation(systemPrompt, userPrompt, temperature, maxTokens)
-                )
-            );
-        }
     }
 
     /**

@@ -122,7 +122,7 @@ class SeedanceVideoModelProviderTest {
                 "video",
                 "seedance-1.5-pro",
                 "seedance",
-                "seedance-1.5-pro",
+                "doubao-seedance-1-5-pro-251215",
                 "k",
                 "https://ark.cn-beijing.volces.com/api/v3/contents/generations/tasks",
                 "https://ark.cn-beijing.volces.com/api/v3/contents/generations/tasks",

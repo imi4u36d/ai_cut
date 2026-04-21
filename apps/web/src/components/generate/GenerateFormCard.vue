@@ -30,11 +30,7 @@
     <div class="field-grid">
       <label class="field">
         <span class="field-label">文本分析模型</span>
-        <select v-model="props.form.textAnalysisModel" class="field-select">
-          <option v-for="item in props.textAnalysisModels" :key="item.value" :value="item.value">
-            {{ item.label }}{{ item.description ? ` · ${item.description}` : "" }}
-          </option>
-        </select>
+        <AppSelect v-model="props.form.textAnalysisModel" :options="textAnalysisModelOptions" />
         <TextModelProbeInline
           ref="textModelProbeRef"
           :model-value="props.form.textAnalysisModel"
@@ -43,9 +39,7 @@
       </label>
       <label class="field">
         <span class="field-label">视频模型</span>
-        <select v-model="props.form.providerModel" class="field-select">
-          <option v-for="item in props.videoModels" :key="item.value" :value="item.value">{{ item.label }}</option>
-        </select>
+        <AppSelect v-model="props.form.providerModel" :options="videoModelOptions" />
         <p v-if="props.selectedVideoModel?.description" class="field-hint">
           {{ props.selectedVideoModel.description }}
         </p>
@@ -55,9 +49,7 @@
     <div class="field-grid">
       <label class="field">
         <span class="field-label">清晰度 / 画幅</span>
-        <select v-model="props.form.videoSize" class="field-select">
-          <option v-for="item in props.videoSizes" :key="item.value" :value="item.value">{{ item.label }}</option>
-        </select>
+        <AppSelect v-model="props.form.videoSize" :options="videoSizeOptions" />
         <p class="field-hint">按当前视频模型过滤可用清晰度和画幅组合。</p>
       </label>
     </div>
@@ -92,7 +84,7 @@
     <div class="model-inline">
       <span>{{ props.selectedVideoModel?.label || props.form.providerModel }}</span>
       <span v-if="props.selectedVideoModel?.provider">{{ props.selectedVideoModel.provider }}</span>
-      <span>{{ props.form.videoSize || "未选清晰度" }}</span>
+      <span>{{ formatVideoSizeLabel(props.form.videoSize, "未选清晰度") }}</span>
       <span>{{ durationHint }}</span>
     </div>
 
@@ -111,11 +103,32 @@
  * Generate表单组件。
  */
 import { computed, ref } from "vue";
+import AppSelect from "@/components/common/AppSelect.vue";
+import type { AppSelectOption } from "@/components/common/app-select";
 import TextModelProbeInline from "@/components/TextModelProbeInline.vue";
+import { formatVideoSizeLabel } from "@/utils/presentation";
 import type { GenerateFormCardProps } from "./types";
 
 const props = defineProps<GenerateFormCardProps>();
 const textModelProbeRef = ref<{ ensureReady: (force?: boolean) => Promise<boolean> } | null>(null);
+const textAnalysisModelOptions = computed<AppSelectOption[]>(() =>
+  props.textAnalysisModels.map((item) => ({
+    label: item.description ? `${item.label} · ${item.description}` : item.label,
+    value: item.value,
+  })),
+);
+const videoModelOptions = computed<AppSelectOption[]>(() =>
+  props.videoModels.map((item) => ({
+    label: item.label,
+    value: item.value,
+  })),
+);
+const videoSizeOptions = computed<AppSelectOption[]>(() =>
+  props.videoSizes.map((item) => ({
+    label: formatVideoSizeLabel(item.label || item.value),
+    value: item.value,
+  })),
+);
 
 const durationHint = computed(() => {
   const values = props.videoDurations.map((item) => item.value).filter((item) => Number.isFinite(item));

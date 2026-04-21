@@ -5,7 +5,9 @@
 
     <aside class="surface-card admin-layout__aside">
       <div class="admin-layout__brand">
-        <div class="admin-layout__brand-mark">jd</div>
+        <div class="admin-layout__brand-mark">
+          <img alt="煎豆 Logo" class="admin-layout__brand-logo" src="/brand/jiandou-mark.svg" />
+        </div>
         <div>
           <p class="admin-layout__eyebrow">Admin Console</p>
           <h1>JianDou 管理系统</h1>
@@ -143,11 +145,12 @@ async function handleLogout() {
   height: 54px;
   border-radius: 18px;
   background: linear-gradient(135deg, rgba(196, 107, 47, 0.18), rgba(47, 122, 136, 0.18));
-  font-family: "Space Grotesk", sans-serif;
-  font-size: 1.1rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
+}
+
+.admin-layout__brand-logo {
+  width: 34px;
+  height: 34px;
+  filter: drop-shadow(0 0 12px rgba(98, 136, 255, 0.18));
 }
 
 .admin-layout__eyebrow {

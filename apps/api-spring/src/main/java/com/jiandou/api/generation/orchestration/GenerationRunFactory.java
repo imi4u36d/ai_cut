@@ -159,21 +159,19 @@ public class GenerationRunFactory {
         }
         String prompt = buildScriptUserPrompt(sourceText, visualStyle);
         List<Map<String, Object>> callChain = new ArrayList<>();
-        GenerationRunSupport.TextGenerationAttempt scriptAttempt = support.generateTextWithFallback(
+        TextModelResponse response = textModelProviderRegistry.resolve(profile).generate(
             profile,
-            userId,
-            "script",
-            buildScriptSystemPrompt(),
-            prompt,
-            support.boundedTemperature(profile.temperature(), 0.1, 0.4),
-            Math.max(800, profile.maxTokens()),
-            callChain
+            new TextCompletionInvocation(
+                buildScriptSystemPrompt(),
+                prompt,
+                support.boundedTemperature(profile.temperature(), 0.1, 0.4),
+                Math.max(800, profile.maxTokens())
+            )
         );
-        TextModelResponse response = scriptAttempt.response();
         String scriptMarkdown = support.stripMarkdownFence(response.text());
         callChain.add(support.callLog("script", "script.requested", "success", "脚本生成请求已发送到文本模型。", Map.of(
-            "provider", scriptAttempt.profile().provider(),
-            "modelName", scriptAttempt.profile().modelName(),
+            "provider", profile.provider(),
+            "modelName", profile.modelName(),
             "endpointHost", response.endpointHost()
         )));
         callChain.add(support.callLog("script", "script.completed", "success", "脚本生成已完成。", Map.of(
@@ -183,10 +181,10 @@ public class GenerationRunFactory {
         )));
         TextArtifact markdownArtifact = support.writeTextArtifact(runId, request, "script.md", scriptMarkdown);
         Map<String, Object> modelInfo = support.buildModelInfo(
-            scriptAttempt.profile(),
+            profile,
             requestedModel,
             "script",
-            scriptAttempt.response(),
+            response,
             "spring-text-script"
         );
         Map<String, Object> metadata = new LinkedHashMap<>();

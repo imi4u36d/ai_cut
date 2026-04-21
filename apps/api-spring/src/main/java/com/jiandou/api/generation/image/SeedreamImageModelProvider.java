@@ -17,17 +17,6 @@ import org.springframework.stereotype.Component;
 @Component
 public class SeedreamImageModelProvider implements ImageModelProvider {
 
-    private static final Map<String, String> SEEDREAM_MODEL_ALIASES = Map.ofEntries(
-        Map.entry("doubao-seedream-4.5", "doubao-seedream-4-5-251128"),
-        Map.entry("doubao-seedream-4-5", "doubao-seedream-4-5-251128"),
-        Map.entry("seedream-4.5", "doubao-seedream-4-5-251128"),
-        Map.entry("seedream-4-5", "doubao-seedream-4-5-251128"),
-        Map.entry("doubao-seedream-5.0", "doubao-seedream-5-0-260128"),
-        Map.entry("doubao-seedream-5-0", "doubao-seedream-5-0-260128"),
-        Map.entry("seedream-5.0", "doubao-seedream-5-0-260128"),
-        Map.entry("seedream-5-0", "doubao-seedream-5-0-260128")
-    );
-
     private final ImageProviderTransport transport;
 
     public SeedreamImageModelProvider(ImageProviderTransport transport) {
@@ -45,7 +34,7 @@ public class SeedreamImageModelProvider implements ImageModelProvider {
         if (!profile.ready()) {
             throw new GenerationConfigurationException("image provider config missing api key or base url");
         }
-        String providerModel = normalizeSeedreamModelName(blankTo(profile.modelName(), request.requestedModel()));
+        String providerModel = blankTo(profile.modelName(), request.requestedModel());
         String size = seedreamSize(providerModel, request.width(), request.height());
         HttpResponse<String> response = transport.sendJson(
             profile.baseUrl(),
@@ -103,16 +92,11 @@ public class SeedreamImageModelProvider implements ImageModelProvider {
     }
 
     String seedreamSize(String modelName, int width, int height) {
-        String normalizedModel = normalizeSeedreamModelName(modelName);
+        String normalizedModel = modelName == null ? "" : modelName.trim().toLowerCase(Locale.ROOT);
         if ("doubao-seedream-4-5-251128".equals(normalizedModel)) {
             return "2K";
         }
         return "1K";
-    }
-
-    private String normalizeSeedreamModelName(String raw) {
-        String normalized = raw == null ? "" : raw.trim().toLowerCase(Locale.ROOT);
-        return SEEDREAM_MODEL_ALIASES.getOrDefault(normalized, raw);
     }
 
     private String blankTo(String primary, String fallback) {

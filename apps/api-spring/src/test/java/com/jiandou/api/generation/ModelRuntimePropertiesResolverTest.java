@@ -122,6 +122,21 @@ class ModelRuntimePropertiesResolverTest {
     }
 
     @Test
+    void resolveProfilesSupportConfiguredProviderModel() throws Exception {
+        Path configDir = tempDir.resolve("config");
+        writeConfig(configDir, "0.20");
+
+        MockEnvironment env = new MockEnvironment().withProperty("JIANDOU_CONFIG_DIR", configDir.toString());
+        ModelRuntimePropertiesResolver resolver = new ModelRuntimePropertiesResolver(env, new GenerationConfigPathLocator(env));
+
+        assertEquals("qwen-plus", resolver.resolveTextProfile("qwen-plus").config().requestedModel());
+        assertEquals("qwen-plus-2026-04-01", resolver.resolveTextProfile("qwen-plus").modelName());
+        assertEquals("seedance-v1", resolver.resolveVideoProfile("seedance-v1").requestedModel());
+        assertEquals("seedance-v1-upstream", resolver.resolveVideoProfile("seedance-v1").modelName());
+        assertTrue(resolver.supportsSeed("seedance-v1"));
+    }
+
+    @Test
     void userScopedProfilesUseDatabaseApiKeysWithoutFallingBackToSharedSecrets() throws Exception {
         Path configDir = tempDir.resolve("config");
         writeConfig(configDir, "0.20");
@@ -200,10 +215,13 @@ class ModelRuntimePropertiesResolverTest {
                       provider: "qwen"
                       vendor: "aliyun"
                       kind: "text"
+                      provider_model: "qwen-plus-2026-04-01"
                     "seedance-v1":
                       provider: "seedance"
                       vendor: "volcengine"
                       kind: "video"
+                      provider_model: "seedance-v1-upstream"
+                      supports_seed: true
                 """
         );
     }

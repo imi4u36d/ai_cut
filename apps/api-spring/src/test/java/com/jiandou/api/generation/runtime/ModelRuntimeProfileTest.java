@@ -12,7 +12,7 @@ class ModelRuntimeProfileTest {
     @Test
     void accessorsNormalizeValuesAndExposeCapabilities() {
         ModelRuntimeProfile profile = new ModelRuntimeProfile(
-            new TextProviderConfig("text", "gpt-4.1", "openai", "gpt-4.1", null, "key", "https://api.example.com/v1", -3, 0.35, -10, "cfg"),
+            new TextProviderConfig("text", "gpt-4.1", "openai", "gpt-4.1", "key", "https://api.example.com/v1", -3, 0.35, -10, "cfg"),
             new TextProviderCapabilities(true, true, true)
         );
 
@@ -20,7 +20,6 @@ class ModelRuntimeProfileTest {
         assertEquals("text", profile.kind());
         assertEquals("openai", profile.provider());
         assertEquals("gpt-4.1", profile.modelName());
-        assertEquals("", profile.fallbackModel());
         assertEquals("key", profile.apiKey());
         assertEquals("https://api.example.com/v1", profile.baseUrl());
         assertEquals(0, profile.timeoutSeconds());
@@ -41,7 +40,6 @@ class ModelRuntimeProfileTest {
         assertEquals("", profile.kind());
         assertEquals("", profile.provider());
         assertEquals("", profile.modelName());
-        assertEquals("", profile.fallbackModel());
         assertEquals("", profile.apiKey());
         assertEquals("", profile.baseUrl());
         assertEquals(0, profile.timeoutSeconds());

@@ -98,7 +98,6 @@ public class ModelRuntimePropertiesResolver {
                     "",
                     "",
                     "",
-                    "",
                     intValue(firstNonBlank(current.value("model", "timeout_seconds"), "120"), 120),
                     doubleValue(firstNonBlank(current.value("model", "temperature"), "0.15"), 0.15),
                     intValue(firstNonBlank(current.value("model", "max_tokens"), "2000"), 2000),
@@ -107,20 +106,16 @@ public class ModelRuntimePropertiesResolver {
                 new TextProviderCapabilities(false, false, false)
             );
         }
-        String modelSection = "model.models.\"" + modelName + "\"";
-        String kind = firstNonBlank(current.value(modelSection, "kind"), GenerationModelKinds.TEXT).toLowerCase(Locale.ROOT);
+        ResolvedModel resolvedModel = resolveConfiguredModel(current, modelName);
+        String modelSection = resolvedModel.sectionPath();
+        Map<String, Object> modelValues = resolvedModel.section();
+        String kind = firstNonBlank(stringValue(modelValues.get("kind")), GenerationModelKinds.TEXT).toLowerCase(Locale.ROOT);
         String provider = firstNonBlank(
             property("JIANDOU_MODEL_PROVIDER"),
-            current.value(modelSection, "provider"),
+            stringValue(modelValues.get("provider")),
             ""
         );
         String providerSection = "model.providers." + provider;
-        String fallbackModel = firstNonBlank(
-            property("JIANDOU_MODEL_FALLBACK"),
-            current.value(modelSection, "fallback_model"),
-            current.value(modelSection, "fallback"),
-            ""
-        );
         String apiKey = userScoped
             ? resolveUserApiKey(userId, provider)
             : firstNonBlank(
@@ -172,8 +167,7 @@ public class ModelRuntimePropertiesResolver {
                 kind,
                 modelName,
                 provider,
-                modelName,
-                fallbackModel,
+                configuredProviderModel(modelName, resolvedModel),
                 apiKey,
                 baseUrl,
                 timeoutSeconds,
@@ -182,9 +176,16 @@ public class ModelRuntimePropertiesResolver {
                 source
             ),
             new TextProviderCapabilities(
-                boolValue(current.value(modelSection, "supports_seed")),
+                boolValue(stringValue(modelValues.get("supports_seed"))),
                 resolveTextSupportsResponsesApi(current, providerSection, provider, baseUrl),
-                resolveTextPrefersChatCompletionsForVision(current, modelSection, providerSection, provider, modelName, baseUrl)
+                resolveTextPrefersChatCompletionsForVision(
+                    current,
+                    modelSection,
+                    providerSection,
+                    provider,
+                    firstNonBlank(configuredProviderModel(modelName, resolvedModel), resolvedModel.canonicalName(), modelName),
+                    baseUrl
+                )
             )
         );
     }
@@ -273,10 +274,6 @@ public class ModelRuntimePropertiesResolver {
             item.put("family", trimToEmpty(stringValue(section.get("family"))));
             item.put("description", trimToEmpty(stringValue(section.get("description"))));
             item.put("kind", targetKind);
-            String fallbackModel = firstNonBlank(stringValue(section.get("fallback_model")), stringValue(section.get("fallback")));
-            if (!fallbackModel.isBlank()) {
-                item.put("fallbackModel", fallbackModel);
-            }
             if (GenerationModelKinds.TEXT.equals(targetKind) || GenerationModelKinds.VISION.equals(targetKind)) {
                 ModelRuntimeProfile textProfile = resolveTextProfile(entry.getKey());
                 item.put("supportsSeed", textProfile.supportsSeed());
@@ -311,8 +308,8 @@ public class ModelRuntimePropertiesResolver {
         if (modelName.isBlank()) {
             return false;
         }
-        String modelSection = "model.models.\"" + modelName + "\"";
-        return boolValue(snapshot().value(modelSection, "supports_seed"));
+        ResolvedModel resolvedModel = resolveConfiguredModel(snapshot(), modelName);
+        return boolValue(stringValue(resolvedModel.section().get("supports_seed")));
     }
 
     /**
@@ -401,7 +398,8 @@ public class ModelRuntimePropertiesResolver {
      */
     public MediaProviderProfile resolveMediaProfile(String requestedModel) {
         ConfigSnapshot current = snapshot();
-        String kind = trimToEmpty(current.value("model.models.\"" + trimToEmpty(requestedModel) + "\"", "kind")).toLowerCase(Locale.ROOT);
+        ResolvedModel resolvedModel = resolveConfiguredModel(current, trimToEmpty(requestedModel));
+        String kind = firstNonBlank(stringValue(resolvedModel.section().get("kind")), "").toLowerCase(Locale.ROOT);
         return resolveMediaProfile(requestedModel, kind, current, null);
     }
 
@@ -413,7 +411,8 @@ public class ModelRuntimePropertiesResolver {
      */
     public MediaProviderProfile resolveMediaProfile(String requestedModel, Long userId) {
         ConfigSnapshot current = snapshot();
-        String kind = trimToEmpty(current.value("model.models.\"" + trimToEmpty(requestedModel) + "\"", "kind")).toLowerCase(Locale.ROOT);
+        ResolvedModel resolvedModel = resolveConfiguredModel(current, trimToEmpty(requestedModel));
+        String kind = firstNonBlank(stringValue(resolvedModel.section().get("kind")), "").toLowerCase(Locale.ROOT);
         return resolveMediaProfile(requestedModel, kind, current, userId);
     }
 
@@ -428,9 +427,11 @@ public class ModelRuntimePropertiesResolver {
                 current.source()
             );
         }
-        String modelSection = "model.models.\"" + modelName + "\"";
-        String actualKind = firstNonBlank(current.value(modelSection, "kind"), normalizedExpectedKind).toLowerCase(Locale.ROOT);
-        String provider = firstNonBlank(current.value(modelSection, "provider"), "");
+        ResolvedModel resolvedModel = resolveConfiguredModel(current, modelName);
+        String modelSection = resolvedModel.sectionPath();
+        Map<String, Object> modelValues = resolvedModel.section();
+        String actualKind = firstNonBlank(stringValue(modelValues.get("kind")), normalizedExpectedKind).toLowerCase(Locale.ROOT);
+        String provider = firstNonBlank(stringValue(modelValues.get("provider")), "");
         String providerSection = "model.providers." + provider;
         String baseUrl = normalizeBaseUrl(firstNonBlank(
             providerProperty(provider, "BASE_URL"),
@@ -451,7 +452,7 @@ public class ModelRuntimePropertiesResolver {
                 actualKind,
                 modelName,
                 provider,
-                modelName,
+                configuredProviderModel(modelName, resolvedModel),
                 apiKey,
                 baseUrl,
                 taskBaseUrl,
@@ -468,7 +469,7 @@ public class ModelRuntimePropertiesResolver {
                 source
             ),
             new MediaProviderCapabilities(
-                boolValue(current.value(modelSection, "supports_seed")),
+                boolValue(stringValue(modelValues.get("supports_seed"))),
                 boolValue(current.value(providerSection + ".extras", "prompt_extend")),
                 boolValue(current.value(providerSection + ".extras", "camera_fixed")),
                 resolveWatermarkDefault(actualKind, current.value(providerSection + ".extras", "watermark")),
@@ -486,9 +487,9 @@ public class ModelRuntimePropertiesResolver {
                     ),
                     GenerationModelKinds.VIDEO.equals(actualKind) ? 600 : 120
                 ),
-                firstNonBlank(current.value(modelSection, "generation_mode"), GenerationModelKinds.VIDEO.equals(actualKind) ? "i2v" : ""),
-                parseStringList(current.value(modelSection, "supported_sizes")),
-                parseIntegerList(current.value(modelSection, "supported_durations"))
+                firstNonBlank(stringValue(modelValues.get("generation_mode")), GenerationModelKinds.VIDEO.equals(actualKind) ? "i2v" : ""),
+                parseStringList(modelValues.get("supported_sizes")),
+                parseIntegerList(modelValues.get("supported_durations"))
             )
         );
     }
@@ -763,8 +764,29 @@ public class ModelRuntimePropertiesResolver {
         return "";
     }
 
-    private List<String> parseStringList(String raw) {
-        String value = trimToEmpty(raw);
+    private ResolvedModel resolveConfiguredModel(ConfigSnapshot current, String requestedModel) {
+        String normalizedRequestedModel = trimToEmpty(requestedModel);
+        if (normalizedRequestedModel.isBlank()) {
+            return new ResolvedModel("", Map.of());
+        }
+        Map<String, Object> models = current.map("model.models");
+        Object direct = models.get(normalizedRequestedModel);
+        if (direct instanceof Map<?, ?> directSection) {
+            return new ResolvedModel(normalizedRequestedModel, normalizeMap(directSection));
+        }
+        return new ResolvedModel(normalizedRequestedModel, Map.of());
+    }
+
+    private String configuredProviderModel(String requestedModel, ResolvedModel resolvedModel) {
+        return firstNonBlank(
+            stringValue(resolvedModel.section().get("provider_model")),
+            resolvedModel.canonicalName(),
+            trimToEmpty(requestedModel)
+        );
+    }
+
+    private List<String> parseStringList(Object raw) {
+        String value = stringValue(raw);
         if (value.isBlank()) {
             return List.of();
         }
@@ -775,8 +797,8 @@ public class ModelRuntimePropertiesResolver {
             .toList();
     }
 
-    private List<Integer> parseIntegerList(String raw) {
-        String value = trimToEmpty(raw);
+    private List<Integer> parseIntegerList(Object raw) {
+        String value = stringValue(raw);
         if (value.isBlank()) {
             return List.of();
         }
@@ -1168,6 +1190,18 @@ public class ModelRuntimePropertiesResolver {
         ConfigSnapshot snapshot,
         long loadedAtMillis
     ) {}
+
+    private record ResolvedModel(
+        String canonicalName,
+        Map<String, Object> section
+    ) {
+        private String sectionPath() {
+            if (canonicalName == null || canonicalName.isBlank()) {
+                return "";
+            }
+            return "model.models.\"" + canonicalName + "\"";
+        }
+    }
 
     /**
      * 处理配置Section。
