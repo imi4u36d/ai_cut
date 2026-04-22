@@ -48,6 +48,27 @@ class VideoProviderTransportTest {
     }
 
     @Test
+    void sendSanitizesHtmlGatewayErrors() throws Exception {
+        HttpClient httpClient = mock(HttpClient.class);
+        @SuppressWarnings("unchecked")
+        HttpResponse<String> response = mock(HttpResponse.class);
+        when(response.statusCode()).thenReturn(504);
+        when(response.body()).thenReturn("""
+            <html><head><title>504 Gateway Time-out</title></head>
+            <body><center><h1>504 Gateway Time-out</h1></center></body></html>
+            """);
+        when(httpClient.send(any(HttpRequest.class), any(HttpResponse.BodyHandler.class))).thenReturn(response);
+        VideoProviderTransport transport = new VideoProviderTransport(new ObjectMapper(), httpClient);
+
+        GenerationProviderException ex = assertThrows(
+            GenerationProviderException.class,
+            () -> transport.send(HttpRequest.newBuilder().uri(java.net.URI.create("https://api.example.com")).build(), "video failed")
+        );
+
+        assertEquals("video failed: http 504 upstream gateway timeout", ex.getMessage());
+    }
+
+    @Test
     void extractionHelpersHandleNestedPayloads() {
         VideoProviderTransport transport = new VideoProviderTransport(new ObjectMapper());
         Map<String, Object> payload = Map.of(

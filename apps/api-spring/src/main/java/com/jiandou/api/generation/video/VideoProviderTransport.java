@@ -62,7 +62,7 @@ public class VideoProviderTransport {
             HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
             if (response.statusCode() < 200 || response.statusCode() >= 300) {
                 throw new GenerationProviderException(
-                    errorPrefix + ": http " + response.statusCode() + " " + truncate(response.body(), 320)
+                    errorPrefix + ": " + summarizeErrorResponse(response.statusCode(), response.body())
                 );
             }
             return response;
@@ -195,5 +195,29 @@ public class VideoProviderTransport {
             return "";
         }
         return value.length() <= limit ? value : value.substring(0, limit);
+    }
+
+    private String summarizeErrorResponse(int statusCode, String body) {
+        String normalizedBody = body == null ? "" : body.trim();
+        if (normalizedBody.isBlank()) {
+            return "http " + statusCode;
+        }
+        if (looksLikeHtml(normalizedBody)) {
+            return switch (statusCode) {
+                case 502 -> "http 502 upstream gateway error";
+                case 503 -> "http 503 upstream service unavailable";
+                case 504 -> "http 504 upstream gateway timeout";
+                default -> "http " + statusCode + " upstream html error page";
+            };
+        }
+        return "http " + statusCode + " " + truncate(normalizedBody, 320);
+    }
+
+    private boolean looksLikeHtml(String value) {
+        String normalized = value == null ? "" : value.trim().toLowerCase(Locale.ROOT);
+        return normalized.startsWith("<!doctype html")
+            || normalized.startsWith("<html")
+            || normalized.contains("<title>")
+            || normalized.contains("<body");
     }
 }

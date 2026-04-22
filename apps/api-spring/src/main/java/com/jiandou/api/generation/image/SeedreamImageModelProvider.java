@@ -39,7 +39,7 @@ public class SeedreamImageModelProvider implements ImageModelProvider {
         HttpResponse<String> response = transport.sendJson(
             profile.baseUrl(),
             profile.apiKey(),
-            buildSeedreamImageRequestBody(providerModel, request.prompt(), size, request.seed()),
+            buildSeedreamImageRequestBody(providerModel, request.prompt(), size, request.referenceImageUrl(), request.seed()),
             profile.timeoutSeconds(),
             Map.of("X-Api-Key", profile.apiKey())
         );
@@ -76,7 +76,7 @@ public class SeedreamImageModelProvider implements ImageModelProvider {
         );
     }
 
-    Map<String, Object> buildSeedreamImageRequestBody(String providerModel, String prompt, String size, Integer seed) {
+    Map<String, Object> buildSeedreamImageRequestBody(String providerModel, String prompt, String size, String referenceImageUrl, Integer seed) {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("model", providerModel);
         body.put("prompt", prompt);
@@ -85,6 +85,9 @@ public class SeedreamImageModelProvider implements ImageModelProvider {
         body.put("size", size);
         body.put("stream", false);
         body.put("watermark", false);
+        if (referenceImageUrl != null && !referenceImageUrl.isBlank()) {
+            body.put("reference_images", java.util.List.of(referenceImageUrl.trim()));
+        }
         if (seed != null) {
             body.put("seed", seed);
         }

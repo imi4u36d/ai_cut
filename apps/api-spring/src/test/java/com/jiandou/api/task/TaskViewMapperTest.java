@@ -105,6 +105,37 @@ class TaskViewMapperTest {
         assertEquals("render", row.get("currentStage"));
     }
 
+    /**
+     * 处理转为详情汇总执行期具体失败原因。
+     */
+    @Test
+    void toDetailIncludesSpecificFailureReasonFromExecutionData() {
+        TaskRecord task = new TaskRecord();
+        task.id = "task_4";
+        task.title = "demo";
+        task.status = "FAILED";
+        task.errorMessage = "错误";
+        task.stageRuns.add(Map.of(
+            "stageName", "render",
+            "clipIndex", 3,
+            "status", "FAILED",
+            "errorMessage", "远端视频生成失败",
+            "finishedAt", "2026-04-22T10:00:00Z"
+        ));
+        task.attempts.add(Map.of(
+            "attemptId", "attempt_1",
+            "failureMessage", "DashScope quota exceeded for current account",
+            "finishedAt", "2026-04-22T10:00:01Z"
+        ));
+
+        TaskViewMapper mapper = new TaskViewMapper(storageProperties("../../storage"));
+        Map<String, Object> detail = mapper.toDetail(task);
+
+        assertEquals("DashScope quota exceeded for current account", detail.get("failureReason"));
+        assertEquals("render", detail.get("failureStage"));
+        assertEquals(3, detail.get("failureClipIndex"));
+    }
+
     private JiandouStorageProperties storageProperties(String rootDir) {
         JiandouStorageProperties properties = new JiandouStorageProperties();
         properties.setRootDir(rootDir);

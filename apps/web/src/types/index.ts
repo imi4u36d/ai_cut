@@ -651,6 +651,9 @@ export interface TaskListItem {
   diagnosisCode?: string | null;
   diagnosisHint?: string | null;
   recommendedAction?: string | null;
+  failureReason?: string | null;
+  failureStage?: string | null;
+  failureClipIndex?: number | null;
 }
 
 /**
@@ -781,6 +784,9 @@ export interface TaskDetail extends TaskListItem {
   outroTemplate: string;
   creativePrompt?: string;
   errorMessage?: string | null;
+  failureReason?: string | null;
+  failureStage?: string | null;
+  failureClipIndex?: number | null;
   startedAt?: string | null;
   finishedAt?: string | null;
   retryCount?: number;
@@ -1036,6 +1042,8 @@ export interface CreateWorkflowRequest {
   imageModel: string;
   videoModel: string;
   videoSize?: string | null;
+  keyframeSeed?: number | null;
+  videoSeed?: number | null;
   seed?: number | null;
   minDurationSeconds?: number | null;
   maxDurationSeconds?: number | null;
@@ -1119,6 +1127,19 @@ export interface WorkflowClipSlot {
   videoVersions: StageVersion[];
 }
 
+export interface WorkflowCharacterSheet {
+  id?: string | null;
+  characterName?: string | null;
+  name?: string | null;
+  displayName?: string | null;
+  appearanceSummary?: string | null;
+  appearance?: string | null;
+  syntheticClipIndex?: number | null;
+  clipIndex?: number | null;
+  versions?: StageVersion[] | null;
+  keyframeVersions?: StageVersion[] | null;
+}
+
 export interface WorkflowSummary {
   id: string;
   title: string;
@@ -1145,6 +1166,8 @@ export interface WorkflowDetail {
   imageModel: string;
   videoModel: string;
   videoSize?: string | null;
+  keyframeSeed?: number | null;
+  videoSeed?: number | null;
   seed?: number | null;
   minDurationSeconds?: number | null;
   maxDurationSeconds?: number | null;
@@ -1157,6 +1180,7 @@ export interface WorkflowDetail {
   createdAt: string;
   updatedAt: string;
   storyboardVersions: StageVersion[];
+  characterSheets?: WorkflowCharacterSheet[] | null;
   clipSlots: WorkflowClipSlot[];
   finalResult?: MaterialAssetLibraryItem | null;
 }

@@ -76,6 +76,10 @@ public class TextProviderTransport {
         if (!outputText.isBlank()) {
             return outputText;
         }
+        String fromOutputObject = extractFromOutputObject(responseMap.get("output"));
+        if (!fromOutputObject.isBlank()) {
+            return fromOutputObject;
+        }
         String fromOutput = extractFromOutput(responseMap.get("output"));
         if (!fromOutput.isBlank()) {
             return fromOutput;
@@ -83,6 +87,10 @@ public class TextProviderTransport {
         String fromChoices = extractFromChoices(responseMap.get("choices"));
         if (!fromChoices.isBlank()) {
             return fromChoices;
+        }
+        String fromMessage = extractFromMessage(responseMap.get("message"));
+        if (!fromMessage.isBlank()) {
+            return fromMessage;
         }
         return stringValue(responseMap.get("text"));
     }
@@ -122,6 +130,27 @@ public class TextProviderTransport {
         return builder.toString().trim();
     }
 
+    private String extractFromOutputObject(Object raw) {
+        if (!(raw instanceof Map<?, ?> map)) {
+            return "";
+        }
+        String text = stringValue(map.get("text"));
+        if (!text.isBlank()) {
+            return text;
+        }
+        String fromChoices = extractFromChoices(map.get("choices"));
+        if (!fromChoices.isBlank()) {
+            return fromChoices;
+        }
+        String fromMessage = extractFromMessage(map.get("message"));
+        if (!fromMessage.isBlank()) {
+            return fromMessage;
+        }
+        StringBuilder builder = new StringBuilder();
+        appendContent(builder, map.get("content"));
+        return builder.toString().trim();
+    }
+
     private String extractFromChoices(Object raw) {
         if (!(raw instanceof List<?> choices) || choices.isEmpty()) {
             return "";
@@ -141,6 +170,19 @@ public class TextProviderTransport {
             return builder.toString().trim();
         }
         return stringValue(map.get("text"));
+    }
+
+    private String extractFromMessage(Object raw) {
+        if (!(raw instanceof Map<?, ?> messageMap)) {
+            return "";
+        }
+        Object content = messageMap.get("content");
+        if (content instanceof String text) {
+            return text.trim();
+        }
+        StringBuilder builder = new StringBuilder();
+        appendContent(builder, content);
+        return builder.toString().trim();
     }
 
     private void appendContent(StringBuilder builder, Object raw) {
@@ -165,6 +207,10 @@ public class TextProviderTransport {
         Object type = map.get("type");
         if ("output_text".equals(type) || "text".equals(type) || "input_text".equals(type)) {
             appendContent(builder, map.get("text"));
+            return;
+        }
+        if ("message".equals(type)) {
+            appendContent(builder, map.get("content"));
             return;
         }
         if (map.containsKey("content")) {

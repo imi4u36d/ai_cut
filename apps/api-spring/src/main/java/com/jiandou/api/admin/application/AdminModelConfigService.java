@@ -117,13 +117,7 @@ public class AdminModelConfigService {
         AdminModelConfigKeyUpdateRequest request,
         List<AdminModelConfigResponse.ProviderItem> providers
     ) {
-        Map<String, String> knownProviders = new LinkedHashMap<>();
-        for (AdminModelConfigResponse.ProviderItem provider : providers) {
-            knownProviders.put(normalize(provider.key()), provider.key());
-            if (!provider.provider().isBlank()) {
-                knownProviders.putIfAbsent(normalize(provider.provider()), provider.key());
-            }
-        }
+        Map<String, String> knownProviders = buildProviderKeyLookup(providers);
         List<String> errors = new ArrayList<>();
         Map<String, String> updates = new LinkedHashMap<>();
         LinkedHashSet<String> seen = new LinkedHashSet<>();
@@ -182,13 +176,19 @@ public class AdminModelConfigService {
             );
             providers.add(updated);
             providersByLookup.put(normalize(updated.key()), updated);
+            if (!updated.vendor().isBlank()) {
+                providersByLookup.putIfAbsent(normalize(updated.vendor()), updated);
+            }
             if (!updated.provider().isBlank()) {
                 providersByLookup.putIfAbsent(normalize(updated.provider()), updated);
             }
         }
 
         List<AdminModelConfigResponse.ModelItem> models = base.models().stream()
-            .map(model -> applyModelApiKeyOverride(model, providersByLookup.get(normalize(model.provider()))))
+            .map(model -> applyModelApiKeyOverride(
+                model,
+                providersByLookup.get(firstNonBlank(normalize(model.vendor()), normalize(model.provider())))
+            ))
             .toList();
 
         List<String> configErrors = new ArrayList<>(base.configErrors());
@@ -355,60 +355,64 @@ public class AdminModelConfigService {
     }
 
     private List<AdminModelConfigResponse.ProviderItem> readProviders(List<AdminModelConfigResponse.ModelItem> models) {
+        Map<String, List<AdminModelConfigResponse.ModelItem>> vendorModels = new LinkedHashMap<>();
+        for (AdminModelConfigResponse.ModelItem model : models) {
+            String vendorKey = providerGroupKey(model.vendor(), model.provider());
+            vendorModels.computeIfAbsent(vendorKey, ignored -> new ArrayList<>()).add(model);
+        }
         List<AdminModelConfigResponse.ProviderItem> items = new ArrayList<>();
-        for (ModelRuntimePropertiesResolver.ConfigSection section : modelResolver.listSections("model.providers")) {
-            String key = section.name();
-            String providerName = firstNonBlank(section.values().get("provider"), key);
-            String vendorName = firstNonBlank(
-                section.values().get("vendor"),
-                models.stream()
-                    .filter(item -> providerName.equalsIgnoreCase(item.provider()) || key.equalsIgnoreCase(item.provider()))
-                    .map(AdminModelConfigResponse.ModelItem::vendor)
-                    .filter(value -> value != null && !value.isBlank())
-                    .findFirst()
-                    .orElse("")
-            );
-            List<AdminModelConfigResponse.ModelItem> providerModels = models.stream()
-                .filter(item -> providerName.equalsIgnoreCase(item.provider()) || key.equalsIgnoreCase(item.provider()))
-                .toList();
-            AdminModelConfigResponse.ModelItem sampleTextModel = providerModels.stream()
-                .filter(item -> GenerationModelKinds.TEXT.equals(item.kind()) || GenerationModelKinds.VISION.equals(item.kind()))
+        for (Map.Entry<String, List<AdminModelConfigResponse.ModelItem>> entry : vendorModels.entrySet()) {
+            List<AdminModelConfigResponse.ModelItem> providerModels = entry.getValue();
+            String vendorName = providerModels.stream()
+                .map(AdminModelConfigResponse.ModelItem::vendor)
+                .filter(value -> value != null && !value.isBlank())
                 .findFirst()
-                .orElse(null);
-            AdminModelConfigResponse.ModelItem sampleVideoModel = providerModels.stream()
-                .filter(item -> GenerationModelKinds.VIDEO.equals(item.kind()))
-                .findFirst()
-                .orElse(null);
-            String baseUrl = firstNonBlank(
-                resolveModelBaseUrl(sampleTextModel),
-                resolveModelBaseUrl(sampleVideoModel),
-                section.values().get("base_url")
-            );
-            String taskBaseUrl = firstNonBlank(
-                resolveTaskBaseUrl(sampleVideoModel),
-                modelResolver.value("model.providers." + key + ".extras", "task_base_url", "")
-            );
-            String endpointHost = hostOf(baseUrl);
-            String taskEndpointHost = hostOf(taskBaseUrl);
-            Map<String, String> extras = new LinkedHashMap<>(modelResolver.section("model.providers." + key + ".extras"));
+                .orElse(entry.getKey());
+            String baseUrl = resolveProviderBaseUrl(providerModels);
+            String taskBaseUrl = resolveProviderTaskBaseUrl(providerModels);
             items.add(new AdminModelConfigResponse.ProviderItem(
-                key,
-                providerName,
+                entry.getKey(),
+                vendorName,
                 vendorName,
                 providerModels.stream().map(AdminModelConfigResponse.ModelItem::kind).distinct().sorted(this::compareKinds).toList(),
                 baseUrl,
                 taskBaseUrl,
-                endpointHost,
-                taskEndpointHost,
-                !firstNonBlank(resolveApiKey(sampleTextModel), resolveApiKey(sampleVideoModel), section.values().get("api_key")).isBlank(),
+                hostOf(baseUrl),
+                hostOf(taskBaseUrl),
+                providerModels.stream().map(this::resolveApiKey).anyMatch(apiKey -> !apiKey.isBlank()),
                 !baseUrl.isBlank(),
                 !taskBaseUrl.isBlank(),
-                Map.copyOf(extras),
+                Map.of(),
                 providerModels.stream().map(AdminModelConfigResponse.ModelItem::name).toList()
             ));
         }
         items.sort(Comparator.comparing(AdminModelConfigResponse.ProviderItem::key, String.CASE_INSENSITIVE_ORDER));
         return items;
+    }
+
+    private Map<String, String> buildProviderKeyLookup(List<AdminModelConfigResponse.ProviderItem> providers) {
+        Map<String, String> knownProviders = new LinkedHashMap<>();
+        for (AdminModelConfigResponse.ProviderItem provider : providers) {
+            knownProviders.put(normalize(provider.key()), provider.key());
+            if (!provider.provider().isBlank()) {
+                knownProviders.putIfAbsent(normalize(provider.provider()), provider.key());
+            }
+            if (!provider.vendor().isBlank()) {
+                knownProviders.putIfAbsent(normalize(provider.vendor()), provider.key());
+            }
+        }
+        for (ModelRuntimePropertiesResolver.ConfigSection section : modelResolver.listSections("model.providers")) {
+            String vendorKey = providerGroupKey(section.values().get("vendor"), firstNonBlank(section.values().get("provider"), section.name()));
+            String resolvedKey = knownProviders.get(normalize(vendorKey));
+            if (resolvedKey == null) {
+                continue;
+            }
+            knownProviders.putIfAbsent(normalize(section.name()), resolvedKey);
+            if (!firstNonBlank(section.values().get("provider")).isBlank()) {
+                knownProviders.putIfAbsent(normalize(section.values().get("provider")), resolvedKey);
+            }
+        }
+        return knownProviders;
     }
 
     private String resolveApiKey(AdminModelConfigResponse.ModelItem model) {
@@ -431,11 +435,38 @@ public class AdminModelConfigService {
         return modelResolver.resolveMediaProfile(model.name(), model.kind()).baseUrl();
     }
 
+    private String resolveProviderBaseUrl(List<AdminModelConfigResponse.ModelItem> providerModels) {
+        for (AdminModelConfigResponse.ModelItem model : providerModels) {
+            String baseUrl = resolveModelBaseUrl(model);
+            if (!baseUrl.isBlank()) {
+                return baseUrl;
+            }
+        }
+        return "";
+    }
+
     private String resolveTaskBaseUrl(AdminModelConfigResponse.ModelItem model) {
         if (model == null) {
             return "";
         }
         return modelResolver.resolveMediaProfile(model.name(), model.kind()).taskBaseUrl();
+    }
+
+    private String resolveProviderTaskBaseUrl(List<AdminModelConfigResponse.ModelItem> providerModels) {
+        for (AdminModelConfigResponse.ModelItem model : providerModels) {
+            if (!GenerationModelKinds.VIDEO.equals(model.kind())) {
+                continue;
+            }
+            String taskBaseUrl = resolveTaskBaseUrl(model);
+            if (!taskBaseUrl.isBlank()) {
+                return taskBaseUrl;
+            }
+            String configuredTaskBaseUrl = modelResolver.value("model.providers." + model.provider() + ".extras", "task_base_url", "");
+            if (!configuredTaskBaseUrl.isBlank()) {
+                return configuredTaskBaseUrl;
+            }
+        }
+        return "";
     }
 
     private int countReadyModels(List<AdminModelConfigResponse.ModelItem> models, String kind) {
@@ -464,6 +495,10 @@ public class AdminModelConfigService {
 
     private String normalize(String value) {
         return value == null ? "" : value.trim().toLowerCase(Locale.ROOT);
+    }
+
+    private String providerGroupKey(String vendor, String fallback) {
+        return firstNonBlank(normalize(vendor), normalize(fallback));
     }
 
     private String firstNonBlank(String... values) {

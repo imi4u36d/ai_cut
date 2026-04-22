@@ -64,6 +64,17 @@ class TextProviderTransportTest {
         assertEquals("hi", transport.extractText(Map.of(
             "choices", List.of(Map.of("message", Map.of("content", List.of(Map.of("type", "text", "text", "hi")))))
         )));
+        assertEquals("dashscope text", transport.extractText(Map.of(
+            "output", Map.of("text", "dashscope text")
+        )));
+        assertEquals("dashscope choice", transport.extractText(Map.of(
+            "output", Map.of(
+                "choices", List.of(Map.of("message", Map.of("content", "dashscope choice")))
+            )
+        )));
+        assertEquals("nested message", transport.extractText(Map.of(
+            "message", Map.of("content", List.of(Map.of("type", "output_text", "text", "nested message")))
+        )));
     }
 
     @Test

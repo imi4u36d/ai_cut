@@ -154,6 +154,7 @@ class GenerationRunFactoryImagePromptPassthroughTest {
         }));
         LocalMediaArtifactService localMediaArtifactService = new LocalMediaArtifactService(storageProperties(tempDir), "ffmpeg");
         final String[] submittedPrompt = new String[1];
+        final String[] submittedReferenceImageUrl = new String[1];
         ImageModelProvider fakeImageModelProvider = new ImageModelProvider() {
             @Override
             public boolean supports(MediaProviderProfile profile) {
@@ -166,6 +167,7 @@ class GenerationRunFactoryImagePromptPassthroughTest {
                 ImageGenerationRequest request
             ) {
                 submittedPrompt[0] = request.prompt();
+                submittedReferenceImageUrl[0] = request.referenceImageUrl();
                 return new RemoteImageGenerationResult(
                     new byte[] {1, 2, 3},
                     "image/png",
@@ -217,6 +219,7 @@ class GenerationRunFactoryImagePromptPassthroughTest {
         Map<String, Object> run = factory.createImageRun("run_image_1", request);
 
         assertEquals(storyboardPrompt, submittedPrompt[0]);
+        assertEquals("https://example.com/reference.png", submittedReferenceImageUrl[0]);
         @SuppressWarnings("unchecked")
         Map<String, Object> result = (Map<String, Object>) run.get("result");
         assertEquals(storyboardPrompt, result.get("keyframePrompt"));

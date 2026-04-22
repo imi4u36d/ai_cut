@@ -20,11 +20,13 @@ import java.util.Map;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 
 @Component
+@ConditionalOnProperty(prefix = "jiandou.app.workflow", name = "bootstrap-mock-data", havingValue = "true")
 public class WorkflowMockDataBootstrap {
 
     private static final Logger log = LoggerFactory.getLogger(WorkflowMockDataBootstrap.class);
@@ -814,6 +816,8 @@ public class WorkflowMockDataBootstrap {
         workflow.setImageModel(imageModel);
         workflow.setVideoModel(videoModel);
         workflow.setVideoSize(videoSize);
+        workflow.setKeyframeSeed(seed);
+        workflow.setVideoSeed(seed);
         workflow.setTaskSeed(seed);
         workflow.setMinDurationSeconds(minDurationSeconds);
         workflow.setMaxDurationSeconds(maxDurationSeconds);

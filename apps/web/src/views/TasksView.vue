@@ -127,6 +127,10 @@
                     <h4>{{ task.title }}</h4>
                     <span class="board-task__menu">⋮</span>
                   </div>
+                  <div v-if="task.failureReason" class="board-task__reason">
+                    <span>{{ taskFailureContext(task) || "失败原因" }}</span>
+                    <p>{{ task.failureReason }}</p>
+                  </div>
                   <div class="board-task__progress">
                     <div class="board-task__progress-fill" :style="{ width: `${task.progress}%` }"></div>
                   </div>
@@ -177,6 +181,11 @@
             <div class="detail-stage-line__bar" :class="stageStateClass(stage.state)"></div>
             <p>{{ stage.label }}</p>
           </div>
+        </div>
+
+        <div v-if="selectedTaskFailureReason" class="task-details-panel__error task-details-panel__error-block">
+          <strong>{{ selectedTaskFailureContext || "失败原因" }}</strong>
+          <p>{{ selectedTaskFailureReason }}</p>
         </div>
 
         <div class="task-details-dialog__grid">
@@ -551,6 +560,12 @@ const selectedTaskJoinLabel = computed(() => {
     return "暂无";
   }
   return formatMonitoringValue(monitoring.latestJoinName || monitoring.latestJoinClipIndex);
+});
+const selectedTaskFailureReason = computed(() => {
+  return selectedTaskDetail.value?.failureReason || selectedTaskSummary.value?.failureReason || "";
+});
+const selectedTaskFailureContext = computed(() => {
+  return taskFailureContext(selectedTaskDetail.value ?? selectedTaskSummary.value);
 });
 
 const selectedTaskArtifactDirectories = computed(() => {
@@ -1056,6 +1071,20 @@ function formatMonitoringValue(value: unknown) {
   return text ? text : "暂无";
 }
 
+function taskFailureContext(task?: Pick<TaskListItem, "failureStage" | "failureClipIndex"> | null) {
+  if (!task) {
+    return "";
+  }
+  const parts: string[] = [];
+  if (task.failureStage) {
+    parts.push(`阶段 ${task.failureStage}`);
+  }
+  if (typeof task.failureClipIndex === "number" && task.failureClipIndex > 0) {
+    parts.push(`镜头 #${task.failureClipIndex}`);
+  }
+  return parts.join(" · ");
+}
+
 /**
  * 处理阶段状态样式类。
  * @param state 状态值
@@ -1423,6 +1452,27 @@ onUnmounted(() => {
   color: rgba(255, 255, 255, 0.44);
 }
 
+.board-task__reason {
+  display: grid;
+  gap: 4px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(255, 118, 150, 0.1);
+}
+
+.board-task__reason span {
+  font-size: 0.7rem;
+  letter-spacing: 0.04em;
+  color: rgba(255, 179, 197, 0.86);
+}
+
+.board-task__reason p {
+  margin: 0;
+  font-size: 0.78rem;
+  line-height: 1.45;
+  color: rgba(255, 228, 234, 0.96);
+}
+
 .board-task__progress {
   height: 6px;
   border-radius: 999px;
@@ -1525,6 +1575,16 @@ onUnmounted(() => {
 
 .task-details-panel__error {
   color: #ffabc0;
+}
+
+.task-details-panel__error-block {
+  display: grid;
+  gap: 6px;
+}
+
+.task-details-panel__error-block strong,
+.task-details-panel__error-block p {
+  margin: 0;
 }
 
 .task-details-panel__title {

@@ -36,6 +36,7 @@ public class TaskViewMapper {
     public Map<String, Object> toListItem(TaskRecord task) {
         TaskMonitoringSnapshot monitoring = monitoringSummary(task);
         TaskDiagnosisSummary diagnosis = diagnosisSummary(task, monitoring);
+        FailureSummary failure = failureSummary(task);
         Map<String, Object> row = new LinkedHashMap<>();
         row.put("id", task.id());
         row.put("title", task.title());
@@ -69,6 +70,9 @@ public class TaskViewMapper {
         row.put("diagnosisCode", diagnosis.code());
         row.put("diagnosisHint", diagnosis.hint());
         row.put("recommendedAction", diagnosis.recommendedAction());
+        row.put("failureReason", failure.reason());
+        row.put("failureStage", failure.stage());
+        row.put("failureClipIndex", failure.clipIndex());
         return row;
     }
 
@@ -132,6 +136,7 @@ public class TaskViewMapper {
      */
     public Map<String, Object> toDetail(TaskRecord task) {
         TaskMonitoringSnapshot monitoring = monitoringSummary(task);
+        FailureSummary failure = failureSummary(task);
         Map<String, Object> row = new LinkedHashMap<>(toListItem(task));
         row.put("artifactDirectories", monitoring.artifactDirectories().toMap());
         row.put("introTemplate", task.introTemplate());
@@ -142,6 +147,9 @@ public class TaskViewMapper {
         row.put("effectRatingNote", task.effectRatingNote());
         row.put("ratedAt", task.ratedAt());
         row.put("errorMessage", task.errorMessage());
+        row.put("failureReason", failure.reason());
+        row.put("failureStage", failure.stage());
+        row.put("failureClipIndex", failure.clipIndex());
         row.put("transcriptPreview", transcriptPreview(task.transcriptText()));
         row.put("transcriptCueCount", 0);
         row.put("source", null);
@@ -343,6 +351,33 @@ public class TaskViewMapper {
     }
 
     /**
+     * 处理latest失败阶段运行。
+     * @param task 要处理的任务对象
+     * @return 处理结果
+     */
+    private Map<String, Object> latestFailedStageRun(TaskRecord task) {
+        return task.stageRunsView().stream()
+            .filter(item -> !stringValue(item.get("errorMessage")).isBlank() || "FAILED".equalsIgnoreCase(stringValue(item.get("status"))))
+            .max(Comparator.comparing(this::stageRunSortKey))
+            .orElse(Map.of());
+    }
+
+    /**
+     * 处理latest错误追踪。
+     * @param task 要处理的任务对象
+     * @return 处理结果
+     */
+    private Map<String, Object> latestErrorTrace(TaskRecord task) {
+        return task.traceView().stream()
+            .filter(item -> {
+                String level = stringValue(item.get("level"));
+                return "ERROR".equalsIgnoreCase(level) || "WARN".equalsIgnoreCase(level);
+            })
+            .max(Comparator.comparing(item -> stringValue(item.get("timestamp"))))
+            .orElse(Map.of());
+    }
+
+    /**
      * 处理阶段运行SortKey。
      * @param stageRun 阶段运行值
      * @return 处理结果
@@ -378,6 +413,47 @@ public class TaskViewMapper {
             .filter(item -> isJoinResultType(item.get("resultType")))
             .max(Comparator.comparingInt(item -> intValue(item.get("clipIndex"), 0)))
             .orElse(Map.of());
+    }
+
+    /**
+     * 汇总任务失败原因，优先返回执行期最具体的错误文本。
+     * @param task 要处理的任务对象
+     * @return 处理结果
+     */
+    private FailureSummary failureSummary(TaskRecord task) {
+        Map<String, Object> latestAttempt = latestAttempt(task);
+        Map<String, Object> latestFailedStageRun = latestFailedStageRun(task);
+        Map<String, Object> latestErrorTrace = latestErrorTrace(task);
+        Map<String, Object> tracePayload = mapValue(latestErrorTrace.get("payload"));
+
+        String reason = firstNonBlank(
+            specificFailureMessage(latestAttempt.get("failureMessage")),
+            specificFailureMessage(latestFailedStageRun.get("errorMessage")),
+            specificFailureMessage(tracePayload.get("error")),
+            specificFailureMessage(tracePayload.get("errorMessage")),
+            specificFailureMessage(tracePayload.get("reason")),
+            specificFailureMessage(latestErrorTrace.get("message")),
+            blankToNull(task.errorMessage())
+        );
+
+        String stage = blankToNull(firstNonBlank(
+            stringValue(latestFailedStageRun.get("stageName")),
+            stringValue(latestErrorTrace.get("stage")),
+            stringValue(task.executionContext().get("currentStage")),
+            stringValue(latestAttempt.get("resumeFromStage"))
+        ));
+        Integer clipIndex = nullableInt(firstPresent(
+            latestFailedStageRun.get("clipIndex"),
+            tracePayload.get("clipIndex"),
+            task.executionContext().get("currentClipIndex")
+        ));
+        if (clipIndex != null && clipIndex <= 0) {
+            clipIndex = null;
+        }
+        if (reason.isBlank()) {
+            return new FailureSummary(null, stage, clipIndex);
+        }
+        return new FailureSummary(reason, stage, clipIndex);
     }
 
     /**
@@ -857,6 +933,26 @@ public class TaskViewMapper {
     }
 
     /**
+     * 过滤“失败/错误”等无信息量的泛化文案。
+     * @param value 待处理的值
+     * @return 处理结果
+     */
+    private String specificFailureMessage(Object value) {
+        String normalized = stringValue(value);
+        if (normalized.isBlank()) {
+            return "";
+        }
+        String lower = normalized.toLowerCase();
+        if (List.of("error", "failed", "failure", "错误", "失败", "任务失败", "任务已失败").contains(normalized)
+            || List.of("error", "failed", "failure").contains(lower)
+            || List.of("spring worker 执行失败", "spring worker 执行失败。", "远端视频生成失败").contains(normalized)
+            || List.of("spring worker 执行失败", "spring worker 执行失败。", "remote video generation failed").contains(lower)) {
+            return "";
+        }
+        return normalized;
+    }
+
+    /**
      * 处理任务诊断摘要。
      * @param severity severity值
      * @param code code值
@@ -865,6 +961,14 @@ public class TaskViewMapper {
      * @return 处理结果
      */
     private record TaskDiagnosisSummary(String severity, String code, String hint, String recommendedAction) {}
+
+    /**
+     * 处理任务失败摘要。
+     * @param reason 失败原因值
+     * @param stage 失败阶段值
+     * @param clipIndex 失败镜头值
+     */
+    private record FailureSummary(String reason, String stage, Integer clipIndex) {}
 
     /**
      * 处理任务产物Directories。

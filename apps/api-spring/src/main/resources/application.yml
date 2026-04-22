@@ -29,6 +29,8 @@ jiandou:
     execution-mode: ${JIANDOU_EXECUTION_MODE:queue}
     web-origin: ${JIANDOU_WEB_ORIGIN:http://127.0.0.1:5173,http://localhost:5173,http://127.0.0.1:5174,http://localhost:5174}
     cookie-secure: ${JIANDOU_COOKIE_SECURE:false}
+    workflow:
+      bootstrap-mock-data: ${JIANDOU_WORKFLOW_BOOTSTRAP_MOCK_DATA:false}
   auth:
     invite-default-expiry-days: ${JIANDOU_AUTH_INVITE_DEFAULT_EXPIRY_DAYS:7}
     credential-secret: ${JIANDOU_USER_CREDENTIAL_SECRET:dev-user-credential-secret-change-me}

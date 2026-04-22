@@ -11,6 +11,8 @@ public record CreateWorkflowRequest(
     String imageModel,
     String videoModel,
     String videoSize,
+    Integer keyframeSeed,
+    Integer videoSeed,
     Integer seed,
     Integer minDurationSeconds,
     Integer maxDurationSeconds

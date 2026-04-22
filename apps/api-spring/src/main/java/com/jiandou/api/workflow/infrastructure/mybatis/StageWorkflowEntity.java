@@ -31,6 +31,10 @@ public class StageWorkflowEntity {
     private String videoModel;
     @TableField("video_size")
     private String videoSize;
+    @TableField("keyframe_seed")
+    private Integer keyframeSeed;
+    @TableField("video_seed")
+    private Integer videoSeed;
     @TableField("task_seed")
     private Integer taskSeed;
     @TableField("min_duration_seconds")
@@ -83,6 +87,10 @@ public class StageWorkflowEntity {
     public void setVideoModel(String videoModel) { this.videoModel = videoModel; }
     public String getVideoSize() { return videoSize; }
     public void setVideoSize(String videoSize) { this.videoSize = videoSize; }
+    public Integer getKeyframeSeed() { return keyframeSeed; }
+    public void setKeyframeSeed(Integer keyframeSeed) { this.keyframeSeed = keyframeSeed; }
+    public Integer getVideoSeed() { return videoSeed; }
+    public void setVideoSeed(Integer videoSeed) { this.videoSeed = videoSeed; }
     public Integer getTaskSeed() { return taskSeed; }
     public void setTaskSeed(Integer taskSeed) { this.taskSeed = taskSeed; }
     public Integer getMinDurationSeconds() { return minDurationSeconds; }

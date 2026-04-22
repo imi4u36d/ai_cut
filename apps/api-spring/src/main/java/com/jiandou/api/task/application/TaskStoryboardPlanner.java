@@ -34,6 +34,12 @@ public class TaskStoryboardPlanner {
         "^\\s*(?<value>\\d{1,3}(?:\\.\\d+)?)\\s*$",
         Pattern.CASE_INSENSITIVE
     );
+    private static final Pattern CHARACTER_DEFINITION_LINE_PATTERN = Pattern.compile(
+        "^\\s*[-*]\\s*(?<name>[^：:]+?)\\s*[：:]\\s*(?<details>.+)$"
+    );
+    private static final Pattern CHARACTER_APPEARANCE_PATTERN = Pattern.compile(
+        "(?:外观锚点|外形定义|外观定义|外貌特征|人物外观)\\s*[：:](?<appearance>.+?)(?=(?:行为特征|说话风格|性格特征|角色关系|$))"
+    );
 
     private final ModelRuntimePropertiesResolver modelResolver;
 
@@ -62,11 +68,7 @@ public class TaskStoryboardPlanner {
      * @return 处理结果
      */
     public List<StoryboardShotPlan> buildStoryboardShotPlans(TaskRecord task, String storyboardMarkdown) {
-        List<StoryboardShotPlan> shotPlans = extractStoryboardShotPlans(storyboardMarkdown);
-        if (!shotPlans.isEmpty()) {
-            return shotPlans;
-        }
-        throw new IllegalStateException("分镜解析失败，未识别到有效镜头。");
+        return extractStoryboardShotPlans(storyboardMarkdown);
     }
 
     /**
@@ -75,11 +77,41 @@ public class TaskStoryboardPlanner {
      * @return 处理结果
      */
     public List<String> buildStoryboardVideoPrompts(String storyboardMarkdown) {
-        List<StoryboardShotPlan> shotPlans = extractStoryboardShotPlans(storyboardMarkdown);
-        if (shotPlans.isEmpty()) {
-            throw new IllegalStateException("分镜解析失败，未识别到有效镜头。");
+        return extractStoryboardShotPlans(storyboardMarkdown).stream().map(StoryboardShotPlan::videoPrompt).toList();
+    }
+
+    /**
+     * 提取角色定义。
+     * @param storyboardMarkdown 分镜Markdown值
+     * @return 角色定义列表
+     */
+    public List<CharacterDefinition> extractCharacterDefinitions(String storyboardMarkdown) {
+        String normalized = stringValue(storyboardMarkdown);
+        if (normalized.isBlank()) {
+            return List.of();
         }
-        return shotPlans.stream().map(StoryboardShotPlan::videoPrompt).toList();
+        int definitionsStart = normalized.indexOf("【角色定义信息】");
+        if (definitionsStart < 0) {
+            return List.of();
+        }
+        int scriptStart = normalized.indexOf("【分镜脚本】");
+        String definitionsBlock = scriptStart > definitionsStart
+            ? normalized.substring(definitionsStart, scriptStart)
+            : normalized.substring(definitionsStart);
+        List<CharacterDefinition> definitions = new ArrayList<>();
+        for (String rawLine : definitionsBlock.split("\\R")) {
+            Matcher matcher = CHARACTER_DEFINITION_LINE_PATTERN.matcher(rawLine);
+            if (!matcher.matches()) {
+                continue;
+            }
+            String name = normalizeStoryboardPromptValue(matcher.group("name"));
+            String details = normalizeStoryboardPromptValue(matcher.group("details"));
+            String appearance = extractAppearanceDefinition(details);
+            if (!name.isBlank() && !appearance.isBlank() && !details.isBlank()) {
+                definitions.add(new CharacterDefinition(name, appearance, details));
+            }
+        }
+        return definitions;
     }
 
     /**
@@ -222,6 +254,9 @@ public class TaskStoryboardPlanner {
         }
         List<String> lines = List.of(normalized.split("\\R"));
         StoryboardTableSchema schema = detectStoryboardTableSchema(lines);
+        if (schema.headerCells().isEmpty() || !schema.missingStructuredRequiredColumns().isEmpty()) {
+            return List.of();
+        }
         List<int[]> ranges = new ArrayList<>();
         for (String rawLine : lines) {
             String stripped = rawLine.trim();
@@ -236,19 +271,8 @@ public class TaskStoryboardPlanner {
             if (first.isBlank() || first.contains("镜号") || first.toLowerCase().contains("shot")) {
                 continue;
             }
-            int legacyDurationFallbackIndex = schema.headerCells().isEmpty() ? cells.size() - 1 : -1;
-            String durationCell = schema.cell(cells, schema.durationIndex(), legacyDurationFallbackIndex);
+            String durationCell = schema.cell(cells, schema.durationIndex(), -1);
             int[] parsed = parseDurationRangeHint(durationCell);
-            if (parsed != null) {
-                ranges.add(parsed);
-            }
-        }
-        if (!ranges.isEmpty()) {
-            return ranges;
-        }
-        Matcher matcher = SCRIPT_DURATION_RANGE_PATTERN.matcher(normalized);
-        while (matcher.find()) {
-            int[] parsed = parseDurationRangeHint(matcher.group());
             if (parsed != null) {
                 ranges.add(parsed);
             }
@@ -264,11 +288,14 @@ public class TaskStoryboardPlanner {
     private List<StoryboardShotPlan> extractStoryboardShotPlans(String storyboardMarkdown) {
         String normalized = stringValue(storyboardMarkdown);
         if (normalized.isBlank()) {
-            return List.of();
+            throw new IllegalStateException("分镜解析失败，分镜脚本不能为空，且必须是结构化 Markdown 表格。");
         }
+        Map<String, String> characterAppearances = extractCharacterAppearanceMap(normalized);
         List<String> lines = List.of(normalized.split("\\R"));
         StoryboardTableSchema schema = detectStoryboardTableSchema(lines);
+        validateStructuredStoryboardSchema(schema);
         List<StoryboardShotPlan> shotPlans = new ArrayList<>();
+        int dataRowCount = 0;
 
         for (String rawLine : lines) {
             String stripped = rawLine.trim();
@@ -283,78 +310,105 @@ public class TaskStoryboardPlanner {
             if (first.isBlank() || first.contains("镜号") || first.toLowerCase().contains("shot")) {
                 continue;
             }
-            String shotIndex = first.replaceAll("[^0-9一二三四五六七八九十百千两]", "");
-            if (shotIndex.isBlank()) {
-                shotIndex = String.valueOf(shotPlans.size() + 1);
-            }
+            dataRowCount++;
+            String shotIndex = normalizeStoryboardPromptValue(first);
             int sequentialIndex = shotPlans.size() + 1;
-            int legacyCameraFallbackIndex = schema.headerCells().isEmpty() ? 2 : -1;
-            int legacyDurationFallbackIndex = schema.headerCells().isEmpty() ? cells.size() - 1 : -1;
-            String scene = schema.cell(cells, schema.sceneIndex(), 1);
-            String time = schema.cell(cells, schema.timeIndex(), -1);
-            String shotSpec = normalizeStoryboardPromptValue(schema.cell(cells, schema.shotSpecIndex(), legacyCameraFallbackIndex));
-            String movement = normalizeStoryboardPromptValue(schema.cell(cells, schema.movementIndex(), legacyCameraFallbackIndex));
-            String cameraMovement = firstNonBlank(
-                normalizeStoryboardPromptValue(schema.cell(cells, schema.cameraMovementIndex(), -1)),
-                movement
+            String scene = "";
+            String durationHint = normalizeStoryboardPromptValue(schema.cell(cells, schema.durationIndex(), -1));
+            String firstFramePrompt = augmentCharacterAppearanceDefinitions(
+                normalizeStoryboardPromptValue(schema.cell(cells, schema.firstFramePromptIndex(), -1)),
+                characterAppearances
             );
-            String explicitMotion = normalizeStoryboardPromptValue(schema.cell(cells, schema.motionIndex(), -1));
-            String explicitFirstFrame = normalizeStoryboardPromptValue(schema.cell(cells, schema.firstFramePromptIndex(), -1));
-            String explicitLastFrame = normalizeStoryboardPromptValue(schema.cell(cells, schema.lastFramePromptIndex(), -1));
-            String visual = schema.cell(cells, schema.visualIndex(), 3);
-            String dynamic = schema.cell(cells, schema.dynamicIndex(), -1);
-            String storyDescription = schema.cell(cells, schema.storyDescriptionIndex(), -1);
-            String characterAppearance = schema.cell(cells, schema.characterAppearanceIndex(), -1);
-            String action = schema.cell(cells, schema.actionIndex(), -1);
-            String emotion = schema.cell(cells, schema.emotionIndex(), -1);
-            String dialogue = normalizeStoryboardPromptValue(schema.cell(cells, schema.dialogueIndex(), -1));
-            String audio = normalizeStoryboardPromptValue(schema.cell(cells, schema.audioIndex(), -1));
-            String durationHint = schema.cell(cells, schema.durationIndex(), legacyDurationFallbackIndex);
-            String firstFramePrompt = explicitFirstFrame;
-            String lastFramePrompt = explicitLastFrame;
-            String motion = explicitMotion;
-            if (motion.isBlank()) {
-                motion = normalizeStoryboardPromptValue(action);
-            }
-            cameraMovement = firstNonBlank(extractCameraMovement(cameraMovement), normalizeStoryboardPromptValue(cameraMovement));
-            if (cameraMovement.isBlank()) {
-                cameraMovement = inferCameraMovement(shotSpec, motion);
-            }
+            String lastFramePrompt = augmentCharacterAppearanceDefinitions(
+                normalizeStoryboardPromptValue(schema.cell(cells, schema.lastFramePromptIndex(), -1)),
+                characterAppearances
+            );
+            String contentDescription = normalizeStoryboardPromptValue(schema.cell(cells, schema.contentDescriptionIndex(), -1));
+            String cameraMovement = extractCameraMovement(contentDescription);
             if (cameraMovement.isBlank()) {
                 cameraMovement = "static";
             }
-            String sceneDescription = normalizeStoryboardPromptValue(storyDescription);
-            if (sceneDescription.isBlank()) {
-                continue;
-            }
-            if (firstFramePrompt.isBlank()) {
-                firstFramePrompt = sceneDescription;
-            }
-            if (lastFramePrompt.isBlank()) {
-                lastFramePrompt = sceneDescription;
-            }
-            String imagePrompt = sequentialIndex == 1 ? firstNonBlank(firstFramePrompt, sceneDescription) : "";
-            String videoPromptBase = firstNonBlank(lastFramePrompt, sceneDescription);
-            String videoPrompt = buildContinuousClipPrompt(videoPromptBase, motion, cameraMovement, "", audio);
-            if (!videoPrompt.isBlank()) {
-                shotPlans.add(new StoryboardShotPlan(
-                    sequentialIndex,
-                    shotIndex,
-                    scene,
-                    firstFramePrompt,
-                    lastFramePrompt,
-                    motion,
-                    cameraMovement,
-                    durationHint,
-                    imagePrompt,
-                    videoPrompt
-                ));
-            }
+            assertStructuredStoryboardRow(shotIndex, firstFramePrompt, lastFramePrompt, contentDescription, durationHint);
+            String imagePrompt = sequentialIndex == 1 ? firstFramePrompt : "";
+            String videoPrompt = buildContinuousClipPrompt(
+                firstFramePrompt,
+                lastFramePrompt,
+                contentDescription,
+                cameraMovement,
+                durationHint
+            );
+            shotPlans.add(new StoryboardShotPlan(
+                sequentialIndex,
+                shotIndex,
+                scene,
+                firstFramePrompt,
+                lastFramePrompt,
+                contentDescription,
+                cameraMovement,
+                durationHint,
+                imagePrompt,
+                videoPrompt
+            ));
+        }
+        if (dataRowCount == 0) {
+            throw new IllegalStateException("分镜解析失败，结构化分镜表未识别到任何镜头数据行。");
         }
         if (!shotPlans.isEmpty()) {
             return shotPlans;
         }
-        return List.of();
+        throw new IllegalStateException("分镜解析失败，结构化分镜表未生成有效镜头。");
+    }
+
+    /**
+     * 校验结构化分镜Schema。
+     * @param schema 分镜表Schema值
+     */
+    private void validateStructuredStoryboardSchema(StoryboardTableSchema schema) {
+        if (schema.headerCells().isEmpty()) {
+            throw new IllegalStateException(
+                "分镜解析失败，必须提供结构化 Markdown 分镜表，表头需包含：镜号、首帧描述、尾帧描述、分镜内容描述、时长。"
+            );
+        }
+        List<String> missingColumns = schema.missingStructuredRequiredColumns();
+        if (!missingColumns.isEmpty()) {
+            throw new IllegalStateException("分镜解析失败，结构化分镜表缺少必填列：" + String.join("、", missingColumns));
+        }
+    }
+
+    /**
+     * 校验结构化分镜行。
+     * @param shotLabel 镜头标签值
+     * @param firstFramePrompt 首帧描述值
+     * @param lastFramePrompt 尾帧描述值
+     * @param contentDescription 分镜内容描述值
+     * @param durationHint 时长值
+     */
+    private void assertStructuredStoryboardRow(
+        String shotLabel,
+        String firstFramePrompt,
+        String lastFramePrompt,
+        String contentDescription,
+        String durationHint
+    ) {
+        List<String> missingFields = new ArrayList<>();
+        if (normalizeStoryboardPromptValue(shotLabel).isBlank()) {
+            missingFields.add("镜号");
+        }
+        if (normalizeStoryboardPromptValue(firstFramePrompt).isBlank()) {
+            missingFields.add("首帧描述");
+        }
+        if (normalizeStoryboardPromptValue(lastFramePrompt).isBlank()) {
+            missingFields.add("尾帧描述");
+        }
+        if (normalizeStoryboardPromptValue(contentDescription).isBlank()) {
+            missingFields.add("分镜内容描述");
+        }
+        if (normalizeStoryboardPromptValue(durationHint).isBlank()) {
+            missingFields.add("时长");
+        }
+        if (!missingFields.isEmpty()) {
+            throw new IllegalStateException("分镜解析失败，镜头 " + shotLabel + " 缺少必填字段：" + String.join("、", missingFields));
+        }
     }
 
     /**
@@ -547,14 +601,13 @@ public class TaskStoryboardPlanner {
     private boolean looksLikeHeaderRow(List<String> cells) {
         for (String cell : cells) {
             String normalized = normalizeStoryboardHeader(cell);
-            if (normalized.contains("shot") || normalized.contains("镜号") || normalized.contains("景别")
-                || normalized.contains("运镜") || normalized.contains("镜头参数") || normalized.contains("画面") || normalized.contains("visual")
-                || normalized.contains("audio") || normalized.contains("duration") || normalized.contains("时长")
-                || normalized.contains("剧情摘要") || normalized.contains("seedream") || normalized.contains("seedance")
-                || normalized.contains("剧情描述") || normalized.contains("画面叙述") || normalized.contains("storydescription")
-                || normalized.contains("scene") || normalized.contains("time") || normalized.contains("lighting")
-                || normalized.contains("atmosphere") || normalized.contains("appearance") || normalized.contains("action")
-                || normalized.contains("emotion") || normalized.contains("camera") || normalized.contains("continuity")) {
+            if (normalized.contains("shot") || normalized.contains("镜号")
+                || normalized.contains("首帧") || normalized.contains("尾帧")
+                || normalized.contains("startframe") || normalized.contains("endframe")
+                || normalized.contains("分镜内容描述") || normalized.contains("剧情画面与声音描述")
+                || normalized.contains("合并长段描述") || normalized.contains("画面叙述")
+                || normalized.contains("storydescription") || normalized.contains("contentdescription")
+                || normalized.contains("duration") || normalized.contains("时长")) {
                 return true;
             }
         }
@@ -588,76 +641,145 @@ public class TaskStoryboardPlanner {
     }
 
     /**
-     * 构建Continuous片段提示词。
-     * @param lastFramePrompt lastFrame提示词值
-     * @param motion motion值
-     * @param cameraMovement cameraMovement值
-     * @param dialogue dialogue值
-     * @param audio audio值
-     * @return 处理结果
+     * 提取角色外观定义。
+     * @param storyboardMarkdown 分镜Markdown值
+     * @return 角色外观映射
      */
-    private String buildContinuousClipPrompt(String lastFramePrompt, String motion, String cameraMovement, String dialogue, String audio) {
-        List<String> parts = new ArrayList<>();
-        if (!lastFramePrompt.isBlank()) {
-            parts.add(lastFramePrompt);
+    private Map<String, String> extractCharacterAppearanceMap(String storyboardMarkdown) {
+        Map<String, String> appearances = new LinkedHashMap<>();
+        for (CharacterDefinition definition : extractCharacterDefinitions(storyboardMarkdown)) {
+            if (!definition.name().isBlank() && !definition.appearance().isBlank()) {
+                appearances.put(definition.name(), definition.appearance());
+            }
         }
-        if (!motion.isBlank()) {
-            parts.add("动作延展：" + motion);
-        }
-        if (!cameraMovement.isBlank()) {
-            parts.add("运镜：" + cameraMovement);
-        }
-        String dialogueInstruction = dialogueInstruction(dialogue);
-        if (!dialogueInstruction.isBlank()) {
-            parts.add(dialogueInstruction);
-        }
-        if (!audio.isBlank()) {
-            parts.add("音频设计：" + audio);
-        }
-        return truncateText(String.join("；", parts), 1400);
+        return appearances;
     }
 
     /**
-     * 处理dialogueInstruction。
-     * @param dialogue dialogue值
-     * @return 处理结果
+     * 提取单个角色外观定义。
+     * @param details 角色定义详情
+     * @return 外观定义
      */
-    private String dialogueInstruction(String dialogue) {
-        String normalized = normalizeStoryboardPromptValue(dialogue);
+    private String extractAppearanceDefinition(String details) {
+        String normalized = normalizeStoryboardPromptValue(details);
         if (normalized.isBlank()) {
             return "";
         }
-        String lowered = normalized.toLowerCase();
-        if (normalized.startsWith("画外音") || normalized.startsWith("旁白")
-            || lowered.startsWith("voice over") || lowered.startsWith("voiceover")
-            || lowered.startsWith("off-screen") || lowered.startsWith("offscreen")) {
-            return "可听见的画外音：" + normalized + "；说话者可暂不出镜，画外音放在镜头中段，前0.5秒与后0.5秒保持人声留白，仅保留动作或环境声缓冲。";
+        Matcher matcher = CHARACTER_APPEARANCE_PATTERN.matcher(normalized);
+        if (matcher.find()) {
+            return trimAppearanceDefinition(normalizeStoryboardPromptValue(matcher.group("appearance")));
         }
-        if (normalized.startsWith("独白：") || normalized.startsWith("独白:")) {
-            return "可听见的人声独白：" + normalized + "；独白放在镜头中段，前0.5秒与后0.5秒保持无人声，仅保留动作或环境声缓冲。";
-        }
-        if (normalized.contains("“") || normalized.contains("\"") || normalized.contains("：") || normalized.contains(":")) {
-            return "可听见的人声对白：" + normalized + "；对白放在镜头中段，前0.5秒与后0.5秒保持无人声，仅保留动作或环境声缓冲。";
-        }
-        return "可听见的人声独白：独白：" + normalized + "；独白放在镜头中段，前0.5秒与后0.5秒保持无人声，仅保留动作或环境声缓冲。";
+        int behaviorIndex = indexOfFirst(normalized, "行为特征", "说话风格", "性格特征", "角色关系");
+        return behaviorIndex > 0 ? trimAppearanceDefinition(normalizeStoryboardPromptValue(normalized.substring(0, behaviorIndex))) : "";
     }
 
     /**
-     * 处理inferCameraMovement。
-     * @param shotSpec shotSpec值
-     * @param motion motion值
-     * @return 处理结果
+     * 为关键帧提示词补充角色外观定义。
+     * @param prompt 原始提示词
+     * @param characterAppearances 角色外观映射
+     * @return 增强后的提示词
      */
-    private String inferCameraMovement(String shotSpec, String motion) {
-        String normalizedShotSpec = normalizeStoryboardPromptValue(shotSpec);
-        String normalizedMotion = normalizeStoryboardPromptValue(motion);
-        for (String candidate : List.of(normalizedShotSpec, normalizedMotion)) {
-            String inferred = extractCameraMovement(candidate);
-            if (!inferred.isBlank()) {
-                return inferred;
+    private String augmentCharacterAppearanceDefinitions(String prompt, Map<String, String> characterAppearances) {
+        String normalizedPrompt = normalizeStoryboardPromptValue(prompt);
+        if (normalizedPrompt.isBlank() || characterAppearances == null || characterAppearances.isEmpty()) {
+            return normalizedPrompt;
+        }
+        String augmentedPrompt = normalizedPrompt;
+        List<Map.Entry<String, String>> entries = new ArrayList<>(characterAppearances.entrySet());
+        entries.sort((left, right) -> Integer.compare(right.getKey().length(), left.getKey().length()));
+        for (Map.Entry<String, String> entry : entries) {
+            String characterName = normalizeStoryboardPromptValue(entry.getKey());
+            String appearance = normalizeStoryboardPromptValue(entry.getValue());
+            if (characterName.isBlank()
+                || appearance.isBlank()
+                || !augmentedPrompt.contains(characterName)
+                || augmentedPrompt.contains(characterName + "（" + appearance + "）")
+                || augmentedPrompt.contains(characterName + "(" + appearance + ")")) {
+                continue;
+            }
+            Pattern pattern = Pattern.compile(Pattern.quote(characterName) + "(?!\\s*[（(])");
+            Matcher matcher = pattern.matcher(augmentedPrompt);
+            if (matcher.find()) {
+                augmentedPrompt = matcher.replaceFirst(
+                    Matcher.quoteReplacement(characterName + "（" + appearance + "）")
+                );
             }
         }
-        return "";
+        return augmentedPrompt;
+    }
+
+    /**
+     * 查找多个token中的最早位置。
+     * @param value 原始文本
+     * @param tokens token列表
+     * @return 最早位置
+     */
+    private int indexOfFirst(String value, String... tokens) {
+        int resolved = -1;
+        String normalized = stringValue(value);
+        for (String token : tokens) {
+            int current = normalized.indexOf(token);
+            if (current >= 0 && (resolved < 0 || current < resolved)) {
+                resolved = current;
+            }
+        }
+        return resolved;
+    }
+
+    /**
+     * 清理外观定义末尾标点，避免重复包裹时出现冗余停顿。
+     * @param value 原始外观定义
+     * @return 清理后的外观定义
+     */
+    private String trimAppearanceDefinition(String value) {
+        return normalizeStoryboardPromptValue(value).replaceAll("[。；;，,]+$", "").trim();
+    }
+
+    /**
+     * 角色定义。
+     * @param name 角色名
+     * @param appearance 外观定义
+     */
+    public record CharacterDefinition(String name, String appearance, String definition) {
+
+        public CharacterDefinition(String name, String appearance) {
+            this(name, appearance, appearance);
+        }
+    }
+
+    /**
+     * 构建Continuous片段提示词。
+     * @param firstFramePrompt 首帧提示词值
+     * @param lastFramePrompt 尾帧提示词值
+     * @param contentDescription 分镜内容描述值
+     * @param cameraMovement cameraMovement值
+     * @param durationHint 时长值
+     * @return 处理结果
+     */
+    private String buildContinuousClipPrompt(
+        String firstFramePrompt,
+        String lastFramePrompt,
+        String contentDescription,
+        String cameraMovement,
+        String durationHint
+    ) {
+        List<String> parts = new ArrayList<>();
+        if (!firstFramePrompt.isBlank()) {
+            parts.add("首帧：" + firstFramePrompt);
+        }
+        if (!lastFramePrompt.isBlank()) {
+            parts.add("尾帧：" + lastFramePrompt);
+        }
+        if (!contentDescription.isBlank()) {
+            parts.add("分镜内容：" + contentDescription);
+        }
+        if (!cameraMovement.isBlank() && !"static".equalsIgnoreCase(cameraMovement)) {
+            parts.add("运镜关键词：" + cameraMovement);
+        }
+        if (!durationHint.isBlank()) {
+            parts.add("时长：" + durationHint);
+        }
+        return truncateText(String.join("；", parts), 2200);
     }
 
     /**
@@ -713,21 +835,6 @@ public class TaskStoryboardPlanner {
     }
 
     /**
-     * 处理首个非空白。
-     * @param values 值
-     * @return 处理结果
-     */
-    private String firstNonBlank(String... values) {
-        for (String value : values) {
-            String normalized = stringValue(value);
-            if (!normalized.isBlank()) {
-                return normalized;
-            }
-        }
-        return "";
-    }
-
-    /**
      * 检查是否Divider行。
      * @param cells cells值
      * @return 是否满足条件
@@ -768,48 +875,18 @@ public class TaskStoryboardPlanner {
      * 处理分镜TableSchema。
      * @param headerCells headerCells值
      * @param shotNoIndex shotNo索引值
-     * @param sceneIndex scene索引值
-     * @param timeIndex 时间索引值
-     * @param shotSpecIndex shotSpec索引值
-     * @param movementIndex movement索引值
-     * @param firstFramePromptIndex 首个Frame提示词索引值
-     * @param lastFramePromptIndex lastFrame提示词索引值
-     * @param motionIndex motion索引值
-     * @param cameraMovementIndex cameraMovement索引值
-     * @param visualIndex visual索引值
-     * @param dynamicIndex dynamic索引值
-     * @param storyDescriptionIndex storyDescription索引值
-     * @param characterAppearanceIndex characterAppearance索引值
-     * @param actionIndex action索引值
-     * @param emotionIndex emotion索引值
-     * @param lightingIndex lighting索引值
-     * @param atmosphereIndex atmosphere索引值
-     * @param dialogueIndex dialogue索引值
-     * @param audioIndex audio索引值
+     * @param firstFramePromptIndex 首帧描述索引值
+     * @param lastFramePromptIndex 尾帧描述索引值
+     * @param contentDescriptionIndex 分镜内容描述索引值
      * @param durationIndex 时长索引值
      * @return 处理结果
      */
     private record StoryboardTableSchema(
         List<String> headerCells,
         Integer shotNoIndex,
-        Integer sceneIndex,
-        Integer timeIndex,
-        Integer shotSpecIndex,
-        Integer movementIndex,
         Integer firstFramePromptIndex,
         Integer lastFramePromptIndex,
-        Integer motionIndex,
-        Integer cameraMovementIndex,
-        Integer visualIndex,
-        Integer dynamicIndex,
-        Integer storyDescriptionIndex,
-        Integer characterAppearanceIndex,
-        Integer actionIndex,
-        Integer emotionIndex,
-        Integer lightingIndex,
-        Integer atmosphereIndex,
-        Integer dialogueIndex,
-        Integer audioIndex,
+        Integer contentDescriptionIndex,
         Integer durationIndex
     ) {
         /**
@@ -817,29 +894,7 @@ public class TaskStoryboardPlanner {
          * @return 处理结果
          */
         static StoryboardTableSchema empty() {
-            return new StoryboardTableSchema(
-                List.of(),
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null
-            );
+            return new StoryboardTableSchema(List.of(), null, null, null, null, null);
         }
 
         /**
@@ -850,43 +905,11 @@ public class TaskStoryboardPlanner {
         static StoryboardTableSchema fromHeader(List<String> headers) {
             return new StoryboardTableSchema(
                 List.copyOf(headers),
-                resolve(headers, "shotno", "shot", "镜号"),
-                resolve(headers, "剧情摘要", "剧情节点", "场景", "scene", "summary"),
-                resolve(headers, "time", "时间"),
-                resolve(headers, "camerashottype", "camerashot", "shotspec", "景别角度", "景别", "镜头语言", "镜头参数", "shotsize", "angle", "shottype"),
-                resolve(headers, "cameramovement", "movement", "运镜"),
-                resolve(headers, "firstframeprompt", "firstframe", "首帧提示词", "首帧"),
-                resolve(headers, "lastframeprompt", "lastframe", "尾帧提示词", "尾帧"),
-                resolve(headers, "motion", "动作"),
-                resolve(headers, "cameramovement", "movement", "运镜"),
-                resolve(headers, "统一提示词", "统一画面提示词", "镜头提示词", "cinematicvisualdescription", "visualdescription", "visualcontent", "视觉描述", "画面提示词", "画面细节描述", "画面描述", "visualprompt", "seedream提示词", "seedream", "关键帧", "visual"),
-                resolve(headers, "统一提示词", "统一画面提示词", "镜头提示词", "seedance提示词", "seedance", "动态与运镜", "动态", "衔接逻辑", "转场", "转场衔接", "镜头节拍", "continuity", "motion"),
-                resolve(
-                    headers,
-                    "剧情描述",
-                    "剧情画面描述",
-                    "剧情画面与声音描述",
-                    "剧情画面与声音长描述",
-                    "整段描述",
-                    "合并长段描述",
-                    "长段描述",
-                    "scene description",
-                    "story description",
-                    "combined description",
-                    "merged description",
-                    "storyline",
-                    "plot description",
-                    "story narrative",
-                    "画面叙述"
-                ),
-                resolve(headers, "characterappearance", "appearance", "人物外观", "角色外观"),
-                resolve(headers, "action", "动作", "表演调度", "动作节拍", "动作链", "角色动作", "表演", "blocking", "beat", "performance"),
-                resolve(headers, "sentiment", "emotion", "情绪", "情感分析", "感情分析", "情感", "感情"),
-                resolve(headers, "lighting", "光线"),
-                resolve(headers, "atmosphere", "氛围"),
-                resolve(headers, "dialogue", "独白", "对话", "对白", "对白人声", "台词", "字幕", "对话独白画外音", "对白独白画外音", "dialoguevoiceover"),
-                resolve(headers, "audio", "音效", "bgm", "sfx", "声音与对白", "声音设计转场", "声音设计", "音效转场设计", "转场设计"),
-                resolve(headers, "duration", "时长", "秒")
+                resolve(headers, "镜号"),
+                resolve(headers, "首帧描述startframe", "首帧描述", "startframe"),
+                resolve(headers, "尾帧描述endframe", "尾帧描述", "endframe"),
+                resolve(headers, "分镜内容描述"),
+                resolve(headers, "时长", "duration")
             );
         }
 
@@ -909,6 +932,30 @@ public class TaskStoryboardPlanner {
                 }
             }
             return null;
+        }
+
+        /**
+         * 获取缺失的结构化必填列。
+         * @return 缺失列列表
+         */
+        List<String> missingStructuredRequiredColumns() {
+            List<String> missing = new ArrayList<>();
+            if (shotNoIndex == null) {
+                missing.add("镜号");
+            }
+            if (firstFramePromptIndex == null) {
+                missing.add("首帧描述");
+            }
+            if (lastFramePromptIndex == null) {
+                missing.add("尾帧描述");
+            }
+            if (contentDescriptionIndex == null) {
+                missing.add("分镜内容描述");
+            }
+            if (durationIndex == null) {
+                missing.add("时长");
+            }
+            return missing;
         }
 
         /**
@@ -973,5 +1020,28 @@ public class TaskStoryboardPlanner {
         String imagePrompt,
         String videoPrompt
     ) {
+        /**
+         * 获取首帧提示词语义别名。
+         * @return 处理结果
+         */
+        public String startFramePrompt() {
+            return firstFramePrompt;
+        }
+
+        /**
+         * 获取尾帧提示词语义别名。
+         * @return 处理结果
+         */
+        public String endFramePrompt() {
+            return lastFramePrompt;
+        }
+
+        /**
+         * 获取动作路径语义别名。
+         * @return 处理结果
+         */
+        public String actionPath() {
+            return motion;
+        }
     }
 }

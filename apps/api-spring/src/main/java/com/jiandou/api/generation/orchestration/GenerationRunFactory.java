@@ -7,6 +7,7 @@ import com.jiandou.api.generation.RemoteImageGenerationResult;
 import com.jiandou.api.generation.RemoteTaskQueryResult;
 import com.jiandou.api.generation.RemoteVideoTaskSubmission;
 import com.jiandou.api.generation.TextModelResponse;
+import com.jiandou.api.generation.exception.GenerationProviderException;
 import com.jiandou.api.generation.image.ImageGenerationRequest;
 import com.jiandou.api.generation.image.ImageModelProvider;
 import com.jiandou.api.generation.image.ImageModelProviderRegistry;
@@ -21,6 +22,7 @@ import com.jiandou.api.generation.video.VideoGenerationRequest;
 import com.jiandou.api.generation.video.VideoModelProvider;
 import com.jiandou.api.generation.video.VideoModelProviderRegistry;
 import com.jiandou.api.media.LocalMediaArtifactService.TextArtifact;
+import java.net.URI;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -242,6 +244,7 @@ public class GenerationRunFactory {
                 shapedPrompt,
                 width,
                 height,
+                referenceImageUrl,
                 appliedImageSeed
             )
         );
@@ -345,6 +348,8 @@ public class GenerationRunFactory {
         );
         String firstFrameUrl = support.nestedValue(request, "input", "firstFrameUrl", "");
         String lastFrameUrl = support.nestedValue(request, "input", "lastFrameUrl", "");
+        validateExternalMediaUrl(firstFrameUrl, "firstFrameUrl");
+        validateExternalMediaUrl(lastFrameUrl, "lastFrameUrl");
         boolean generateAudio = support.nestedBoolean(request, "input", "generateAudio", true);
         boolean returnLastFrame = support.nestedBoolean(request, "input", "returnLastFrame", true);
         ModelRuntimeProfile textProfile = modelResolver.resolveTextProfile(textModel, userId);
@@ -356,9 +361,13 @@ public class GenerationRunFactory {
         String visionAnalysisNotes = "";
         if (!firstFrameUrl.isBlank()) {
             List<String> images = new ArrayList<>();
-            images.add(firstFrameUrl);
-            if (!lastFrameUrl.isBlank()) {
-                images.add(lastFrameUrl);
+            String normalizedFirstFrameUrl = normalizeExternalMediaUrl(firstFrameUrl);
+            if (!normalizedFirstFrameUrl.isBlank()) {
+                images.add(normalizedFirstFrameUrl);
+            }
+            String normalizedLastFrameUrl = normalizeExternalMediaUrl(lastFrameUrl);
+            if (!normalizedLastFrameUrl.isBlank()) {
+                images.add(normalizedLastFrameUrl);
             }
             visionResponse = textModelProviderRegistry.resolve(visionProfile).generate(
                 visionProfile,
@@ -511,13 +520,33 @@ public class GenerationRunFactory {
         Long userId = userIdFromRun(run);
         MediaProviderProfile profile = modelResolver.resolveVideoProfile(requestedModel, userId);
         VideoModelProvider videoModelProvider = videoModelProviderRegistry.resolve(profile);
-        RemoteTaskQueryResult query = videoModelProvider.query(profile, taskId);
+        List<Map<String, Object>> callChain = mutableCallChain(result.get("callChain"));
+        RemoteTaskQueryResult query;
+        try {
+            query = videoModelProvider.query(profile, taskId);
+        } catch (RuntimeException ex) {
+            if (isTransientVideoPollingError(ex)) {
+                String message = normalizeVideoPollingErrorMessage(ex);
+                metadata.put("taskMessage", message);
+                metadata.put("nextPollAt", now + Math.max(1, profile.pollIntervalSeconds()) * 1000L);
+                callChain.add(support.callLog("generation", "video.poll.retry", "running", "远端视频任务轮询暂时失败，将继续重试。", Map.of(
+                    "taskId", taskId,
+                    "error", message
+                )));
+                result.put("callChain", callChain);
+                result.put("metadata", metadata);
+                run.put("result", result);
+                run.put("resultVideo", result);
+                support.updateRunStatus(run, GenerationRunStatuses.RUNNING);
+                return run;
+            }
+            throw ex;
+        }
         String remoteStatus = support.stringValue(query.status()).toUpperCase(Locale.ROOT);
         metadata.put("taskStatus", remoteStatus);
         if (!support.stringValue(query.message()).isBlank()) {
             metadata.put("taskMessage", query.message());
         }
-        List<Map<String, Object>> callChain = mutableCallChain(result.get("callChain"));
         if (VIDEO_SUCCESS_STATES.contains(remoteStatus)) {
             String videoUrl = support.stringValue(query.videoUrl());
             if (videoUrl.isBlank()) {
@@ -598,6 +627,30 @@ public class GenerationRunFactory {
         return run;
     }
 
+    private boolean isTransientVideoPollingError(RuntimeException ex) {
+        String message = ex == null ? "" : support.stringValue(ex.getMessage()).toLowerCase(Locale.ROOT);
+        if (message.isBlank()) {
+            return false;
+        }
+        if (!(ex instanceof GenerationProviderException) && !message.contains("task query failed")) {
+            return false;
+        }
+        return message.contains("http 502")
+            || message.contains("http 503")
+            || message.contains("http 504")
+            || message.contains("gateway timeout")
+            || message.contains("service unavailable")
+            || message.contains("temporarily unavailable");
+    }
+
+    private String normalizeVideoPollingErrorMessage(RuntimeException ex) {
+        String message = ex == null ? "" : support.stringValue(ex.getMessage());
+        if (message.isBlank()) {
+            return "远端视频任务轮询失败";
+        }
+        return message;
+    }
+
     /**
      * 规范化视频时长Seconds。
      * @param requestedVideoModel requested视频模型值
@@ -645,6 +698,31 @@ public class GenerationRunFactory {
             }
         }
         return resolved;
+    }
+
+    private void validateExternalMediaUrl(String url, String fieldName) {
+        String normalized = normalizeExternalMediaUrl(url);
+        if (!support.stringValue(url).isBlank() && normalized.isBlank()) {
+            throw new IllegalArgumentException("video " + fieldName + " must be an absolute http(s) URL");
+        }
+    }
+
+    private String normalizeExternalMediaUrl(String url) {
+        String normalized = support.stringValue(url);
+        if (normalized.isBlank()) {
+            return "";
+        }
+        try {
+            URI uri = URI.create(normalized);
+            String scheme = uri.getScheme();
+            if (scheme == null) {
+                return "";
+            }
+            String lowerScheme = scheme.toLowerCase(Locale.ROOT);
+            return ("http".equals(lowerScheme) || "https".equals(lowerScheme)) && uri.getHost() != null ? normalized : "";
+        } catch (IllegalArgumentException ex) {
+            return "";
+        }
     }
 
     /**

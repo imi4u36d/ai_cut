@@ -6,6 +6,7 @@ package com.jiandou.api.generation.image;
  * @param prompt 提示词值
  * @param width width值
  * @param height height值
+ * @param referenceImageUrl 参考图 URL 值
  * @param seed 种子值
  */
 public record ImageGenerationRequest(
@@ -13,6 +14,7 @@ public record ImageGenerationRequest(
     String prompt,
     int width,
     int height,
+    String referenceImageUrl,
     Integer seed
 ) {
 }

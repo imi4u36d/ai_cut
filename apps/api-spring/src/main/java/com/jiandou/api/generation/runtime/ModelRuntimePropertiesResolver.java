@@ -116,14 +116,8 @@ public class ModelRuntimePropertiesResolver {
             ""
         );
         String providerSection = "model.providers." + provider;
-        String apiKey = userScoped
-            ? resolveUserApiKey(userId, provider)
-            : firstNonBlank(
-                property("JIANDOU_MODEL_API_KEY"),
-                providerProperty(provider, "API_KEY"),
-                current.value(providerSection, "api_key"),
-                ""
-            );
+        String vendor = firstNonBlank(stringValue(modelValues.get("vendor")), current.value(providerSection, "vendor"));
+        String apiKey = resolveApiKey(current, userId, provider, vendor, providerSection);
         String baseUrl = normalizeBaseUrl(firstNonBlank(
             property("JIANDOU_MODEL_BASE_URL"),
             property("JIANDOU_MODEL_ENDPOINT"),
@@ -161,7 +155,7 @@ public class ModelRuntimePropertiesResolver {
             ),
             2000
         );
-        String source = resolveConfigSource(userScoped, apiKey, provider, current.source(), !property("JIANDOU_MODEL_PROVIDER").isBlank());
+        String source = resolveConfigSource(userScoped, apiKey, provider, vendor, current.source(), !property("JIANDOU_MODEL_PROVIDER").isBlank());
         return new ModelRuntimeProfile(
             new TextProviderConfig(
                 kind,
@@ -433,6 +427,7 @@ public class ModelRuntimePropertiesResolver {
         String actualKind = firstNonBlank(stringValue(modelValues.get("kind")), normalizedExpectedKind).toLowerCase(Locale.ROOT);
         String provider = firstNonBlank(stringValue(modelValues.get("provider")), "");
         String providerSection = "model.providers." + provider;
+        String vendor = firstNonBlank(stringValue(modelValues.get("vendor")), current.value(providerSection, "vendor"));
         String baseUrl = normalizeBaseUrl(firstNonBlank(
             providerProperty(provider, "BASE_URL"),
             providerProperty(provider, "ENDPOINT"),
@@ -443,10 +438,8 @@ public class ModelRuntimePropertiesResolver {
             current.value(providerSection + ".extras", "task_base_url"),
             defaultTaskBaseUrl(actualKind, provider, baseUrl)
         ));
-        String apiKey = userScoped
-            ? resolveUserApiKey(userId, provider)
-            : firstNonBlank(providerProperty(provider, "API_KEY"), current.value(providerSection, "api_key"));
-        String source = resolveConfigSource(userScoped, apiKey, provider, current.source(), false);
+        String apiKey = resolveApiKey(current, userId, provider, vendor, providerSection);
+        String source = resolveConfigSource(userScoped, apiKey, provider, vendor, current.source(), false);
         return new MediaProviderProfile(
             new MediaProviderConfig(
                 actualKind,
@@ -646,24 +639,99 @@ public class ModelRuntimePropertiesResolver {
     }
 
     private String providerProperty(String provider, String suffix) {
-        String normalizedProvider = trimToEmpty(provider).toUpperCase(Locale.ROOT).replaceAll("[^A-Z0-9]+", "_");
-        if (normalizedProvider.isBlank()) {
-            return "";
-        }
-        return property("JIANDOU_MODEL_" + normalizedProvider + "_" + suffix);
+        return scopedProperty(provider, suffix);
     }
 
-    private String resolveUserApiKey(Long userId, String provider) {
+    private String vendorProperty(String vendor, String suffix) {
+        return scopedProperty(vendor, suffix);
+    }
+
+    private String scopedProperty(String scope, String suffix) {
+        String normalizedScope = trimToEmpty(scope).toUpperCase(Locale.ROOT).replaceAll("[^A-Z0-9]+", "_");
+        if (normalizedScope.isBlank()) {
+            return "";
+        }
+        return property("JIANDOU_MODEL_" + normalizedScope + "_" + suffix);
+    }
+
+    private String resolveApiKey(
+        ConfigSnapshot current,
+        Long userId,
+        String provider,
+        String vendor,
+        String providerSection
+    ) {
+        if (userId != null) {
+            return resolveUserApiKey(current, userId, provider, vendor);
+        }
+        return firstNonBlank(
+            property("JIANDOU_MODEL_API_KEY"),
+            providerProperty(provider, "API_KEY"),
+            vendorProperty(vendor, "API_KEY"),
+            vendor.isBlank() ? "" : current.value("model.providers." + vendor, "api_key"),
+            current.value(providerSection, "api_key"),
+            resolveSharedConfiguredApiKey(current, provider, vendor),
+            ""
+        );
+    }
+
+    private String resolveUserApiKey(ConfigSnapshot current, Long userId, String provider, String vendor) {
         if (userId == null || userModelCredentialRepository == null) {
             return "";
         }
-        return trimToEmpty(userModelCredentialRepository.findApiKey(userId, provider));
+        return trimToEmpty(userModelCredentialRepository.findApiKey(userId, preferredApiKeyScopes(current, provider, vendor)));
+    }
+
+    private List<String> preferredApiKeyScopes(ConfigSnapshot current, String provider, String vendor) {
+        List<String> scopes = new ArrayList<>();
+        addApiKeyScope(scopes, provider);
+        addApiKeyScope(scopes, vendor);
+        for (String siblingProvider : sameVendorProviderKeys(current, provider, vendor)) {
+            addApiKeyScope(scopes, siblingProvider);
+        }
+        return List.copyOf(scopes);
+    }
+
+    private String resolveSharedConfiguredApiKey(ConfigSnapshot current, String provider, String vendor) {
+        for (String siblingProvider : sameVendorProviderKeys(current, provider, vendor)) {
+            String apiKey = current.value("model.providers." + siblingProvider, "api_key");
+            if (!apiKey.isBlank()) {
+                return apiKey;
+            }
+        }
+        return "";
+    }
+
+    private List<String> sameVendorProviderKeys(ConfigSnapshot current, String provider, String vendor) {
+        String normalizedVendor = normalize(vendor);
+        if (normalizedVendor.isBlank()) {
+            return List.of();
+        }
+        List<String> providerKeys = new ArrayList<>();
+        for (ConfigSection section : current.listSections("model.providers")) {
+            String sectionVendor = firstNonBlank(section.values().get("vendor"));
+            if (!normalizedVendor.equals(normalize(sectionVendor))) {
+                continue;
+            }
+            addApiKeyScope(providerKeys, section.name());
+            addApiKeyScope(providerKeys, section.values().get("provider"));
+        }
+        providerKeys.removeIf(candidate -> normalize(candidate).equals(normalize(provider)));
+        return List.copyOf(providerKeys);
+    }
+
+    private void addApiKeyScope(List<String> scopes, String candidate) {
+        String normalizedCandidate = trimToEmpty(candidate);
+        if (!normalizedCandidate.isBlank() && scopes.stream().noneMatch(item -> normalize(item).equals(normalize(normalizedCandidate)))) {
+            scopes.add(normalizedCandidate);
+        }
     }
 
     private String resolveConfigSource(
         boolean userScoped,
         String apiKey,
         String provider,
+        String vendor,
         String defaultSource,
         boolean providerOverridden
     ) {
@@ -673,6 +741,7 @@ public class ModelRuntimePropertiesResolver {
         if (
             !property("JIANDOU_MODEL_API_KEY").isBlank()
                 || !providerProperty(provider, "API_KEY").isBlank()
+                || !vendorProperty(vendor, "API_KEY").isBlank()
                 || !property("JIANDOU_MODEL_BASE_URL").isBlank()
                 || !providerProperty(provider, "BASE_URL").isBlank()
                 || !providerProperty(provider, "TASK_BASE_URL").isBlank()
@@ -905,6 +974,10 @@ public class ModelRuntimePropertiesResolver {
      */
     private String trimToEmpty(String value) {
         return value == null ? "" : value.trim();
+    }
+
+    private String normalize(String value) {
+        return trimToEmpty(value).toLowerCase(Locale.ROOT);
     }
 
     /**

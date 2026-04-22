@@ -47,7 +47,7 @@
                 <article class="surface-panel summary-card summary-card-primary">
                   <p class="summary-card__eyebrow">运行时来源</p>
                   <strong>{{ displayedConfig?.configSource || "未知" }}</strong>
-                  <p>厂商 {{ displayedConfig?.summary.vendorCount ?? 0 }} 个 · 模型接入 {{ displayedConfig?.summary.providerCount ?? 0 }} 个</p>
+                  <p>厂商 {{ displayedConfig?.summary.vendorCount ?? 0 }} 个 · Key 配置 {{ displayedConfig?.summary.providerCount ?? 0 }} 项</p>
                   <p>模型 {{ displayedConfig?.summary.modelCount ?? 0 }} 个</p>
                   <p>就绪 {{ displayedConfig?.summary.readyModelCount ?? 0 }}/{{ displayedConfig?.summary.modelCount ?? 0 }}</p>
                 </article>
@@ -100,10 +100,10 @@
               <section class="settings-block">
                 <div class="settings-block__head">
                   <div>
-                    <h4>模型接入 Key 输入</h4>
+                    <h4>厂商 API Key 输入</h4>
                     <p class="settings-block__hint">按厂商统一管理接入密钥，并在同一组内查看文本、视觉、视频模型。</p>
                   </div>
-                  <span class="surface-chip">{{ providerRows.length }} 个</span>
+                  <span class="surface-chip">{{ providerRows.length }} 项</span>
                 </div>
 
                 <div class="vendor-groups">
@@ -113,7 +113,7 @@
                         <p class="provider-card__eyebrow">厂商</p>
                         <h5>{{ group.title }}</h5>
                       </div>
-                      <span class="surface-chip">{{ group.items.length }} 个接入 · {{ group.modelCount }} 个模型</span>
+                      <span class="surface-chip">{{ group.items.length }} 个 Key · {{ group.modelCount }} 个模型</span>
                     </div>
 
                     <div class="provider-grid">

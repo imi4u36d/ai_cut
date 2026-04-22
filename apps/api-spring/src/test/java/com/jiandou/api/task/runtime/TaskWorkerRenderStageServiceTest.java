@@ -116,6 +116,14 @@ class TaskWorkerRenderStageServiceTest {
                 "metadata", Map.of("remoteSourceUrl", "https://example.com/clip1-first.png")
             )
         );
+        Map<String, Object> imageRun1Last = Map.of(
+            "id", "image_run_1_last",
+            "status", "succeeded",
+            "result", Map.of(
+                "outputUrl", "/storage/gen/_runs/task_1/clip1-last.png",
+                "metadata", Map.of("remoteSourceUrl", "https://example.com/clip1-last-keyframe.png")
+            )
+        );
         Map<String, Object> videoRun1 = Map.of(
             "id", "video_run_1",
             "status", "succeeded",
@@ -126,8 +134,17 @@ class TaskWorkerRenderStageServiceTest {
                 "metadata", Map.of(
                     "remoteSourceUrl", "https://example.com/clip1.mp4",
                     "firstFrameUrl", "https://example.com/clip1-first.png",
+                    "requestedLastFrameUrl", "https://example.com/clip1-last-keyframe.png",
                     "taskId", "remote_task_1"
                 )
+            )
+        );
+        Map<String, Object> imageRun2Last = Map.of(
+            "id", "image_run_2_last",
+            "status", "succeeded",
+            "result", Map.of(
+                "outputUrl", "/storage/gen/_runs/task_1/clip2-last.png",
+                "metadata", Map.of("remoteSourceUrl", "https://example.com/clip2-last-keyframe.png")
             )
         );
         Map<String, Object> videoRun2 = Map.of(
@@ -139,12 +156,13 @@ class TaskWorkerRenderStageServiceTest {
                 "hasAudio", true,
                 "metadata", Map.of(
                     "remoteSourceUrl", "https://example.com/clip2.mp4",
-                    "firstFrameUrl", "https://example.com/clip1-last.png",
+                    "firstFrameUrl", "https://example.com/clip1-last-result.png",
+                    "requestedLastFrameUrl", "https://example.com/clip2-last-keyframe.png",
                     "taskId", "remote_task_2"
                 )
             )
         );
-        when(generationApplicationService.createRun(anyMap())).thenReturn(imageRun1, videoRun1, videoRun2);
+        when(generationApplicationService.createRun(anyMap())).thenReturn(imageRun1, imageRun1Last, videoRun1, imageRun2Last, videoRun2);
         when(runtimeSupport.buildImageRunRequest(any(), anyInt(), anyString(), anyInt(), anyInt(), anyString(), anyInt(), anyString()))
             .thenAnswer(invocation -> Map.of(
                 "kind", "image",
@@ -172,14 +190,22 @@ class TaskWorkerRenderStageServiceTest {
                 "id", "asset_image_1",
                 "fileUrl", "/storage/gen/_runs/task_1/clip1-first.png",
                 "remoteUrl", "https://example.com/clip1-first.png"
+            ), Map.of(
+                "id", "asset_image_1_last",
+                "fileUrl", "/storage/gen/_runs/task_1/clip1-last.png",
+                "remoteUrl", "https://example.com/clip1-last-keyframe.png"
+            ), Map.of(
+                "id", "asset_image_2_last",
+                "fileUrl", "/storage/gen/_runs/task_1/clip2-last.png",
+                "remoteUrl", "https://example.com/clip2-last-keyframe.png"
             ));
         when(artifactAssembler.createReferenceFrameMaterial(any(), anyInt(), anyString(), anyString()))
             .thenReturn(Map.of(
                 "id", "asset_image_2",
                 "fileUrl", "/storage/gen/_runs/task_1/clip2-first.png",
-                "remoteUrl", "https://example.com/clip1-last.png"
+                "remoteUrl", "https://example.com/clip1-last-result.png"
             ));
-        when(artifactAssembler.extractLastFrameUrl(any())).thenReturn("https://example.com/clip1-last.png", "");
+        when(artifactAssembler.extractLastFrameUrl(any())).thenReturn("https://example.com/clip1-last-result.png", "https://example.com/clip2-last-result.png");
         when(artifactAssembler.createVideoMaterial(any(), anyMap(), anyMap(), anyInt(), anyInt()))
             .thenReturn(
                 Map.of("id", "asset_video_1", "fileUrl", "/storage/gen/_runs/task_1/clip1.mp4", "previewUrl", "/storage/gen/_runs/task_1/clip1.mp4"),
@@ -198,7 +224,7 @@ class TaskWorkerRenderStageServiceTest {
                 "raises head",
                 "slow push in",
                 "6",
-                "first-frame-1",
+                "image-prompt-should-not-be-used",
                 "clip-1-last；动作延展：raises head；运镜：slow push in"
             ),
             new TaskStoryboardPlanner.StoryboardShotPlan(
@@ -236,20 +262,34 @@ class TaskWorkerRenderStageServiceTest {
         );
 
         ArgumentCaptor<Map<String, Object>> requestCaptor = ArgumentCaptor.forClass(Map.class);
-        verify(generationApplicationService, times(3)).createRun(requestCaptor.capture());
+        verify(generationApplicationService, times(5)).createRun(requestCaptor.capture());
         List<Map<String, Object>> capturedRequests = requestCaptor.getAllValues();
         @SuppressWarnings("unchecked")
         Map<String, Object> firstImageInput = (Map<String, Object>) capturedRequests.get(0).get("input");
         @SuppressWarnings("unchecked")
-        Map<String, Object> firstVideoInput = (Map<String, Object>) capturedRequests.get(1).get("input");
+        Map<String, Object> firstLastImageInput = (Map<String, Object>) capturedRequests.get(1).get("input");
         @SuppressWarnings("unchecked")
-        Map<String, Object> secondVideoInput = (Map<String, Object>) capturedRequests.get(2).get("input");
+        Map<String, Object> firstVideoInput = (Map<String, Object>) capturedRequests.get(2).get("input");
+        @SuppressWarnings("unchecked")
+        Map<String, Object> secondLastImageInput = (Map<String, Object>) capturedRequests.get(3).get("input");
+        @SuppressWarnings("unchecked")
+        Map<String, Object> secondVideoInput = (Map<String, Object>) capturedRequests.get(4).get("input");
         assertEquals("first-frame-1", firstImageInput.get("prompt"));
-        assertEquals("", firstVideoInput.get("lastFrameUrl"));
-        assertEquals("https://example.com/clip1-last.png", secondVideoInput.get("firstFrameUrl"));
-        assertEquals("", secondVideoInput.get("lastFrameUrl"));
-        verify(artifactAssembler, times(1)).createImageMaterial(any(), anyMap(), anyMap(), anyInt(), anyString());
-        verify(artifactAssembler, times(1)).createReferenceFrameMaterial(task, 2, "https://example.com/clip1-last.png", "first");
+        assertEquals("clip-1-last", firstLastImageInput.get("prompt"));
+        assertEquals("https://example.com/clip1-first.png", firstLastImageInput.get("referenceImageUrl"));
+        assertEquals("https://example.com/clip1-last-keyframe.png", firstVideoInput.get("lastFrameUrl"));
+        assertEquals("clip-2-last", secondLastImageInput.get("prompt"));
+        assertEquals("https://example.com/clip1-last-result.png", secondLastImageInput.get("referenceImageUrl"));
+        assertEquals("https://example.com/clip1-last-result.png", secondVideoInput.get("firstFrameUrl"));
+        assertEquals("https://example.com/clip2-last-keyframe.png", secondVideoInput.get("lastFrameUrl"));
+        verify(artifactAssembler, times(3)).createImageMaterial(any(), anyMap(), anyMap(), anyInt(), anyString());
+        verify(artifactAssembler, times(1)).createReferenceFrameMaterial(task, 2, "https://example.com/clip1-last-result.png", "first");
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> clipFrameContexts = (List<Map<String, Object>>) task.executionContext().get("clipFrameContexts");
+        assertEquals(2, clipFrameContexts.size());
+        assertEquals("first-frame-1", clipFrameContexts.get(0).get("startFramePrompt"));
+        assertEquals("https://example.com/clip1-last-result.png", clipFrameContexts.get(0).get("returnedLastFrameUrl"));
+        assertEquals("previous_video_last_frame", clipFrameContexts.get(1).get("startFrameSourceType"));
         verifyNoMoreInteractions(generationApplicationService);
     }
 
@@ -266,6 +306,14 @@ class TaskWorkerRenderStageServiceTest {
         task.setExecutionContext(new LinkedHashMap<>());
         TaskWorkerExecutionContext runContext = new TaskWorkerExecutionContext("worker_1", "spring", "queue");
 
+        Map<String, Object> imageRun2Last = Map.of(
+            "id", "image_run_2_last",
+            "status", "succeeded",
+            "result", Map.of(
+                "outputUrl", "/storage/gen/_runs/task_resume/clip2-last.png",
+                "metadata", Map.of("remoteSourceUrl", "https://example.com/clip2-last-keyframe.png")
+            )
+        );
         Map<String, Object> videoRun2 = Map.of(
             "id", "video_run_2",
             "status", "succeeded",
@@ -280,9 +328,11 @@ class TaskWorkerRenderStageServiceTest {
                 )
             )
         );
-        when(generationApplicationService.createRun(anyMap())).thenReturn(videoRun2);
+        when(generationApplicationService.createRun(anyMap())).thenReturn(imageRun2Last, videoRun2);
         when(runtimeSupport.buildVideoRunRequest(any(), anyInt(), anyString(), anyString(), anyInt(), anyInt(), anyInt(), anyString(), anyString()))
             .thenReturn(Map.of("kind", "video", "input", Map.of("clipIndex", 2)));
+        when(runtimeSupport.buildImageRunRequest(any(), anyInt(), anyString(), anyInt(), anyInt(), anyString(), anyInt(), anyString()))
+            .thenReturn(Map.of("kind", "image", "input", Map.of("clipIndex", 2, "frameRole", "last")));
         when(statusStageService.createModelCall(any(), anyString(), anyString(), anyMap(), anyMap(), anyMap(), anyInt(), anyString()))
             .thenReturn(Map.of("modelCallId", "model_call"));
         when(artifactAssembler.createReferenceFrameMaterial(any(), anyInt(), anyString(), anyString()))
@@ -291,7 +341,13 @@ class TaskWorkerRenderStageServiceTest {
                 "fileUrl", "/storage/gen/_runs/task_resume/clip2-first.png",
                 "remoteUrl", "https://example.com/clip1-last.png"
             ));
-        when(artifactAssembler.extractLastFrameUrl(any())).thenReturn("https://example.com/clip2-last.png");
+        when(artifactAssembler.createImageMaterial(any(), anyMap(), anyMap(), anyInt(), anyString()))
+            .thenReturn(Map.of(
+                "id", "asset_image_2_last",
+                "fileUrl", "/storage/gen/_runs/task_resume/clip2-last.png",
+                "remoteUrl", "https://example.com/clip2-last-keyframe.png"
+            ));
+        when(artifactAssembler.extractLastFrameUrl(any())).thenReturn("https://example.com/clip2-last-result.png");
         when(artifactAssembler.createVideoMaterial(any(), anyMap(), anyMap(), anyInt(), anyInt()))
             .thenReturn(Map.of(
                 "id", "asset_video_2",

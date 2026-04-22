@@ -4,6 +4,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -137,6 +139,18 @@ class ModelRuntimePropertiesResolverTest {
     }
 
     @Test
+    void volcengineProviderApiKeyIsSharedAcrossSiblingModels() throws Exception {
+        Path configDir = tempDir.resolve("config");
+        writeConfig(configDir, "0.20");
+
+        MockEnvironment env = new MockEnvironment().withProperty("JIANDOU_CONFIG_DIR", configDir.toString());
+        ModelRuntimePropertiesResolver resolver = new ModelRuntimePropertiesResolver(env, new GenerationConfigPathLocator(env));
+
+        assertEquals("video-key", resolver.resolveImageProfile("seedream-v1").apiKey());
+        assertEquals("video-key", resolver.resolveVideoProfile("seedance-v1").apiKey());
+    }
+
+    @Test
     void userScopedProfilesUseDatabaseApiKeysWithoutFallingBackToSharedSecrets() throws Exception {
         Path configDir = tempDir.resolve("config");
         writeConfig(configDir, "0.20");
@@ -149,22 +163,32 @@ class ModelRuntimePropertiesResolverTest {
                   providers:
                     qwen:
                       api_key: "shared-text-key"
-                    seedance:
-                      api_key: "shared-video-key"
+                    volcengine:
+                      api_key: "shared-volc-key"
                 """
         );
 
         MockEnvironment env = new MockEnvironment().withProperty("JIANDOU_CONFIG_DIR", configDir.toString());
         MybatisUserModelCredentialRepository repository = mock(MybatisUserModelCredentialRepository.class);
-        when(repository.findApiKey(42L, "qwen")).thenReturn("user-text-key");
-        when(repository.findApiKey(42L, "seedance")).thenReturn("user-video-key");
+        when(repository.findApiKey(eq(42L), anyList())).thenAnswer(invocation -> {
+            List<String> providerKeys = invocation.getArgument(1);
+            if (providerKeys.contains("qwen")) {
+                return "user-text-key";
+            }
+            if (providerKeys.contains("volcengine")) {
+                return "user-volc-key";
+            }
+            return "";
+        });
 
         ModelRuntimePropertiesResolver resolver = new ModelRuntimePropertiesResolver(env, new GenerationConfigPathLocator(env), repository);
 
         assertEquals("shared-text-key", resolver.resolveTextProfile("qwen-plus").apiKey());
-        assertEquals("shared-video-key", resolver.resolveVideoProfile("seedance-v1").apiKey());
+        assertEquals("shared-volc-key", resolver.resolveImageProfile("seedream-v1").apiKey());
+        assertEquals("shared-volc-key", resolver.resolveVideoProfile("seedance-v1").apiKey());
         assertEquals("user-text-key", resolver.resolveTextProfile("qwen-plus", 42L).apiKey());
-        assertEquals("user-video-key", resolver.resolveVideoProfile("seedance-v1", 42L).apiKey());
+        assertEquals("user-volc-key", resolver.resolveImageProfile("seedream-v1", 42L).apiKey());
+        assertEquals("user-volc-key", resolver.resolveVideoProfile("seedance-v1", 42L).apiKey());
         assertEquals("user-db", resolver.resolveTextProfile("qwen-plus", 42L).source());
         assertEquals("user-db", resolver.resolveVideoProfile("seedance-v1", 42L).source());
     }
@@ -198,6 +222,10 @@ class ModelRuntimePropertiesResolverTest {
                       vendor: "aliyun"
                       api_key: "test-key"
                       base_url: "https://example.com/v1"
+                    seedream:
+                      vendor: "volcengine"
+                      api_key: ""
+                      base_url: "https://image.example.com/api"
                     seedance:
                       vendor: "volcengine"
                       api_key: "video-key"
@@ -216,6 +244,11 @@ class ModelRuntimePropertiesResolverTest {
                       vendor: "aliyun"
                       kind: "text"
                       provider_model: "qwen-plus-2026-04-01"
+                    "seedream-v1":
+                      provider: "seedream"
+                      vendor: "volcengine"
+                      kind: "image"
+                      provider_model: "seedream-v1-upstream"
                     "seedance-v1":
                       provider: "seedance"
                       vendor: "volcengine"

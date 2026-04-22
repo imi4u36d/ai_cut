@@ -196,6 +196,9 @@ public class TaskWorkerPipelineHandler {
             putExecutionContext(task, "plannedClipCount", clipPrompts.size());
             putExecutionContext(task, "clipPrompts", clipPrompts);
             putExecutionContext(task, "clipDurationPlan", storyboardPlanner.buildClipDurationPlanContext(clipDurationPlan, storyboardDurationRanges));
+            putExecutionContext(task, "storyboardFormatVersion", "structured-md-v1");
+            putExecutionContext(task, "storyboardContinuityRule", "current_end_frame_matches_next_start_frame");
+            putExecutionContext(task, "storyboardClips", buildStoryboardClipContext(shotPlans, clipDurationPlan));
             taskRepository.save(task);
             executionCoordinator.recordTrace(task, TaskStage.PLANNING.code(), "planning.shots_resolved", "已完成分镜数量解析，按镜头顺序生成。", "INFO", Map.of(
                 "clipCount", clipPrompts.size(),
@@ -203,7 +206,8 @@ public class TaskWorkerPipelineHandler {
                 "requestedOutputCount", storyboardPlanner.requestSnapshotOutputCount(task),
                 "completedClipCount", completedClipCount,
                 "renderStartIndex", renderStartIndex,
-                "durationPlan", storyboardPlanner.buildClipDurationPlanContext(clipDurationPlan, storyboardDurationRanges)
+                "durationPlan", storyboardPlanner.buildClipDurationPlanContext(clipDurationPlan, storyboardDurationRanges),
+                "storyboardFormatVersion", "structured-md-v1"
             ));
 
             statusStageService.updateStatus(task, runContext, TaskStatus.PLANNING.value(), 35, TaskStage.PLANNING.code(), "task.planning", "任务开始按分镜生成关键画面。");
@@ -407,5 +411,42 @@ public class TaskWorkerPipelineHandler {
             }
         }
         return "";
+    }
+
+    private List<Map<String, Object>> buildStoryboardClipContext(
+        List<TaskStoryboardPlanner.StoryboardShotPlan> shotPlans,
+        List<int[]> clipDurationPlan
+    ) {
+        List<Map<String, Object>> rows = new ArrayList<>();
+        for (int index = 0; index < shotPlans.size(); index++) {
+            TaskStoryboardPlanner.StoryboardShotPlan shotPlan = shotPlans.get(index);
+            int[] duration = index < clipDurationPlan.size() ? clipDurationPlan.get(index) : new int[] {0, 0, 0};
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("clipIndex", shotPlan.sequentialIndex());
+            row.put("shotLabel", shotPlan.shotLabel());
+            row.put("scene", shotPlan.scene());
+            row.put("startFramePrompt", shotPlan.firstFramePrompt());
+            row.put("endFramePrompt", shotPlan.lastFramePrompt());
+            row.put("firstFramePrompt", shotPlan.firstFramePrompt());
+            row.put("lastFramePrompt", shotPlan.lastFramePrompt());
+            row.put("actionPath", shotPlan.motion());
+            row.put("motion", shotPlan.motion());
+            row.put("cameraMovement", shotPlan.cameraMovement());
+            row.put("durationHint", shotPlan.durationHint());
+            row.put("imagePrompt", shotPlan.imagePrompt());
+            row.put("videoPrompt", shotPlan.videoPrompt());
+            row.put("targetDurationSeconds", duration[0]);
+            row.put("minDurationSeconds", duration[1]);
+            row.put("maxDurationSeconds", duration[2]);
+            row.put("continuityRule", "current_end_frame_matches_next_start_frame");
+            if (index + 1 < shotPlans.size()) {
+                TaskStoryboardPlanner.StoryboardShotPlan nextShotPlan = shotPlans.get(index + 1);
+                row.put("nextClipIndex", nextShotPlan.sequentialIndex());
+                row.put("nextClipShotLabel", nextShotPlan.shotLabel());
+                row.put("nextClipStartFramePrompt", nextShotPlan.firstFramePrompt());
+            }
+            rows.add(row);
+        }
+        return rows;
     }
 }

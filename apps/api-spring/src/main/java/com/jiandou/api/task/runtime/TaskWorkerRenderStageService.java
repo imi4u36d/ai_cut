@@ -112,69 +112,36 @@ final class TaskWorkerRenderStageService {
             TaskStoryboardPlanner.StoryboardShotPlan shotPlan = request.shotPlans().get(index);
             String clipPrompt = shotPlan.videoPrompt();
             String firstFramePrompt = firstNonBlank(
-                shotPlan.imagePrompt(),
                 shotPlan.firstFramePrompt(),
                 shotPlan.lastFramePrompt(),
+                clipPrompt
+            );
+            String lastFramePrompt = firstNonBlank(
+                shotPlan.lastFramePrompt(),
+                shotPlan.firstFramePrompt(),
                 clipPrompt
             );
             int[] clipDuration = request.clipDurationPlan().get(index);
             int clipDurationSeconds = clipDuration[0];
             int clipMinDuration = clipDuration[1];
             int clipMaxDuration = clipDuration[2];
-            Map<String, Object> imageRun = Map.of();
-            Map<String, Object> imageResult = Map.of();
-            Map<String, Object> imageMaterial;
-            String firstFrameUrl;
+            FrameResolution startFrame;
             boolean reusePreviousLastFrame = clipIndex > 1 && !previousClipLastFrameUrl.isBlank();
             if (reusePreviousLastFrame) {
-                // 连续镜头模式下，第 2 镜及以后直接复用上一镜尾帧作为首帧输入，不再额外发起关键帧生成。
-                imageMaterial = artifactAssembler.createReferenceFrameMaterial(task, clipIndex, previousClipLastFrameUrl, "first");
-                executionCoordinator.recordMaterial(task, imageMaterial);
-                putExecutionContext(task, "imageRunId", null);
-                putExecutionContext(task, "keyframeOutputUrl", stringValue(imageMaterial.get("fileUrl")));
-                putExecutionContext(task, "keyframeRemoteSourceUrl", previousClipLastFrameUrl);
-                taskRepository.save(task);
-                firstFrameUrl = firstNonBlank(
-                    stringValue(imageMaterial.get("remoteUrl")),
+                startFrame = reuseFrame(
+                    task,
+                    clipIndex,
                     previousClipLastFrameUrl,
-                    stringValue(imageMaterial.get("fileUrl"))
+                    "first",
+                    "previous_video_last_frame"
                 );
                 executionCoordinator.recordTrace(task, TaskStage.PLANNING.code(), "planning.keyframe_reused_from_last_frame", "复用上一镜尾帧作为当前镜头首帧。", "INFO", Map.of(
                     "clipIndex", clipIndex,
-                    "firstFrameUrl", firstFrameUrl,
+                    "firstFrameUrl", startFrame.videoInputUrl(),
                     "sourceLastFrameUrl", previousClipLastFrameUrl
                 ));
-                statusStageService.recordStageRun(
-                    task,
-                    runContext,
-                    100 + clipIndex,
-                    TaskStage.PLANNING.code(),
-                    clipIndex,
-                    Map.of(
-                        "aspectRatio", task.aspectRatio(),
-                        /**
-                         * 处理truncate文本。
-                         * @param clipPrompt 片段提示词值
-                         * @param 160 160值
-                         * @return 处理结果
-                         */
-                        "clipPrompt", truncateText(clipPrompt, 160),
-                        "targetDurationSeconds", clipDurationSeconds
-                    ),
-                    Map.of(
-                        "summary", "已复用上一镜尾帧作为首帧",
-                        "imageRunId", "",
-                        /**
-                         * 处理string值。
-                         * @param imageMaterial.get("fileUrl" 图像Material.get("fileUrl"值
-                         * @return 处理结果
-                         */
-                        "imageUrl", stringValue(imageMaterial.get("fileUrl")),
-                        "remoteImageUrl", firstFrameUrl
-                    )
-                );
             } else {
-                Map<String, Object> imageRequest = runtimeSupport.buildImageRunRequest(
+                startFrame = generateFrame(
                     task,
                     clipIndex,
                     firstFramePrompt,
@@ -182,69 +149,66 @@ final class TaskWorkerRenderStageService {
                     request.height(),
                     previousClipLastFrameUrl,
                     clipDurationSeconds,
-                    "first"
-                );
-                imageRun = generationApplicationService.createRun(imageRequest);
-                runtimeSupport.assertTaskStillActive(task);
-                imageResult = resultMap(imageRun);
-                Map<String, Object> imageMetadata = mapValue(imageResult.get("metadata"));
-                String keyframeSourceUrl = stringValue(imageMetadata.get("remoteSourceUrl"));
-                if (keyframeSourceUrl.isBlank()) {
-                    keyframeSourceUrl = stringValue(imageResult.get("outputUrl"));
-                }
-                putExecutionContext(task, "imageRunId", stringValue(imageRun.get("id")));
-                putExecutionContext(task, "keyframeOutputUrl", stringValue(imageResult.get("outputUrl")));
-                putExecutionContext(task, "keyframeRemoteSourceUrl", keyframeSourceUrl);
-                taskRepository.save(task);
-                Map<String, Object> imageModelCall = statusStageService.createModelCall(task, TaskStage.PLANNING.code(), "generation.image", imageRequest, imageRun, imageResult, clipIndex, GenerationModelKinds.IMAGE);
-                executionCoordinator.recordModelCall(task, imageModelCall);
-                statusStageService.recordRunCallChain(task, TaskStage.PLANNING.code(), imageRun, imageResult);
-                imageMaterial = artifactAssembler.createImageMaterial(task, imageRun, imageResult, clipIndex, "first");
-                executionCoordinator.recordMaterial(task, imageMaterial);
-                putExecutionContext(task, "keyframeOutputUrl", stringValue(imageMaterial.get("fileUrl")));
-                imageRunIds.add(stringValue(imageRun.get("id")));
-                taskRepository.save(task);
-                firstFrameUrl = firstNonBlank(
-                    keyframeSourceUrl,
-                    stringValue(imageMaterial.get("remoteUrl")),
-                    stringValue(imageMaterial.get("fileUrl")),
-                    previousClipLastFrameUrl
-                );
-                statusStageService.recordStageRun(
-                    task,
-                    runContext,
-                    100 + clipIndex,
-                    TaskStage.PLANNING.code(),
-                    clipIndex,
-                    Map.of(
-                        "aspectRatio", task.aspectRatio(),
-                        /**
-                         * 处理truncate文本。
-                         * @param clipPrompt 片段提示词值
-                         * @param 160 160值
-                         * @return 处理结果
-                         */
-                        "clipPrompt", truncateText(clipPrompt, 160),
-                        "targetDurationSeconds", clipDurationSeconds
-                    ),
-                    Map.of(
-                        "summary", "首帧关键画面已生成",
-                        /**
-                         * 处理string值。
-                         * @param imageRun.get("id" 图像运行.get("标识"值
-                         * @return 处理结果
-                         */
-                        "imageRunId", stringValue(imageRun.get("id")),
-                        /**
-                         * 处理string值。
-                         * @param imageMaterial.get("fileUrl" 图像Material.get("fileUrl"值
-                         * @return 处理结果
-                         */
-                        "imageUrl", stringValue(imageMaterial.get("fileUrl")),
-                        "remoteImageUrl", firstFrameUrl
-                    )
+                    "first",
+                    clipIndex == 1 ? "generated_start_frame_keyframe" : "generated_start_frame_keyframe_fallback",
+                    imageRunIds
                 );
             }
+            FrameResolution endFrame = generateFrame(
+                task,
+                clipIndex,
+                lastFramePrompt,
+                request.width(),
+                request.height(),
+                startFrame.videoInputUrl(),
+                clipDurationSeconds,
+                "last",
+                "generated_end_frame_keyframe",
+                imageRunIds
+            );
+            putExecutionContext(task, "imageRunId", firstNonBlank(startFrame.runId(), endFrame.runId()));
+            putExecutionContext(task, "keyframeOutputUrl", startFrame.materialUrl());
+            putExecutionContext(task, "keyframeRemoteSourceUrl", startFrame.sourceUrl());
+            putExecutionContext(task, "firstFrameUrl", startFrame.videoInputUrl());
+            putExecutionContext(task, "startFrameUrl", startFrame.videoInputUrl());
+            putExecutionContext(task, "startFrameSourceType", startFrame.sourceType());
+            putExecutionContext(task, "startFrameSourceUrl", startFrame.sourceUrl());
+            putExecutionContext(task, "startFrameKeyframeUrl", startFrame.materialUrl());
+            putExecutionContext(task, "startFrameKeyframeRemoteSourceUrl", startFrame.remoteUrl());
+            putExecutionContext(task, "startFrameKeyframeRunId", startFrame.runId());
+            putExecutionContext(task, "lastFrameImageRunId", endFrame.runId());
+            putExecutionContext(task, "requestedLastFrameUrl", endFrame.videoInputUrl());
+            putExecutionContext(task, "endFrameConstraintUrl", endFrame.videoInputUrl());
+            putExecutionContext(task, "endFrameConstraintSourceType", endFrame.sourceType());
+            putExecutionContext(task, "endFrameConstraintSourceUrl", endFrame.sourceUrl());
+            putExecutionContext(task, "endFrameKeyframeUrl", endFrame.materialUrl());
+            putExecutionContext(task, "endFrameKeyframeRemoteSourceUrl", endFrame.remoteUrl());
+            putExecutionContext(task, "endFrameKeyframeRunId", endFrame.runId());
+            putClipFrameExecutionContext(
+                task,
+                clipIndex,
+                buildClipFrameContext(shotPlan, clipIndex, clipDurationSeconds, startFrame, endFrame, "", "", "", "")
+            );
+            taskRepository.save(task);
+            executionCoordinator.recordTrace(task, TaskStage.PLANNING.code(), "planning.clip_frames_resolved", "当前分镜首尾帧约束已就绪。", "INFO", Map.of(
+                "clipIndex", clipIndex,
+                "clipCount", request.shotPlans().size(),
+                "startFrameUrl", startFrame.videoInputUrl(),
+                "startFrameSourceType", startFrame.sourceType(),
+                "startFrameSourceUrl", startFrame.sourceUrl(),
+                "endFrameConstraintUrl", endFrame.videoInputUrl(),
+                "endFrameConstraintSourceType", endFrame.sourceType(),
+                "endFrameConstraintSourceUrl", endFrame.sourceUrl()
+            ));
+            statusStageService.recordStageRun(
+                task,
+                runContext,
+                100 + clipIndex,
+                TaskStage.PLANNING.code(),
+                clipIndex,
+                buildPlanningStageRequest(task, clipPrompt, firstFramePrompt, lastFramePrompt, clipDurationSeconds),
+                buildPlanningStageResponse(startFrame, endFrame, reusePreviousLastFrame)
+            );
             if (index == Math.max(0, request.renderStartIndex() - 1)) {
                 statusStageService.updateStatus(task, runContext, TaskStatus.RENDERING.value(), 55, TaskStage.RENDER.code(), "task.rendering", "任务开始按分镜生成视频输出。");
             } else {
@@ -259,18 +223,24 @@ final class TaskWorkerRenderStageService {
                 clipDurationSeconds,
                 clipMinDuration,
                 clipMaxDuration,
-                firstFrameUrl,
-                ""
+                startFrame.videoInputUrl(),
+                endFrame.videoInputUrl()
             );
             Map<String, Object> videoRun = generationApplicationService.createRun(videoRequest);
             videoRun = awaitCompletedVideoRun(videoRun);
             runtimeSupport.assertTaskStillActive(task);
             Map<String, Object> videoResult = resultMap(videoRun);
             Map<String, Object> videoMetadata = mapValue(videoResult.get("metadata"));
+            String extractedLastFrameUrl = artifactAssembler.extractLastFrameUrl(videoResult);
+            String providerRequestedLastFrameUrl = stringValue(videoMetadata.get("requestedLastFrameUrl"));
+            String resolvedFirstFrameUrl = firstNonBlank(stringValue(videoMetadata.get("firstFrameUrl")), startFrame.videoInputUrl());
             String resolvedLastFrameUrl = firstNonBlank(
-                artifactAssembler.extractLastFrameUrl(videoResult),
-                stringValue(videoMetadata.get("requestedLastFrameUrl"))
+                extractedLastFrameUrl,
+                providerRequestedLastFrameUrl,
+                endFrame.videoInputUrl()
             );
+            String resolvedLastFrameSourceType = resolvedLastFrameSourceType(extractedLastFrameUrl, providerRequestedLastFrameUrl, endFrame.videoInputUrl());
+            String resolvedLastFrameSourceUrl = resolvedLastFrameSourceUrl(extractedLastFrameUrl, providerRequestedLastFrameUrl, endFrame.videoInputUrl());
             artifactAssembler.normalizeOptionalTaskArtifact(
                 task,
                 resolvedLastFrameUrl,
@@ -279,10 +249,29 @@ final class TaskWorkerRenderStageService {
             putExecutionContext(task, "videoRunId", stringValue(videoRun.get("id")));
             putExecutionContext(task, "videoOutputUrl", stringValue(videoResult.get("outputUrl")));
             putExecutionContext(task, "videoThumbnailUrl", stringValue(videoResult.get("thumbnailUrl")));
-            putExecutionContext(task, "firstFrameUrl", firstNonBlank(stringValue(videoMetadata.get("firstFrameUrl")), firstFrameUrl));
+            putExecutionContext(task, "firstFrameUrl", resolvedFirstFrameUrl);
+            putExecutionContext(task, "startFrameUrl", resolvedFirstFrameUrl);
             putExecutionContext(task, "lastFrameUrl", resolvedLastFrameUrl);
+            putExecutionContext(task, "lastFrameSourceType", resolvedLastFrameSourceType);
+            putExecutionContext(task, "lastFrameSourceUrl", resolvedLastFrameSourceUrl);
+            putExecutionContext(task, "requestedLastFrameUrl", endFrame.videoInputUrl());
             putExecutionContext(task, "videoRemoteTaskId", stringValue(videoMetadata.get("taskId")));
             putExecutionContext(task, "videoRemoteSourceUrl", stringValue(videoMetadata.get("remoteSourceUrl")));
+            putClipFrameExecutionContext(
+                task,
+                clipIndex,
+                buildClipFrameContext(
+                    shotPlan,
+                    clipIndex,
+                    clipDurationSeconds,
+                    startFrame,
+                    endFrame,
+                    stringValue(videoRun.get("id")),
+                    firstNonBlank(stringValue(videoResult.get("outputUrl")), stringValue(videoMetadata.get("remoteSourceUrl"))),
+                    resolvedLastFrameUrl,
+                    resolvedLastFrameSourceType
+                )
+            );
             taskRepository.save(task);
             Map<String, Object> videoModelCall = statusStageService.createModelCall(task, TaskStage.RENDER.code(), "generation.video", videoRequest, videoRun, videoResult, clipIndex, GenerationModelKinds.VIDEO);
             executionCoordinator.recordModelCall(task, videoModelCall);
@@ -290,6 +279,21 @@ final class TaskWorkerRenderStageService {
             Map<String, Object> videoMaterial = artifactAssembler.createVideoMaterial(task, videoRun, videoResult, clipIndex, clipDurationSeconds);
             executionCoordinator.recordMaterial(task, videoMaterial);
             putExecutionContext(task, "videoOutputUrl", stringValue(videoMaterial.get("fileUrl")));
+            putClipFrameExecutionContext(
+                task,
+                clipIndex,
+                buildClipFrameContext(
+                    shotPlan,
+                    clipIndex,
+                    clipDurationSeconds,
+                    startFrame,
+                    endFrame,
+                    stringValue(videoRun.get("id")),
+                    stringValue(videoMaterial.get("fileUrl")),
+                    resolvedLastFrameUrl,
+                    resolvedLastFrameSourceType
+                )
+            );
             latestVideoOutputUrl = stringValue(videoMaterial.get("fileUrl"));
             task.setCompletedOutputCount(Math.max(task.completedOutputCount(), clipIndex));
             taskRepository.save(task);
@@ -298,7 +302,7 @@ final class TaskWorkerRenderStageService {
                 videoRun,
                 videoResult,
                 videoMaterial,
-                imageMaterial,
+                startFrame.material(),
                 videoModelCall,
                 resolvedLastFrameUrl,
                 clipIndex,
@@ -313,54 +317,27 @@ final class TaskWorkerRenderStageService {
                 200 + clipIndex,
                 TaskStage.RENDER.code(),
                 clipIndex,
-                Map.of(
-                    /**
-                     * 处理string值。
-                     * @param imageRun.get("id" 图像运行.get("标识"值
-                     * @return 处理结果
-                     */
-                    "imageRunId", stringValue(imageRun.get("id")),
-                    /**
-                     * 处理string值。
-                     * @param imageMaterial.get("fileUrl" 图像Material.get("fileUrl"值
-                     * @return 处理结果
-                     */
-                    "posterUrl", stringValue(imageMaterial.get("fileUrl")),
-                    "targetDurationSeconds", clipDurationSeconds
-                ),
-                Map.of(
-                    /**
-                     * 处理string值。
-                     * @param videoRun.get("id" 视频运行.get("标识"值
-                     * @return 处理结果
-                     */
-                    "videoRunId", stringValue(videoRun.get("id")),
-                    /**
-                     * 处理string值。
-                     * @param videoMaterial.get("fileUrl" 视频Material.get("fileUrl"值
-                     * @return 处理结果
-                     */
-                    "outputUrl", stringValue(videoMaterial.get("fileUrl")),
-                    /**
-                     * 处理string值。
-                     * @param videoMetadata.get("taskId" 视频Metadata.get("任务标识"值
-                     * @return 处理结果
-                     */
-                    "remoteTaskId", stringValue(videoMetadata.get("taskId")),
-                    "lastFrameUrl", resolvedLastFrameUrl
+                buildRenderStageRequest(startFrame, endFrame, clipDurationSeconds),
+                buildRenderStageResponse(
+                    videoRun,
+                    videoMaterial,
+                    videoMetadata,
+                    resolvedFirstFrameUrl,
+                    resolvedLastFrameUrl,
+                    resolvedLastFrameSourceType,
+                    endFrame.videoInputUrl()
                 )
             );
             executionCoordinator.recordTrace(task, TaskStage.RENDER.code(), "render.clip_completed", "当前分镜片段已生成完成。", "INFO", Map.of(
                 "clipIndex", clipIndex,
                 "clipCount", request.shotPlans().size(),
-                /**
-                 * 处理string值。
-                 * @param videoMaterial.get("fileUrl" 视频Material.get("fileUrl"值
-                 * @return 处理结果
-                 */
                 "outputUrl", stringValue(videoMaterial.get("fileUrl")),
-                "firstFrameUrl", firstFrameUrl,
-                "lastFrameUrl", resolvedLastFrameUrl
+                "firstFrameUrl", resolvedFirstFrameUrl,
+                "firstFrameSourceType", startFrame.sourceType(),
+                "requestedLastFrameUrl", endFrame.videoInputUrl(),
+                "requestedLastFrameSourceType", endFrame.sourceType(),
+                "lastFrameUrl", resolvedLastFrameUrl,
+                "lastFrameSourceType", resolvedLastFrameSourceType
             ));
             videoRunIds.add(stringValue(videoRun.get("id")));
             previousClipLastFrameUrl = stringValue(resolvedLastFrameUrl);
@@ -411,6 +388,316 @@ final class TaskWorkerRenderStageService {
         }
         throw new IllegalStateException(
             "video run wait timeout: runId=" + runId + ", status=" + currentStatus + ", maxPolls=" + videoRunMaxPolls
+        );
+    }
+
+    /**
+     * 生成关键帧并落库素材。
+     * @param task 要处理的任务对象
+     * @param clipIndex 片段索引值
+     * @param prompt 提示词值
+     * @param width width值
+     * @param height height值
+     * @param referenceImageUrl reference图像URL值
+     * @param durationSeconds 时长Seconds值
+     * @param frameRole frameRole值
+     * @param sourceType 来源类型值
+     * @param imageRunIds 图像运行标识列表值
+     * @return 处理结果
+     */
+    private FrameResolution generateFrame(
+        TaskRecord task,
+        int clipIndex,
+        String prompt,
+        int width,
+        int height,
+        String referenceImageUrl,
+        int durationSeconds,
+        String frameRole,
+        String sourceType,
+        List<String> imageRunIds
+    ) {
+        Map<String, Object> imageRequest = runtimeSupport.buildImageRunRequest(
+            task,
+            clipIndex,
+            prompt,
+            width,
+            height,
+            referenceImageUrl,
+            durationSeconds,
+            frameRole
+        );
+        Map<String, Object> imageRun = generationApplicationService.createRun(imageRequest);
+        runtimeSupport.assertTaskStillActive(task);
+        Map<String, Object> imageResult = resultMap(imageRun);
+        Map<String, Object> imageMetadata = mapValue(imageResult.get("metadata"));
+        String keyframeSourceUrl = firstNonBlank(
+            stringValue(imageMetadata.get("remoteSourceUrl")),
+            stringValue(imageResult.get("outputUrl"))
+        );
+        Map<String, Object> imageModelCall = statusStageService.createModelCall(
+            task,
+            TaskStage.PLANNING.code(),
+            "generation.image",
+            imageRequest,
+            imageRun,
+            imageResult,
+            clipIndex,
+            GenerationModelKinds.IMAGE
+        );
+        executionCoordinator.recordModelCall(task, imageModelCall);
+        statusStageService.recordRunCallChain(task, TaskStage.PLANNING.code(), imageRun, imageResult);
+        Map<String, Object> imageMaterial = artifactAssembler.createImageMaterial(task, imageRun, imageResult, clipIndex, frameRole);
+        executionCoordinator.recordMaterial(task, imageMaterial);
+        imageRunIds.add(stringValue(imageRun.get("id")));
+        return new FrameResolution(
+            stringValue(prompt),
+            stringValue(frameRole),
+            stringValue(sourceType),
+            keyframeSourceUrl,
+            stringValue(imageMaterial.get("fileUrl")),
+            firstNonBlank(stringValue(imageMaterial.get("remoteUrl")), keyframeSourceUrl),
+            firstNonBlank(keyframeSourceUrl, stringValue(imageMaterial.get("remoteUrl")), stringValue(imageMaterial.get("fileUrl"))),
+            stringValue(imageRun.get("id")),
+            imageMaterial
+        );
+    }
+
+    /**
+     * 复用已有关键帧作为当前输入。
+     * @param task 要处理的任务对象
+     * @param clipIndex 片段索引值
+     * @param sourceUrl 来源URL值
+     * @param frameRole frameRole值
+     * @param sourceType 来源类型值
+     * @return 处理结果
+     */
+    private FrameResolution reuseFrame(TaskRecord task, int clipIndex, String sourceUrl, String frameRole, String sourceType) {
+        Map<String, Object> imageMaterial = artifactAssembler.createReferenceFrameMaterial(task, clipIndex, sourceUrl, frameRole);
+        executionCoordinator.recordMaterial(task, imageMaterial);
+        String remoteUrl = firstNonBlank(stringValue(imageMaterial.get("remoteUrl")), sourceUrl);
+        return new FrameResolution(
+            "",
+            stringValue(frameRole),
+            stringValue(sourceType),
+            stringValue(sourceUrl),
+            stringValue(imageMaterial.get("fileUrl")),
+            remoteUrl,
+            firstNonBlank(remoteUrl, stringValue(imageMaterial.get("fileUrl"))),
+            "",
+            imageMaterial
+        );
+    }
+
+    /**
+     * 构建planning阶段请求。
+     * @param task 要处理的任务对象
+     * @param clipPrompt 片段提示词值
+     * @param firstFramePrompt 首帧提示词值
+     * @param lastFramePrompt 尾帧提示词值
+     * @param clipDurationSeconds 片段时长Seconds值
+     * @return 处理结果
+     */
+    private Map<String, Object> buildPlanningStageRequest(
+        TaskRecord task,
+        String clipPrompt,
+        String firstFramePrompt,
+        String lastFramePrompt,
+        int clipDurationSeconds
+    ) {
+        Map<String, Object> request = new LinkedHashMap<>();
+        request.put("aspectRatio", task.aspectRatio());
+        request.put("clipPrompt", truncateText(clipPrompt, 160));
+        request.put("firstFramePrompt", truncateText(firstFramePrompt, 160));
+        request.put("lastFramePrompt", truncateText(lastFramePrompt, 160));
+        request.put("targetDurationSeconds", clipDurationSeconds);
+        return request;
+    }
+
+    /**
+     * 构建planning阶段响应。
+     * @param startFrame 首帧处理结果值
+     * @param endFrame 尾帧处理结果值
+     * @param reusedPreviousStart 是否复用上一镜尾帧值
+     * @return 处理结果
+     */
+    private Map<String, Object> buildPlanningStageResponse(FrameResolution startFrame, FrameResolution endFrame, boolean reusedPreviousStart) {
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("summary", reusedPreviousStart ? "已复用上一镜尾帧作为首帧，并生成当前镜头尾帧关键画面" : "当前镜头首尾关键画面已生成");
+        response.put("imageRunId", firstNonBlank(startFrame.runId(), endFrame.runId()));
+        response.put("imageUrl", startFrame.materialUrl());
+        response.put("remoteImageUrl", startFrame.videoInputUrl());
+        response.put("startFrameUrl", startFrame.videoInputUrl());
+        response.put("startFrameSourceType", startFrame.sourceType());
+        response.put("startFrameSourceUrl", startFrame.sourceUrl());
+        response.put("startFrameKeyframeUrl", startFrame.materialUrl());
+        response.put("startFrameImageRunId", startFrame.runId());
+        response.put("endFrameConstraintUrl", endFrame.videoInputUrl());
+        response.put("endFrameSourceType", endFrame.sourceType());
+        response.put("endFrameSourceUrl", endFrame.sourceUrl());
+        response.put("endFrameKeyframeUrl", endFrame.materialUrl());
+        response.put("endFrameImageRunId", endFrame.runId());
+        return response;
+    }
+
+    /**
+     * 构建render阶段请求。
+     * @param startFrame 首帧处理结果值
+     * @param endFrame 尾帧处理结果值
+     * @param clipDurationSeconds 片段时长Seconds值
+     * @return 处理结果
+     */
+    private Map<String, Object> buildRenderStageRequest(FrameResolution startFrame, FrameResolution endFrame, int clipDurationSeconds) {
+        Map<String, Object> request = new LinkedHashMap<>();
+        request.put("imageRunId", firstNonBlank(startFrame.runId(), endFrame.runId()));
+        request.put("posterUrl", startFrame.materialUrl());
+        request.put("targetDurationSeconds", clipDurationSeconds);
+        request.put("firstFrameUrl", startFrame.videoInputUrl());
+        request.put("firstFrameSourceType", startFrame.sourceType());
+        request.put("requestedLastFrameUrl", endFrame.videoInputUrl());
+        request.put("requestedLastFrameSourceType", endFrame.sourceType());
+        return request;
+    }
+
+    /**
+     * 构建render阶段响应。
+     * @param videoRun 视频运行值
+     * @param videoMaterial 视频素材值
+     * @param videoMetadata 视频Metadata值
+     * @param resolvedFirstFrameUrl 首帧URL值
+     * @param resolvedLastFrameUrl 尾帧URL值
+     * @param resolvedLastFrameSourceType 尾帧来源类型值
+     * @param requestedLastFrameUrl 请求尾帧URL值
+     * @return 处理结果
+     */
+    private Map<String, Object> buildRenderStageResponse(
+        Map<String, Object> videoRun,
+        Map<String, Object> videoMaterial,
+        Map<String, Object> videoMetadata,
+        String resolvedFirstFrameUrl,
+        String resolvedLastFrameUrl,
+        String resolvedLastFrameSourceType,
+        String requestedLastFrameUrl
+    ) {
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("videoRunId", stringValue(videoRun.get("id")));
+        response.put("outputUrl", stringValue(videoMaterial.get("fileUrl")));
+        response.put("remoteTaskId", stringValue(videoMetadata.get("taskId")));
+        response.put("firstFrameUrl", resolvedFirstFrameUrl);
+        response.put("requestedLastFrameUrl", requestedLastFrameUrl);
+        response.put("lastFrameUrl", resolvedLastFrameUrl);
+        response.put("lastFrameSourceType", resolvedLastFrameSourceType);
+        return response;
+    }
+
+    /**
+     * 构建片段Frame上下文。
+     * @param shotPlan 分镜片段规划值
+     * @param clipIndex 片段索引值
+     * @param clipDurationSeconds 片段时长Seconds值
+     * @param startFrame 首帧处理结果值
+     * @param endFrame 尾帧处理结果值
+     * @param videoRunId 视频运行标识值
+     * @param videoOutputUrl 视频输出URL值
+     * @param resolvedLastFrameUrl 解析后的尾帧URL值
+     * @param resolvedLastFrameSourceType 解析后的尾帧来源类型值
+     * @return 处理结果
+     */
+    private Map<String, Object> buildClipFrameContext(
+        TaskStoryboardPlanner.StoryboardShotPlan shotPlan,
+        int clipIndex,
+        int clipDurationSeconds,
+        FrameResolution startFrame,
+        FrameResolution endFrame,
+        String videoRunId,
+        String videoOutputUrl,
+        String resolvedLastFrameUrl,
+        String resolvedLastFrameSourceType
+    ) {
+        Map<String, Object> row = new LinkedHashMap<>();
+        row.put("clipIndex", clipIndex);
+        row.put("shotLabel", shotPlan.shotLabel());
+        row.put("scene", shotPlan.scene());
+        row.put("targetDurationSeconds", clipDurationSeconds);
+        row.put("startFramePrompt", firstNonBlank(startFrame.prompt(), shotPlan.firstFramePrompt(), shotPlan.lastFramePrompt()));
+        row.put("startFrameUrl", startFrame.videoInputUrl());
+        row.put("startFrameSourceType", startFrame.sourceType());
+        row.put("startFrameSourceUrl", startFrame.sourceUrl());
+        row.put("startFrameKeyframeUrl", startFrame.materialUrl());
+        row.put("startFrameKeyframeRemoteSourceUrl", startFrame.remoteUrl());
+        row.put("startFrameKeyframeRunId", startFrame.runId());
+        row.put("endFramePrompt", firstNonBlank(endFrame.prompt(), shotPlan.lastFramePrompt()));
+        row.put("endFrameConstraintUrl", endFrame.videoInputUrl());
+        row.put("endFrameSourceType", endFrame.sourceType());
+        row.put("endFrameSourceUrl", endFrame.sourceUrl());
+        row.put("endFrameKeyframeUrl", endFrame.materialUrl());
+        row.put("endFrameKeyframeRemoteSourceUrl", endFrame.remoteUrl());
+        row.put("endFrameKeyframeRunId", endFrame.runId());
+        row.put("videoRunId", videoRunId);
+        row.put("videoOutputUrl", videoOutputUrl);
+        row.put("returnedLastFrameUrl", resolvedLastFrameUrl);
+        row.put("returnedLastFrameSourceType", resolvedLastFrameSourceType);
+        return row;
+    }
+
+    /**
+     * 写入片段Frame上下文。
+     * @param task 要处理的任务对象
+     * @param clipIndex 片段索引值
+     * @param clipFrameContext 片段Frame上下文值
+     */
+    private void putClipFrameExecutionContext(TaskRecord task, int clipIndex, Map<String, Object> clipFrameContext) {
+        List<Map<String, Object>> rows = new ArrayList<>();
+        if (task.executionContext() != null && task.executionContext().get("clipFrameContexts") instanceof List<?> existingList) {
+            for (Object item : existingList) {
+                if (item instanceof Map<?, ?> rawMap) {
+                    Map<String, Object> row = new LinkedHashMap<>();
+                    for (Map.Entry<?, ?> entry : rawMap.entrySet()) {
+                        row.put(stringValue(entry.getKey()), entry.getValue());
+                    }
+                    if (intValue(row.get("clipIndex"), 0) != clipIndex) {
+                        rows.add(row);
+                    }
+                }
+            }
+        }
+        rows.add(clipFrameContext);
+        rows.sort((left, right) -> Integer.compare(intValue(left.get("clipIndex"), 0), intValue(right.get("clipIndex"), 0)));
+        putExecutionContext(task, "clipFrameContexts", rows);
+    }
+
+    /**
+     * 解析尾帧来源类型。
+     * @param extractedLastFrameUrl 提取到的尾帧URL值
+     * @param providerRequestedLastFrameUrl provider请求尾帧URL值
+     * @param requestedLastFrameUrl 请求尾帧URL值
+     * @return 处理结果
+     */
+    private String resolvedLastFrameSourceType(String extractedLastFrameUrl, String providerRequestedLastFrameUrl, String requestedLastFrameUrl) {
+        if (!stringValue(extractedLastFrameUrl).isBlank()) {
+            return "video_result_last_frame";
+        }
+        if (!stringValue(providerRequestedLastFrameUrl).isBlank()) {
+            return "video_requested_last_frame";
+        }
+        if (!stringValue(requestedLastFrameUrl).isBlank()) {
+            return "end_frame_keyframe_fallback";
+        }
+        return "";
+    }
+
+    /**
+     * 解析尾帧来源URL。
+     * @param extractedLastFrameUrl 提取到的尾帧URL值
+     * @param providerRequestedLastFrameUrl provider请求尾帧URL值
+     * @param requestedLastFrameUrl 请求尾帧URL值
+     * @return 处理结果
+     */
+    private String resolvedLastFrameSourceUrl(String extractedLastFrameUrl, String providerRequestedLastFrameUrl, String requestedLastFrameUrl) {
+        return firstNonBlank(
+            extractedLastFrameUrl,
+            providerRequestedLastFrameUrl,
+            requestedLastFrameUrl
         );
     }
 
@@ -713,6 +1000,32 @@ final class TaskWorkerRenderStageService {
         List<String> videoRunIds,
         String latestVideoOutputUrl,
         int clipCount
+    ) {
+    }
+
+    /**
+     * Frame处理结果。
+     * @param prompt 提示词值
+     * @param frameRole frameRole值
+     * @param sourceType 来源类型值
+     * @param sourceUrl 来源URL值
+     * @param materialUrl 素材URL值
+     * @param remoteUrl 远程URL值
+     * @param videoInputUrl 视频输入URL值
+     * @param runId 运行标识值
+     * @param material 素材值
+     * @return 处理结果
+     */
+    private record FrameResolution(
+        String prompt,
+        String frameRole,
+        String sourceType,
+        String sourceUrl,
+        String materialUrl,
+        String remoteUrl,
+        String videoInputUrl,
+        String runId,
+        Map<String, Object> material
     ) {
     }
 }

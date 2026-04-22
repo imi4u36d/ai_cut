@@ -1,6 +1,6 @@
 node_modules/
 dist/
-storage/
+storage/*
 .claude
 .codex
 .DS_Store
@@ -23,6 +23,8 @@ storage/mysql/*
 storage/mysql.bak_*/
 storage/redis/*
 apps/api-spring/target
+!storage/gen/
+!storage/gen/**
 !storage/uploads/.gitkeep
 !storage/outputs/.gitkeep
 !storage/temp/.gitkeep

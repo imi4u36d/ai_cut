@@ -3,6 +3,11 @@ package com.jiandou.api.workflow.application;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.jiandou.api.task.infrastructure.mybatis.MaterialAssetEntity;
 import com.jiandou.api.task.infrastructure.mybatis.MaterialAssetMapper;
+import com.jiandou.api.task.infrastructure.mybatis.SystemLogEntity;
+import com.jiandou.api.task.infrastructure.mybatis.SystemLogMapper;
+import com.jiandou.api.task.infrastructure.mybatis.TaskModelCallEntity;
+import com.jiandou.api.task.infrastructure.mybatis.TaskModelCallMapper;
+import com.jiandou.api.workflow.infrastructure.WorkflowJsonSupport;
 import com.jiandou.api.workflow.infrastructure.mybatis.MaterialAssetTagEntity;
 import com.jiandou.api.workflow.infrastructure.mybatis.MaterialAssetTagMapper;
 import com.jiandou.api.workflow.infrastructure.mybatis.StageVersionEntity;
@@ -15,6 +20,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 import java.util.stream.Collectors;
 import org.apache.ibatis.session.SqlSession;
 import org.apache.ibatis.session.SqlSessionFactory;
@@ -260,8 +266,122 @@ public class WorkflowRepository {
         }
     }
 
+    public void saveSystemLog(
+        String ownerRefId,
+        String module,
+        String stage,
+        String event,
+        String level,
+        String message,
+        Map<String, Object> payload
+    ) {
+        try (SqlSession session = sqlSessionFactory.openSession(true)) {
+            SystemLogMapper mapper = session.getMapper(SystemLogMapper.class);
+            SystemLogEntity entity = new SystemLogEntity();
+            OffsetDateTime now = OffsetDateTime.now();
+            entity.setSystemLogId("slog_" + UUID.randomUUID().toString().replace("-", ""));
+            entity.setTaskId(ownerRefId);
+            entity.setTraceId(entity.getSystemLogId());
+            entity.setModule(module);
+            entity.setStage(stage);
+            entity.setEvent(event);
+            entity.setLevel(level == null || level.isBlank() ? "INFO" : level.toUpperCase());
+            entity.setMessage(message == null ? "" : message);
+            entity.setPayloadJson(WorkflowJsonSupport.write(payload == null ? Map.of() : payload));
+            entity.setSource("spring-api");
+            entity.setServiceName("api-spring");
+            entity.setHostName("");
+            entity.setLoggedAt(now);
+            entity.setTimezoneOffsetMinutes(480);
+            entity.setCreateTime(now);
+            entity.setUpdateTime(now);
+            entity.setIsDeleted(0);
+            mapper.insert(entity);
+        }
+    }
+
+    public void saveModelCall(String ownerRefId, Map<String, Object> modelCall) {
+        try (SqlSession session = sqlSessionFactory.openSession(true)) {
+            TaskModelCallMapper mapper = session.getMapper(TaskModelCallMapper.class);
+            TaskModelCallEntity entity = new TaskModelCallEntity();
+            OffsetDateTime now = OffsetDateTime.now();
+            entity.setTaskModelCallId(stringValue(modelCall.get("modelCallId")));
+            entity.setTaskId(ownerRefId == null ? "" : ownerRefId);
+            entity.setCallKind(stringValue(modelCall.get("callKind")));
+            entity.setStage(stringValue(modelCall.get("stage")));
+            entity.setOperation(stringValue(modelCall.get("operation")));
+            entity.setProvider(stringValue(modelCall.get("provider")));
+            entity.setProviderModel(stringValue(modelCall.get("providerModel")));
+            entity.setRequestedModel(stringValue(modelCall.get("requestedModel")));
+            entity.setResolvedModel(stringValue(modelCall.get("resolvedModel")));
+            entity.setModelName(stringValue(modelCall.get("modelName")));
+            entity.setModelAlias(stringValue(modelCall.get("modelAlias")));
+            entity.setEndpointHost(stringValue(modelCall.get("endpointHost")));
+            entity.setRequestId(stringValue(modelCall.get("requestId")));
+            entity.setRequestPayloadJson(WorkflowJsonSupport.write(modelCall.get("requestPayload")));
+            entity.setResponsePayloadJson(WorkflowJsonSupport.write(modelCall.get("responsePayload")));
+            entity.setHttpStatus(intValue(modelCall.get("httpStatus"), 0));
+            entity.setResponseStatusCode(intValue(modelCall.get("responseCode"), entity.getHttpStatus()));
+            entity.setSuccess(booleanValue(modelCall.get("success")) ? 1 : 0);
+            entity.setErrorCode(stringValue(modelCall.get("errorCode")));
+            entity.setErrorMessage(stringValue(modelCall.get("errorMessage")));
+            entity.setLatencyMs(intValue(modelCall.get("latencyMs"), 0));
+            entity.setDurationMs(intValue(modelCall.get("durationMs"), entity.getLatencyMs()));
+            entity.setInputTokens(intValue(modelCall.get("inputTokens"), 0));
+            entity.setOutputTokens(intValue(modelCall.get("outputTokens"), 0));
+            entity.setStartedAt(offsetDateTimeValue(modelCall.get("startedAt"), now));
+            entity.setFinishedAt(offsetDateTimeValue(modelCall.get("finishedAt"), entity.getStartedAt()));
+            entity.setTimezoneOffsetMinutes(480);
+            entity.setCreateTime(now);
+            entity.setUpdateTime(now);
+            entity.setIsDeleted(0);
+            mapper.insert(entity);
+        }
+    }
+
     public OffsetDateTime now() {
         return OffsetDateTime.now();
+    }
+
+    private String stringValue(Object value) {
+        return value == null ? "" : String.valueOf(value).trim();
+    }
+
+    private int intValue(Object value, int fallback) {
+        if (value instanceof Number number) {
+            return number.intValue();
+        }
+        if (value != null) {
+            try {
+                return Integer.parseInt(String.valueOf(value).trim());
+            } catch (NumberFormatException ignored) {
+                return fallback;
+            }
+        }
+        return fallback;
+    }
+
+    private boolean booleanValue(Object value) {
+        if (value instanceof Boolean bool) {
+            return bool;
+        }
+        String normalized = stringValue(value).toLowerCase();
+        return "true".equals(normalized) || "1".equals(normalized) || "yes".equals(normalized);
+    }
+
+    private OffsetDateTime offsetDateTimeValue(Object value, OffsetDateTime fallback) {
+        if (value instanceof OffsetDateTime offsetDateTime) {
+            return offsetDateTime;
+        }
+        String text = stringValue(value);
+        if (text.isBlank()) {
+            return fallback;
+        }
+        try {
+            return OffsetDateTime.parse(text);
+        } catch (Exception ignored) {
+            return fallback;
+        }
     }
 
     private int defaultInt(Integer value) {

@@ -3,6 +3,7 @@ package com.jiandou.api.generation.image;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertIterableEquals;
 import com.jiandou.api.generation.runtime.MediaProviderCapabilities;
 import com.jiandou.api.generation.runtime.MediaProviderConfig;
 import com.jiandou.api.generation.runtime.MediaProviderProfile;
@@ -21,6 +22,7 @@ class SeedreamImageModelProviderTest {
             "doubao-seedream-5-0-260128",
             "a prompt",
             "1K",
+            "",
             42
         );
 
@@ -51,7 +53,7 @@ class SeedreamImageModelProviderTest {
 
         RemoteImageGenerationResult result = provider.generate(
             profile(),
-            new ImageGenerationRequest("seedream-4.5", "a prompt", 720, 1280, null)
+            new ImageGenerationRequest("seedream-4.5", "a prompt", 720, 1280, "", null)
         );
 
         assertArrayEquals(new byte[] {1, 2, 3}, result.data());
@@ -59,6 +61,23 @@ class SeedreamImageModelProviderTest {
         assertEquals("https://example.com/image.png", result.remoteSourceUrl());
         assertEquals("doubao-seedream-4-5-251128", result.providerModel());
         assertEquals("2K", result.requestedSize());
+    }
+
+    @Test
+    void buildRequestBodyIncludesReferenceImagesWhenReferenceImagePresent() {
+        SeedreamImageModelProvider provider = new SeedreamImageModelProvider(new ImageProviderTransport(new com.fasterxml.jackson.databind.ObjectMapper()));
+
+        Map<String, Object> body = provider.buildSeedreamImageRequestBody(
+            "doubao-seedream-4-5-251128",
+            "a prompt",
+            "2K",
+            "https://example.com/clip1-first.png",
+            null
+        );
+
+        @SuppressWarnings("unchecked")
+        java.util.List<String> referenceImages = (java.util.List<String>) body.get("reference_images");
+        assertIterableEquals(java.util.List.of("https://example.com/clip1-first.png"), referenceImages);
     }
 
     private MediaProviderProfile profile() {

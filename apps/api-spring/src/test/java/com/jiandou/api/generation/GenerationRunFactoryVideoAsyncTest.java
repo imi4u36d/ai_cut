@@ -3,11 +3,13 @@ package com.jiandou.api.generation;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.jiandou.api.config.JiandouStorageProperties;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jiandou.api.generation.image.ImageModelProviderRegistry;
+import com.jiandou.api.generation.exception.GenerationProviderException;
 import com.jiandou.api.generation.orchestration.GenerationRunFactory;
 import com.jiandou.api.generation.orchestration.GenerationRunSupport;
 import com.jiandou.api.generation.runtime.GenerationConfigPathLocator;
@@ -285,6 +287,301 @@ class GenerationRunFactoryVideoAsyncTest {
         assertEquals("https://example.com/generated-last-frame.png", refreshedMetadata.get("last_frame_url"));
         assertNotNull(refreshedMetadata.get("providerPayload"));
         assertNotNull(refreshedResult.get("callChain"));
+    }
+
+    @Test
+    void createVideoRunRejectsLocalStorageFrameUrlsBeforeRemoteCalls() {
+        ModelRuntimeProfile textProfile = new ModelRuntimeProfile(
+            "openai",
+            "gpt-text",
+            "k",
+            "https://api.example.com/v1",
+            60,
+            0.2,
+            2048,
+            "test"
+        );
+        ModelRuntimeProfile visionProfile = new ModelRuntimeProfile(
+            "openai",
+            "gpt-vision",
+            "k",
+            "https://api.example.com/v1",
+            60,
+            0.2,
+            2048,
+            "test"
+        );
+        MediaProviderProfile videoProfile = new MediaProviderProfile(
+            new MediaProviderConfig(
+                "video",
+                "wan2.2-i2v-plus",
+                "wan",
+                "wan2.2-i2v-plus",
+                "k",
+                "https://dashscope.aliyuncs.com/api/v1/services/aigc/video-generation/video-synthesis",
+                "https://dashscope.aliyuncs.com/api/v1/tasks",
+                60,
+                "test"
+            ),
+            new MediaProviderCapabilities(false, true, false, false, 1, 120, "i2v", java.util.List.of(), java.util.List.of(6, 8, 10))
+        );
+        ModelRuntimePropertiesResolver modelResolver = new ModelRuntimePropertiesResolver(new MockEnvironment()) {
+            @Override
+            public boolean supportsSeed(String requestedModel) {
+                return false;
+            }
+
+            @Override
+            public ModelRuntimeProfile resolveTextProfile(String requestedModel) {
+                return "gpt-vision".equals(requestedModel) ? visionProfile : textProfile;
+            }
+
+            @Override
+            public MediaProviderProfile resolveMediaProfile(String requestedModel, String expectedKind) {
+                return videoProfile;
+            }
+
+            @Override
+            public String value(String section, String key, String fallback) {
+                return fallback;
+            }
+        };
+        PromptTemplateResolver promptTemplateResolver = new PromptTemplateResolver(
+            new MockEnvironment(),
+            modelResolver,
+            new GenerationConfigPathLocator(new MockEnvironment())
+        );
+        TextModelProviderRegistry textModelProviderRegistry = new TextModelProviderRegistry(java.util.List.of(new TextModelProvider() {
+            @Override
+            public boolean supports(ModelRuntimeProfile profile) {
+                return true;
+            }
+
+            @Override
+            public TextModelResponse generate(ModelRuntimeProfile profile, TextModelInvocation invocation) {
+                throw new AssertionError("vision/text model should not be called for invalid frame URLs");
+            }
+        }));
+        VideoModelProvider fakeVideoModelProvider = new VideoModelProvider() {
+            @Override
+            public boolean supports(MediaProviderProfile profile) {
+                return true;
+            }
+
+            @Override
+            public RemoteVideoTaskSubmission submit(MediaProviderProfile profile, VideoGenerationRequest request) {
+                throw new AssertionError("video provider should not be called for invalid frame URLs");
+            }
+
+            @Override
+            public RemoteTaskQueryResult query(MediaProviderProfile profile, String taskId) {
+                throw new AssertionError("video provider query should not be called for invalid frame URLs");
+            }
+        };
+        LocalMediaArtifactService localMediaArtifactService = new LocalMediaArtifactService(storageProperties(tempDir), "ffmpeg");
+        GenerationRunSupport support = new GenerationRunSupport(localMediaArtifactService, textModelProviderRegistry);
+        GenerationRunFactory factory = new GenerationRunFactory(
+            modelResolver,
+            promptTemplateResolver,
+            textModelProviderRegistry,
+            new ImageModelProviderRegistry(java.util.List.of()),
+            new VideoModelProviderRegistry(java.util.List.of(fakeVideoModelProvider)),
+            support
+        );
+
+        Map<String, Object> request = new LinkedHashMap<>();
+        request.put("kind", "video");
+        request.put("input", Map.of(
+            "prompt", "a hero enters frame",
+            "videoSize", "720*1280",
+            "durationSeconds", 8,
+            "firstFrameUrl", "/storage/workflows/wf_1/keyframes/clip1-first.png",
+            "lastFrameUrl", "https://cdn.example.com/clip1-last.png"
+        ));
+        request.put("model", Map.of(
+            "textAnalysisModel", "gpt-text",
+            "visionModel", "gpt-vision",
+            "providerModel", "wan2.2-i2v-plus"
+        ));
+        request.put("options", Map.of("stylePreset", "cinematic"));
+
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> factory.createVideoRun("run_invalid_url", request));
+        assertEquals("video firstFrameUrl must be an absolute http(s) URL", exception.getMessage());
+    }
+
+    @Test
+    void refreshVideoRunRetriesWhenTaskQueryReturnsGatewayTimeout() {
+        ModelRuntimeProfile textProfile = new ModelRuntimeProfile(
+            "openai",
+            "gpt-text",
+            "k",
+            "https://api.example.com/v1",
+            60,
+            0.2,
+            2048,
+            "test"
+        );
+        ModelRuntimeProfile visionProfile = new ModelRuntimeProfile(
+            "openai",
+            "gpt-vision",
+            "k",
+            "https://api.example.com/v1",
+            60,
+            0.2,
+            2048,
+            "test"
+        );
+        MediaProviderProfile videoProfile = new MediaProviderProfile(
+            new MediaProviderConfig(
+                "video",
+                "wan2.2-i2v-plus",
+                "wan",
+                "wan2.2-i2v-plus",
+                "k",
+                "https://dashscope.aliyuncs.com/api/v1/services/aigc/video-generation/video-synthesis",
+                "https://dashscope.aliyuncs.com/api/v1/tasks",
+                60,
+                "test"
+            ),
+            new MediaProviderCapabilities(false, true, false, false, 1, 120, "i2v", java.util.List.of(), java.util.List.of(6, 8, 10))
+        );
+        ModelRuntimePropertiesResolver modelResolver = new ModelRuntimePropertiesResolver(new MockEnvironment()) {
+            @Override
+            public boolean supportsSeed(String requestedModel) {
+                return false;
+            }
+
+            @Override
+            public ModelRuntimeProfile resolveTextProfile(String requestedModel) {
+                return "gpt-vision".equals(requestedModel) ? visionProfile : textProfile;
+            }
+
+            @Override
+            public MediaProviderProfile resolveMediaProfile(String requestedModel, String expectedKind) {
+                return videoProfile;
+            }
+
+            @Override
+            public MediaProviderProfile resolveVideoProfile(String requestedModel) {
+                return videoProfile;
+            }
+
+            @Override
+            public String value(String section, String key, String fallback) {
+                return fallback;
+            }
+        };
+        PromptTemplateResolver promptTemplateResolver = new PromptTemplateResolver(
+            new MockEnvironment(),
+            modelResolver,
+            new GenerationConfigPathLocator(new MockEnvironment())
+        ) {
+            @Override
+            public String systemPrompt(String promptName, String key) {
+                return "";
+            }
+        };
+        TextModelProviderRegistry textModelProviderRegistry = new TextModelProviderRegistry(java.util.List.of(new TextModelProvider() {
+            @Override
+            public boolean supports(ModelRuntimeProfile profile) {
+                return true;
+            }
+
+            @Override
+            public TextModelResponse generate(ModelRuntimeProfile profile, TextModelInvocation invocation) {
+                if (invocation instanceof VisionCompletionInvocation) {
+                    return new TextModelResponse(
+                        "vision notes",
+                        "https://api.example.com/v1/responses",
+                        "api.example.com",
+                        10,
+                        true,
+                        "resp_2"
+                    );
+                }
+                TextCompletionInvocation textInvocation = (TextCompletionInvocation) invocation;
+                return new TextModelResponse(
+                    textInvocation.userPrompt(),
+                    "https://api.example.com/v1/responses",
+                    "api.example.com",
+                    10,
+                    true,
+                    "resp_1"
+                );
+            }
+        }));
+        VideoModelProvider flakyVideoModelProvider = new VideoModelProvider() {
+            @Override
+            public boolean supports(MediaProviderProfile profile) {
+                return true;
+            }
+
+            @Override
+            public RemoteVideoTaskSubmission submit(MediaProviderProfile profile, VideoGenerationRequest request) {
+                return new RemoteVideoTaskSubmission(
+                    "wan",
+                    request.requestedModel(),
+                    request.requestedModel(),
+                    "dashscope.aliyuncs.com",
+                    "dashscope.aliyuncs.com",
+                    "task_123",
+                    request.firstFrameUrl(),
+                    request.lastFrameUrl() == null ? "" : request.lastFrameUrl(),
+                    request.returnLastFrame(),
+                    request.generateAudio(),
+                    request.prompt(),
+                    0
+                );
+            }
+
+            @Override
+            public RemoteTaskQueryResult query(MediaProviderProfile profile, String taskId) {
+                throw new GenerationProviderException("seedance task query failed: http 504 upstream gateway timeout");
+            }
+        };
+        LocalMediaArtifactService localMediaArtifactService = new LocalMediaArtifactService(storageProperties(tempDir), "ffmpeg");
+        GenerationRunSupport support = new GenerationRunSupport(localMediaArtifactService, textModelProviderRegistry);
+        GenerationRunFactory factory = new GenerationRunFactory(
+            modelResolver,
+            promptTemplateResolver,
+            textModelProviderRegistry,
+            new ImageModelProviderRegistry(java.util.List.of()),
+            new VideoModelProviderRegistry(java.util.List.of(flakyVideoModelProvider)),
+            support
+        );
+
+        Map<String, Object> request = new LinkedHashMap<>();
+        request.put("kind", "video");
+        request.put("input", Map.of(
+            "prompt", "a hero enters frame",
+            "videoSize", "720*1280",
+            "durationSeconds", 8,
+            "firstFrameUrl", "https://cdn.example.com/clip1-first.png",
+            "lastFrameUrl", "https://cdn.example.com/clip1-last.png"
+        ));
+        request.put("model", Map.of(
+            "textAnalysisModel", "gpt-text",
+            "visionModel", "gpt-vision",
+            "providerModel", "wan2.2-i2v-plus"
+        ));
+        request.put("options", Map.of("stylePreset", "cinematic"));
+
+        Map<String, Object> run = factory.createVideoRun("run_retry_1", request);
+        @SuppressWarnings("unchecked")
+        Map<String, Object> result = (Map<String, Object>) run.get("result");
+        @SuppressWarnings("unchecked")
+        Map<String, Object> metadata = (Map<String, Object>) result.get("metadata");
+        metadata.put("nextPollAt", 0L);
+
+        Map<String, Object> refreshed = factory.refreshVideoRun(run);
+        assertEquals("running", refreshed.get("status"));
+        @SuppressWarnings("unchecked")
+        Map<String, Object> refreshedResult = (Map<String, Object>) refreshed.get("result");
+        @SuppressWarnings("unchecked")
+        Map<String, Object> refreshedMetadata = (Map<String, Object>) refreshedResult.get("metadata");
+        assertEquals("seedance task query failed: http 504 upstream gateway timeout", refreshedMetadata.get("taskMessage"));
+        assertNotNull(refreshedMetadata.get("nextPollAt"));
+        assertTrue(String.valueOf(refreshedResult.get("callChain")).contains("video.poll.retry"));
     }
 
     private JiandouStorageProperties storageProperties(Path rootDir) {

@@ -101,6 +101,7 @@ class AdminModelConfigServiceTest {
         assertEquals(List.of(4, 8), response.models().get(2).supportedDurations());
         assertEquals("api.openai.com", response.providers().get(0).endpointHost());
         assertEquals("openai", response.providers().get(0).vendor());
+        assertEquals("volcengine", response.providers().get(1).key());
         assertEquals("volcengine", response.providers().get(1).vendor());
         assertTrue(response.providers().get(0).apiKeyConfigured());
         assertTrue(response.providers().get(1).taskBaseUrlConfigured());
@@ -170,7 +171,7 @@ class AdminModelConfigServiceTest {
             List.of(new AdminModelConfigKeyUpdateRequest.ProviderKeyInput("qwen", "secret-key"))
         ));
 
-        verify(secretsService).saveApiKeys(Map.of("qwen", "secret-key"));
+        verify(secretsService).saveApiKeys(Map.of("aliyun", "secret-key"));
         verify(resolver).refresh();
     }
 

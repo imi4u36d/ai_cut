@@ -29,7 +29,7 @@ class UserModelConfigServiceTest {
         ModelRuntimePropertiesResolver resolver = mock(ModelRuntimePropertiesResolver.class);
         MybatisUserModelCredentialRepository repository = mock(MybatisUserModelCredentialRepository.class);
         UserModelConfigService service = new UserModelConfigService(resolver, repository);
-        when(repository.findApiKeysByUserId(7L)).thenReturn(Map.of("qwen", "user-secret"));
+        when(repository.findApiKeysByUserId(7L)).thenReturn(Map.of("aliyun", "user-secret"));
         when(resolver.listModelsByKind(GenerationModelKinds.TEXT)).thenReturn(List.of(
             Map.of("value", "qwen-plus", "label", "Qwen Plus", "provider", "qwen", "vendor", "aliyun")
         ));
@@ -61,7 +61,7 @@ class UserModelConfigServiceTest {
 
         assertEquals("user-db", response.configSource());
         assertEquals(2, response.providers().size());
-        assertTrue(response.providers().stream().filter(item -> "qwen".equals(item.key())).findFirst().orElseThrow().apiKeyConfigured());
+        assertTrue(response.providers().stream().filter(item -> "aliyun".equals(item.key())).findFirst().orElseThrow().apiKeyConfigured());
         assertTrue(response.models().stream().filter(item -> "qwen-plus".equals(item.name())).findFirst().orElseThrow().ready());
     }
 
@@ -98,7 +98,7 @@ class UserModelConfigServiceTest {
         )));
 
         assertTrue(validation.valid());
-        verify(repository).saveApiKeys(7L, Map.of("qwen", "user-secret"));
+        verify(repository).saveApiKeys(7L, Map.of("aliyun", "user-secret"));
     }
 
     private void stubDefaults(ModelRuntimePropertiesResolver resolver) {

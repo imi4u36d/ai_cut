@@ -237,75 +237,78 @@
                       </div>
                     </div>
 
-                    <div v-else-if="currentStageField?.key === 'minDurationSeconds'" class="stage-progress-form__field stage-progress-form__field-slider">
-                      <span>拖动设置最小时长</span>
-                      <input
-                        v-model="createForm.minDurationSeconds"
-                        class="stage-slider__range"
-                        type="range"
-                        min="1"
-                        max="20"
-                        step="1"
-                      />
-                      <div class="stage-slider__meta">
-                        <strong>{{ createForm.minDurationSeconds || "1" }} 秒</strong>
-                        <input
-                          v-model="createForm.minDurationSeconds"
-                          class="field-input stage-slider__number"
-                          type="number"
-                          min="1"
-                          max="20"
-                          step="1"
-                        />
-                      </div>
-                    </div>
-
-                    <div v-else-if="currentStageField?.key === 'maxDurationSeconds'" class="stage-progress-form__field stage-progress-form__field-slider">
-                      <span>拖动设置最大时长</span>
-                      <input
-                        v-model="createForm.maxDurationSeconds"
-                        class="stage-slider__range"
-                        type="range"
-                        :min="Number(createForm.minDurationSeconds) || 1"
-                        max="30"
-                        step="1"
-                      />
-                      <div class="stage-slider__meta">
-                        <strong>{{ createForm.maxDurationSeconds || "1" }} 秒</strong>
-                        <input
-                          v-model="createForm.maxDurationSeconds"
-                          class="field-input stage-slider__number"
-                          type="number"
-                          :min="Number(createForm.minDurationSeconds) || 1"
-                          max="30"
-                          step="1"
-                        />
-                      </div>
-                    </div>
-
-                    <div v-else-if="currentStageField?.key === 'seed'" class="stage-progress-form__field stage-progress-form__field-slider">
-                      <span>选择 Seed 模式</span>
+                    <div v-else-if="currentStageField?.key === 'storyboardDurationSeconds'" class="stage-progress-form__field stage-progress-form__field-slider">
+                      <span>选择镜头时长模式</span>
                       <div class="stage-toggle-row">
                         <button
                           type="button"
                           class="stage-toggle-chip"
-                          :class="{ 'stage-toggle-chip-active': createForm.seed === '' }"
-                          @click="createForm.seed = ''"
+                          :class="{ 'stage-toggle-chip-active': storyboardDurationMode === 'auto' }"
+                          @click="storyboardDurationMode = 'auto'"
                         >
                           自动
                         </button>
                         <button
                           type="button"
                           class="stage-toggle-chip"
-                          :class="{ 'stage-toggle-chip-active': createForm.seed !== '' }"
-                          @click="createForm.seed = createForm.seed || '1024'"
+                          :class="{ 'stage-toggle-chip-active': storyboardDurationMode === 'manual' }"
+                          @click="storyboardDurationMode = 'manual'"
+                        >
+                          手动
+                        </button>
+                      </div>
+                      <p class="stage-progress-form__field-note">
+                        {{ storyboardDurationMode === "auto" ? "自动模式会沿用当前工作流的默认时长策略。" : storyboardManualDurationHint }}
+                      </p>
+                      <template v-if="storyboardDurationMode === 'manual'">
+                        <input
+                          v-model="storyboardManualDurationSeconds"
+                          class="stage-slider__range"
+                          type="range"
+                          :min="STORYBOARD_MANUAL_DURATION_MIN_SECONDS"
+                          :max="STORYBOARD_MANUAL_DURATION_MAX_SECONDS"
+                          step="1"
+                        />
+                        <div class="stage-slider__meta">
+                          <strong>{{ storyboardManualDurationSeconds || String(STORYBOARD_MANUAL_DURATION_MIN_SECONDS) }} 秒</strong>
+                          <input
+                            v-model="storyboardManualDurationSeconds"
+                            class="field-input stage-slider__number"
+                            type="number"
+                            :min="STORYBOARD_MANUAL_DURATION_MIN_SECONDS"
+                            :max="STORYBOARD_MANUAL_DURATION_MAX_SECONDS"
+                            step="1"
+                          />
+                        </div>
+                        <p v-if="storyboardManualDurationValidationMessage" class="stage-progress-form__field-error">
+                          {{ storyboardManualDurationValidationMessage }}
+                        </p>
+                      </template>
+                    </div>
+
+                    <div v-else-if="currentStageField?.key === 'keyframeSeed'" class="stage-progress-form__field stage-progress-form__field-slider">
+                      <span>选择 Seed 模式</span>
+                      <div class="stage-toggle-row">
+                        <button
+                          type="button"
+                          class="stage-toggle-chip"
+                          :class="{ 'stage-toggle-chip-active': createForm.keyframeSeed === '' }"
+                          @click="createForm.keyframeSeed = ''"
+                        >
+                          自动
+                        </button>
+                        <button
+                          type="button"
+                          class="stage-toggle-chip"
+                          :class="{ 'stage-toggle-chip-active': createForm.keyframeSeed !== '' }"
+                          @click="createForm.keyframeSeed = createForm.keyframeSeed || '1024'"
                         >
                           固定 Seed
                         </button>
                       </div>
-                      <template v-if="createForm.seed !== ''">
+                      <template v-if="createForm.keyframeSeed !== ''">
                         <input
-                          v-model="createForm.seed"
+                          v-model="createForm.keyframeSeed"
                           class="stage-slider__range"
                           type="range"
                           min="0"
@@ -313,9 +316,9 @@
                           step="1"
                         />
                         <div class="stage-slider__meta">
-                          <strong>{{ createForm.seed }}</strong>
+                          <strong>{{ createForm.keyframeSeed }}</strong>
                           <input
-                            v-model="createForm.seed"
+                            v-model="createForm.keyframeSeed"
                             class="field-input stage-slider__number"
                             type="number"
                             min="0"
@@ -428,6 +431,49 @@
                       </div>
                     </div>
 
+                    <div v-else-if="currentStageField?.key === 'videoSeed'" class="stage-progress-form__field stage-progress-form__field-slider">
+                      <span>选择 Seed 模式</span>
+                      <div class="stage-toggle-row">
+                        <button
+                          type="button"
+                          class="stage-toggle-chip"
+                          :class="{ 'stage-toggle-chip-active': createForm.videoSeed === '' }"
+                          @click="createForm.videoSeed = ''"
+                        >
+                          自动
+                        </button>
+                        <button
+                          type="button"
+                          class="stage-toggle-chip"
+                          :class="{ 'stage-toggle-chip-active': createForm.videoSeed !== '' }"
+                          @click="createForm.videoSeed = createForm.videoSeed || '1024'"
+                        >
+                          固定 Seed
+                        </button>
+                      </div>
+                      <template v-if="createForm.videoSeed !== ''">
+                        <input
+                          v-model="createForm.videoSeed"
+                          class="stage-slider__range"
+                          type="range"
+                          min="0"
+                          max="9999"
+                          step="1"
+                        />
+                        <div class="stage-slider__meta">
+                          <strong>{{ createForm.videoSeed }}</strong>
+                          <input
+                            v-model="createForm.videoSeed"
+                            class="field-input stage-slider__number"
+                            type="number"
+                            min="0"
+                            max="9999"
+                            step="1"
+                          />
+                        </div>
+                      </template>
+                    </div>
+
                     <div class="stage-progress-form__actions">
                       <button
                         class="btn-secondary btn-sm"
@@ -507,54 +553,15 @@
             </div>
           </div>
 
-          <div class="workflow-stage-grid">
-            <section class="surface-tile workflow-summary-card workflow-summary-card-compact">
-              <h3>工作流快照</h3>
-              <div class="workflow-kv">
-                <div class="workflow-kv__row">
-                  <span>文本模型</span>
-                  <strong>{{ selectedWorkflow.textAnalysisModel }}</strong>
-                </div>
-                <div class="workflow-kv__row">
-                  <span>视觉模型</span>
-                  <strong>{{ selectedWorkflow.visionModel }}</strong>
-                </div>
-                <div class="workflow-kv__row">
-                  <span>关键帧模型</span>
-                  <strong>{{ selectedWorkflow.imageModel }}</strong>
-                </div>
-                <div class="workflow-kv__row">
-                  <span>视频模型</span>
-                  <strong>{{ selectedWorkflow.videoModel }}</strong>
-                </div>
-                <div class="workflow-kv__row">
-                  <span>视频尺寸</span>
-                  <strong>{{ selectedWorkflow.videoSize || "-" }}</strong>
-                </div>
-                <div class="workflow-kv__row">
-                  <span>风格</span>
-                  <strong>{{ selectedWorkflow.stylePreset || "-" }}</strong>
-                </div>
+          <section class="workflow-stage-content">
+            <div v-if="!selectedWorkflow.storyboardVersions.length" class="workflow-empty">
+              还没有分镜版本，先执行一次分镜生成。
+            </div>
+            <div v-else>
+              <div v-if="selectedWorkflow.storyboardVersions.length > 1" class="workflow-scroll-hint">
+                左右滑动选择分镜版本
               </div>
-              <div v-if="selectedWorkflow.transcriptText" class="workflow-note-block">
-                <span>正文</span>
-                <p>{{ selectedWorkflow.transcriptText }}</p>
-              </div>
-              <div v-if="selectedWorkflow.globalPrompt" class="workflow-note-block">
-                <span>全局 Prompt</span>
-                <p>{{ selectedWorkflow.globalPrompt }}</p>
-              </div>
-            </section>
-
-            <section class="workflow-stage-content">
-              <div v-if="!selectedWorkflow.storyboardVersions.length" class="workflow-empty">
-                还没有分镜版本，先执行一次分镜生成。
-              </div>
-              <div v-else>
-                <div v-if="selectedWorkflow.storyboardVersions.length > 1" class="workflow-scroll-hint">
-                  左右滑动选择分镜版本
-                </div>
-                <div class="version-grid">
+              <div class="version-grid">
                 <article v-for="version in selectedWorkflow.storyboardVersions" :key="version.id" class="surface-tile version-card">
                   <div class="version-card__head">
                     <div>
@@ -570,7 +577,7 @@
                     </button>
                   </div>
 
-                  <pre class="version-card__text">{{ storyboardPreview(version) }}</pre>
+                  <div class="version-card__text version-card__markdown" v-html="storyboardPreviewHtml(version)"></div>
 
                   <div class="rating-row">
                     <button
@@ -605,16 +612,10 @@
                     </button>
                   </div>
 
-                  <div v-if="version.asset?.tags?.length" class="tag-list">
-                    <span v-for="tag in version.asset.tags" :key="tag.id" class="tag-chip">
-                      {{ tag.tagKey }}: {{ tag.tagValue }}
-                    </span>
-                  </div>
                 </article>
-                </div>
               </div>
-            </section>
-          </div>
+            </div>
+          </section>
         </section>
 
         <section v-else-if="activeCreateStage === 'keyframe'" class="surface-panel workflow-panel workflow-stage-panel">
@@ -622,6 +623,12 @@
             <div>
               <p class="workflow-eyebrow">Stage 2 / 3</p>
               <h2>关键帧模块</h2>
+              <div class="workflow-summary__meta">
+                <span class="surface-chip">{{ valueOptionLabel(imageModelOptions, selectedWorkflow.imageModel, selectedWorkflow.imageModel || "未设置") }}</span>
+                <span class="surface-chip">{{ keyOptionLabel(stylePresetOptions, selectedWorkflow.stylePreset, selectedWorkflow.stylePreset || "未设置") }}</span>
+                <span class="surface-chip">{{ selectedWorkflow.aspectRatio }}</span>
+                <span class="surface-chip">关键帧 Seed {{ seedLabel(selectedWorkflow.keyframeSeed) }}</span>
+              </div>
             </div>
             <div class="workflow-stage-panel__actions">
               <div class="stage-switch-row">
@@ -642,11 +649,148 @@
             </div>
           </div>
 
-          <div v-if="!selectedWorkflow.clipSlots.length" class="workflow-empty">
-            选中分镜版本后，这里会展开镜头列表。
+          <div v-if="!workflowCharacterSheets.length && !selectedWorkflow.clipSlots.length" class="workflow-empty">
+            选中分镜版本后，这里会展开角色三视图与镜头列表。
           </div>
 
           <div v-else class="clip-stack">
+            <section class="surface-tile clip-card clip-card-character-sheet-section">
+              <div class="clip-card__head">
+                <div>
+                  <p class="workflow-eyebrow">Character Sheets</p>
+                  <h3>角色三视图</h3>
+                  <p class="clip-card__desc">首次进入关键帧阶段时，先为每个角色生成多版本三视图，再选中继续。</p>
+                </div>
+                <div class="clip-card__meta">
+                  <span class="surface-chip">{{ workflowCharacterSheets.length }} 个角色</span>
+                </div>
+              </div>
+
+              <div v-if="!workflowCharacterSheets.length" class="workflow-empty workflow-empty-nested">
+                当前工作流还没有角色三视图。
+              </div>
+              <div v-else class="character-sheet-stack">
+                <article v-for="sheet in workflowCharacterSheets" :key="characterSheetKey(sheet)" class="character-sheet-card">
+                  <div class="clip-card__head">
+                    <div>
+                      <p class="workflow-eyebrow">Character {{ characterSheetClipIndex(sheet) ?? "-" }}</p>
+                      <h3>{{ characterSheetTitle(sheet) }}</h3>
+                      <p class="clip-card__desc">{{ characterSheetAppearanceSummary(sheet) }}</p>
+                    </div>
+                    <div class="clip-card__meta">
+                      <span v-if="selectedCharacterSheetVersion(sheet)" class="surface-chip">
+                        {{ selectedCharacterSheetVersion(sheet)?.title }}
+                      </span>
+                      <button
+                        class="btn-secondary btn-sm"
+                        type="button"
+                        :disabled="characterSheetClipIndex(sheet) === null || busyActionKey === `keyframe-${characterSheetClipIndex(sheet)}`"
+                        @click="handleGenerateKeyframe(characterSheetClipIndex(sheet) || 0)"
+                      >
+                        {{ busyActionKey === `keyframe-${characterSheetClipIndex(sheet)}` ? "生成中..." : "生成三视图" }}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div v-if="!characterSheetVersions(sheet).length" class="workflow-empty workflow-empty-nested">
+                    还没有角色三视图版本。
+                  </div>
+                  <div v-else>
+                    <div v-if="characterSheetVersions(sheet).length > 1" class="workflow-scroll-hint workflow-scroll-hint-nested">
+                      左右滑动选择角色三视图版本
+                    </div>
+                    <div class="clip-version-list clip-version-list-grid">
+                      <article v-for="version in characterSheetVersions(sheet)" :key="version.id" class="version-card version-card-compact">
+                        <div class="version-card__head">
+                          <div class="version-card__meta">
+                            <strong>{{ version.title }}</strong>
+                            <span class="surface-chip">角色三视图</span>
+                            <span class="surface-chip">Seed {{ seedLabel(versionSeed(version) ?? selectedWorkflow.keyframeSeed) }}</span>
+                            <span class="surface-chip" v-if="version.selected">当前选中</span>
+                          </div>
+                          <button
+                            class="btn-secondary btn-sm"
+                            type="button"
+                            :disabled="version.selected || characterSheetClipIndex(sheet) === null || busyActionKey === version.id"
+                            @click="handleSelectKeyframe(characterSheetClipIndex(sheet) || 0, version.id)"
+                          >
+                            {{ busyActionKey === version.id ? "处理中..." : "选中继续" }}
+                          </button>
+                        </div>
+
+                        <div
+                          v-if="characterSheetPreviewFrames(version).length"
+                          class="keyframe-frame-grid character-sheet-frame-grid"
+                          :class="{ 'character-sheet-frame-grid-single': characterSheetPreviewFrames(version).length === 1 }"
+                        >
+                          <article
+                            v-for="frame in characterSheetPreviewFrames(version)"
+                            :key="`${version.id}-${frame.role}`"
+                            class="keyframe-frame-card keyframe-frame-card-compact"
+                            :class="{ 'character-sheet-frame-card-single': characterSheetPreviewFrames(version).length === 1 }"
+                          >
+                            <div class="keyframe-frame-card__head">
+                              <span class="surface-chip surface-chip-quiet">{{ frame.label }}</span>
+                            </div>
+                            <button
+                              type="button"
+                              class="character-sheet-preview-trigger"
+                              :aria-label="`查看${characterSheetTitle(sheet)}${frame.label}原图`"
+                              @click="openImagePreview(frame.url, `${characterSheetTitle(sheet)}${frame.label}`)"
+                            >
+                              <img
+                                class="version-card__image keyframe-frame-card__image character-sheet-frame-card__image"
+                                :class="{ 'character-sheet-frame-card__image-single': characterSheetPreviewFrames(version).length === 1 }"
+                                :src="frame.url"
+                                :alt="`${characterSheetTitle(sheet)}${frame.label}`"
+                              />
+                            </button>
+                          </article>
+                        </div>
+                        <div v-else class="workflow-empty workflow-empty-nested">
+                          当前版本还没有可预览的角色三视图。
+                        </div>
+
+                        <div class="rating-row">
+                          <button
+                            v-for="score in ratingOptions"
+                            :key="`${version.id}-${score}`"
+                            type="button"
+                            class="rating-pill"
+                            :class="{ 'rating-pill-active': Number(stageRatingDrafts[version.id] || version.rating || 0) === score }"
+                            @click="setStageRatingDraft(version.id, score)"
+                          >
+                            {{ score }}
+                          </button>
+                        </div>
+
+                        <textarea
+                          v-model="stageNoteDrafts[version.id]"
+                          class="field-textarea version-card__textarea"
+                          rows="2"
+                          placeholder="记录这组三视图的评价"
+                        ></textarea>
+
+                        <div class="version-card__actions">
+                          <button class="btn-secondary btn-sm" type="button" :disabled="busyActionKey === `rate-${version.id}`" @click="handleRateStageVersion(version)">
+                            {{ busyActionKey === `rate-${version.id}` ? "保存中..." : "保存评分" }}
+                          </button>
+                          <button
+                            class="btn-ghost btn-sm"
+                            type="button"
+                            :disabled="!version.asset || busyActionKey === `reuse-${version.id}`"
+                            @click="handleReuseAsset(version.asset?.id || '', version.id)"
+                          >
+                            {{ busyActionKey === `reuse-${version.id}` ? "复制为新工作流" : "复用" }}
+                          </button>
+                        </div>
+                      </article>
+                    </div>
+                  </div>
+                </article>
+              </div>
+            </section>
+
             <article v-for="slot in selectedWorkflow.clipSlots" :key="slot.clipIndex" class="surface-tile clip-card">
               <div class="clip-card__head">
                 <div>
@@ -667,13 +811,15 @@
               </div>
               <div v-else>
                 <div v-if="slot.keyframeVersions.length > 1" class="workflow-scroll-hint workflow-scroll-hint-nested">
-                  左右滑动选择关键帧版本
+                  左右滑动选择关键帧版本（含首帧与尾帧）
                 </div>
                 <div class="clip-version-list clip-version-list-grid">
                 <article v-for="version in slot.keyframeVersions" :key="version.id" class="version-card version-card-compact">
                   <div class="version-card__head">
                     <div class="version-card__meta">
                       <strong>{{ version.title }}</strong>
+                      <span class="surface-chip">首尾帧</span>
+                      <span class="surface-chip">Seed {{ seedLabel(versionSeed(version) ?? selectedWorkflow.keyframeSeed) }}</span>
                       <span class="surface-chip" v-if="version.selected">当前选中</span>
                     </div>
                     <button class="btn-secondary btn-sm" type="button" :disabled="version.selected || busyActionKey === version.id" @click="handleSelectKeyframe(slot.clipIndex, version.id)">
@@ -681,7 +827,17 @@
                     </button>
                   </div>
 
-                  <img v-if="version.previewUrl" class="version-card__image" :src="version.previewUrl" :alt="version.title" />
+                  <div v-if="keyframePreviewFrames(version).length" class="keyframe-frame-grid">
+                    <article v-for="frame in keyframePreviewFrames(version)" :key="`${version.id}-${frame.role}`" class="keyframe-frame-card">
+                      <div class="keyframe-frame-card__head">
+                        <span class="surface-chip surface-chip-quiet">{{ frame.label }}</span>
+                      </div>
+                      <img class="version-card__image keyframe-frame-card__image" :src="frame.url" :alt="`${version.title}${frame.label}`" />
+                    </article>
+                  </div>
+                  <div v-else class="workflow-empty workflow-empty-nested">
+                    当前版本还没有可预览的首尾帧。
+                  </div>
 
                   <div class="rating-row">
                     <button
@@ -700,7 +856,7 @@
                     v-model="stageNoteDrafts[version.id]"
                     class="field-textarea version-card__textarea"
                     rows="2"
-                    placeholder="关键帧评价"
+                    placeholder="记录这组首尾帧的评价"
                   ></textarea>
 
                   <div class="version-card__actions">
@@ -728,6 +884,12 @@
             <div>
               <p class="workflow-eyebrow">Stage 3 / Finalize</p>
               <h2>视频生成模块</h2>
+              <div class="workflow-summary__meta">
+                <span class="surface-chip">{{ valueOptionLabel(visionModelOptions, selectedWorkflow.visionModel, selectedWorkflow.visionModel || "未设置") }}</span>
+                <span class="surface-chip">{{ valueOptionLabel(videoModelOptions, selectedWorkflow.videoModel, selectedWorkflow.videoModel || "未设置") }}</span>
+                <span class="surface-chip">{{ valueOptionLabel(videoSizeOptions, selectedWorkflow.videoSize, selectedWorkflow.videoSize || "未设置") }}</span>
+                <span class="surface-chip">视频 Seed {{ seedLabel(selectedWorkflow.videoSeed) }}</span>
+              </div>
             </div>
             <div class="workflow-stage-panel__actions">
               <div class="stage-switch-row">
@@ -841,6 +1003,25 @@
                     </div>
                   </div>
 
+                  <div v-if="selectedKeyframeVersion(slot) && selectedKeyframePreviewFrames(slot).length" class="clip-card__selected-keyframes">
+                    <div class="clip-card__selected-keyframes-head">
+                      <strong>当前视频输入帧</strong>
+                      <span class="surface-chip surface-chip-quiet">{{ selectedKeyframeVersion(slot)?.title }}</span>
+                    </div>
+                    <div class="keyframe-thumb-list">
+                      <article
+                        v-for="frame in selectedKeyframePreviewFrames(slot)"
+                        :key="`selected-${slot.clipIndex}-${frame.role}`"
+                        class="keyframe-thumb-card"
+                      >
+                        <img class="keyframe-thumb-card__image" :src="frame.url" :alt="`${slot.shotLabel || `镜头 #${slot.clipIndex}`}${frame.label}`" />
+                        <div class="keyframe-thumb-card__meta">
+                          <span class="surface-chip surface-chip-quiet">{{ frame.label }}</span>
+                        </div>
+                      </article>
+                    </div>
+                  </div>
+
                   <div v-if="!slot.videoVersions.length" class="workflow-empty workflow-empty-nested">
                     还没有视频版本。
                   </div>
@@ -853,6 +1034,7 @@
                       <div class="version-card__head">
                         <div class="version-card__meta">
                           <strong>{{ version.title }}</strong>
+                          <span class="surface-chip">Seed {{ seedLabel(versionSeed(version) ?? selectedWorkflow.videoSeed) }}</span>
                           <span class="surface-chip" v-if="version.selected">当前选中</span>
                         </div>
                         <button class="btn-secondary btn-sm" type="button" :disabled="version.selected || busyActionKey === version.id" @click="handleSelectVideo(slot.clipIndex, version.id)">
@@ -925,6 +1107,13 @@
       </section>
     </section>
   </section>
+
+  <div v-if="imagePreviewState.open" class="image-preview-overlay" role="dialog" aria-modal="true" @click.self="closeImagePreview">
+    <button type="button" class="image-preview-close" aria-label="关闭原图预览" @click="closeImagePreview">
+      关闭
+    </button>
+    <img class="image-preview-full" :src="imagePreviewState.url" :alt="imagePreviewState.alt" />
+  </div>
 </template>
 
 <script setup lang="ts">
@@ -946,10 +1135,12 @@ import {
   selectStoryboard,
   selectVideo,
 } from "@/api/workflows";
+import { renderMarkdownToHtml } from "@/utils/markdown";
 import type {
   CreateWorkflowRequest,
   GenerationOptionsResponse,
   StageVersion,
+  WorkflowCharacterSheet,
   WorkflowClipSlot,
   WorkflowDetail,
   WorkflowSummary,
@@ -979,6 +1170,12 @@ interface CreateReviewSection {
   items: CreateReviewItem[];
 }
 
+interface PreviewFrame {
+  role: string;
+  label: string;
+  url: string;
+}
+
 const router = useRouter();
 const route = useRoute();
 
@@ -1002,6 +1199,11 @@ const stageFieldIndexMap = reactive<Record<CreateStageKey, number>>({
 const listError = ref("");
 const detailError = ref("");
 const createError = ref("");
+const imagePreviewState = reactive({
+  open: false,
+  url: "",
+  alt: "",
+});
 
 const workflows = ref<WorkflowSummary[]>([]);
 const selectedWorkflow = ref<WorkflowDetail | null>(null);
@@ -1011,19 +1213,19 @@ const createStageOptions = [
     key: "storyboard" as const,
     label: "文本分镜卡片",
     shortLabel: "分镜脚本",
-    description: "文本模型、时长、Seed",
+    description: "文本模型、镜头时长",
   },
   {
     key: "keyframe" as const,
     label: "关键帧卡片",
     shortLabel: "关键帧",
-    description: "图片模型、风格、长宽比",
+    description: "图片模型、风格、关键帧 Seed",
   },
   {
     key: "video" as const,
     label: "视频生成卡片",
     shortLabel: "视频生成",
-    description: "视觉模型、视频模型、尺寸",
+    description: "视觉模型、视频模型、视频 Seed",
   },
 ];
 
@@ -1031,6 +1233,10 @@ const workflowRatingDraft = ref("5");
 const workflowRatingNoteDraft = ref("");
 const stageRatingDrafts = reactive<Record<string, string>>({});
 const stageNoteDrafts = reactive<Record<string, string>>({});
+const storyboardDurationMode = ref<"auto" | "manual">("auto");
+const storyboardManualDurationSeconds = ref("8");
+const STORYBOARD_MANUAL_DURATION_MIN_SECONDS = 5;
+const STORYBOARD_MANUAL_DURATION_MAX_SECONDS = 12;
 
 const createForm = reactive({
   title: "",
@@ -1043,9 +1249,8 @@ const createForm = reactive({
   imageModel: "",
   videoModel: "",
   videoSize: "",
-  seed: "",
-  minDurationSeconds: "5",
-  maxDurationSeconds: "8",
+  keyframeSeed: "",
+  videoSeed: "",
 });
 
 const ratingOptions = [5, 4, 3, 2, 1];
@@ -1054,6 +1259,8 @@ const selectedWorkflowId = computed(() => {
   const workflowId = route.params.workflowId;
   return typeof workflowId === "string" ? workflowId : "";
 });
+
+const workflowCharacterSheets = computed(() => selectedWorkflow.value?.characterSheets ?? []);
 
 const filteredWorkflows = computed(() => {
   const keyword = workflowSearch.value.trim().toLowerCase();
@@ -1105,22 +1312,12 @@ const activeStageSteps = computed<StageFieldStep[]>(() => {
           valueLabel: valueOptionLabel(textModelOptions.value, createForm.textAnalysisModel, "未设置"),
         },
         {
-          key: "minDurationSeconds",
-          label: "最小时长",
-          description: "设定单镜头分配时长的下限。",
-          valueLabel: `${createForm.minDurationSeconds || "1"} 秒`,
-        },
-        {
-          key: "maxDurationSeconds",
-          label: "最大时长",
-          description: "限制单镜头时长上限，避免镜头过长。",
-          valueLabel: `${createForm.maxDurationSeconds || "1"} 秒`,
-        },
-        {
-          key: "seed",
-          label: "Seed",
-          description: "可选，固定随机种子以便重复生成结果。",
-          valueLabel: createForm.seed === "" ? "自动" : createForm.seed,
+          key: "storyboardDurationSeconds",
+          label: "镜头时长",
+          description: "统一设置镜头时长，可切换自动或手动固定时长。",
+          valueLabel: storyboardDurationMode.value === "auto"
+            ? "自动"
+            : (normalizedStoryboardManualDurationSeconds.value === null ? "未设置" : `${normalizedStoryboardManualDurationSeconds.value} 秒`),
         },
       ];
     case "keyframe":
@@ -1143,6 +1340,12 @@ const activeStageSteps = computed<StageFieldStep[]>(() => {
           description: "决定关键帧与后续视频的画面比例。",
           valueLabel: valueOptionLabel(aspectRatioOptions.value, createForm.aspectRatio, "未设置"),
         },
+        {
+          key: "keyframeSeed",
+          label: "关键帧 Seed",
+          description: "可选，固定关键帧阶段的随机种子，便于稳定复现画面。",
+          valueLabel: createForm.keyframeSeed === "" ? "自动" : createForm.keyframeSeed,
+        },
       ];
     default:
       return [
@@ -1163,6 +1366,12 @@ const activeStageSteps = computed<StageFieldStep[]>(() => {
           label: "输出尺寸",
           description: "控制视频输出分辨率与尺寸基线。",
           valueLabel: valueOptionLabel(videoSizeOptions.value, createForm.videoSize, "未设置"),
+        },
+        {
+          key: "videoSeed",
+          label: "视频 Seed",
+          description: "可选，固定视频阶段的随机种子，避免与关键帧阶段互相干扰。",
+          valueLabel: createForm.videoSeed === "" ? "自动" : createForm.videoSeed,
         },
       ];
   }
@@ -1226,25 +1435,13 @@ const createReviewSections = computed<CreateReviewSection[]>(() => [
         required: true,
       },
       {
-        key: "minDurationSeconds",
-        label: "最小时长",
-        valueLabel: createForm.minDurationSeconds ? `${createForm.minDurationSeconds} 秒` : "未设置",
-        configured: isConfiguredNumber(createForm.minDurationSeconds),
+        key: "storyboardDurationSeconds",
+        label: "镜头时长",
+        valueLabel: storyboardDurationMode.value === "auto"
+          ? "自动"
+          : (normalizedStoryboardManualDurationSeconds.value === null ? "未设置" : `${normalizedStoryboardManualDurationSeconds.value} 秒`),
+        configured: isStoryboardDurationConfigured.value,
         required: true,
-      },
-      {
-        key: "maxDurationSeconds",
-        label: "最大时长",
-        valueLabel: createForm.maxDurationSeconds ? `${createForm.maxDurationSeconds} 秒` : "未设置",
-        configured: isConfiguredNumber(createForm.maxDurationSeconds) && Number(createForm.maxDurationSeconds) >= Number(createForm.minDurationSeconds || 0),
-        required: true,
-      },
-      {
-        key: "seed",
-        label: "Seed",
-        valueLabel: createForm.seed === "" ? "自动" : createForm.seed,
-        configured: true,
-        required: false,
       },
     ],
   },
@@ -1274,6 +1471,13 @@ const createReviewSections = computed<CreateReviewSection[]>(() => [
         configured: Boolean(createForm.aspectRatio),
         required: true,
       },
+      {
+        key: "keyframeSeed",
+        label: "关键帧 Seed",
+        valueLabel: createForm.keyframeSeed === "" ? "自动" : createForm.keyframeSeed,
+        configured: true,
+        required: false,
+      },
     ],
   },
   {
@@ -1301,6 +1505,13 @@ const createReviewSections = computed<CreateReviewSection[]>(() => [
         valueLabel: valueOptionLabel(videoSizeOptions.value, createForm.videoSize, "未设置"),
         configured: Boolean(createForm.videoSize),
         required: true,
+      },
+      {
+        key: "videoSeed",
+        label: "视频 Seed",
+        valueLabel: createForm.videoSeed === "" ? "自动" : createForm.videoSeed,
+        configured: true,
+        required: false,
       },
     ],
   },
@@ -1336,12 +1547,37 @@ function keyOptionLabel<T extends { key: string; label: string }>(options: T[], 
   return options.find((item) => item.key === value)?.label || value;
 }
 
-function isConfiguredNumber(value?: string | null) {
-  if (value === undefined || value === null || value === "") {
-    return false;
+function parseStoryboardDurationSeconds(value?: string | null) {
+  if (value === undefined || value === null) {
+    return null;
   }
-  const numberValue = Number(value);
-  return Number.isFinite(numberValue);
+  const raw = String(value).trim();
+  if (!raw) {
+    return null;
+  }
+  const numericValue = Number(raw);
+  if (!Number.isFinite(numericValue) || !Number.isInteger(numericValue)) {
+    return null;
+  }
+  return Math.trunc(numericValue);
+}
+
+function seedLabel(value?: number | string | null) {
+  if (value === undefined || value === null || value === "") {
+    return "自动";
+  }
+  const numericValue = Number(value);
+  return Number.isFinite(numericValue) ? String(numericValue) : "自动";
+}
+
+function versionSeed(version: StageVersion) {
+  const inputSummary = version.inputSummary ?? {};
+  const seed = inputSummary.seed;
+  if (seed === undefined || seed === null || seed === "") {
+    return null;
+  }
+  const numericValue = Number(seed);
+  return Number.isFinite(numericValue) ? numericValue : null;
 }
 
 function durationLabel(value?: number | null) {
@@ -1371,9 +1607,176 @@ function storyboardPreview(version: StageVersion) {
   return scriptMarkdown || previewText || "暂无分镜预览";
 }
 
+function storyboardPreviewHtml(version: StageVersion) {
+  return renderMarkdownToHtml(storyboardPreview(version));
+}
+
+function summaryUrlValue(summary: Record<string, unknown> | null | undefined, ...keys: string[]) {
+  for (const key of keys) {
+    const value = summary?.[key];
+    if (typeof value === "string" && value.trim()) {
+      return value;
+    }
+  }
+  return "";
+}
+
+function summaryUrlListValue(summary: Record<string, unknown> | null | undefined, ...keys: string[]) {
+  for (const key of keys) {
+    const value = summary?.[key];
+    if (Array.isArray(value)) {
+      const urls = value.filter((item): item is string => typeof item === "string" && Boolean(item.trim()));
+      if (urls.length) {
+        return urls;
+      }
+    }
+  }
+  return [];
+}
+
+function keyframePreviewFrames(version: StageVersion): PreviewFrame[] {
+  const outputSummary = version.outputSummary ?? {};
+  const firstFrameUrl = summaryUrlValue(outputSummary, "startFrameUrl", "firstFrameUrl");
+  const lastFrameUrl = summaryUrlValue(outputSummary, "endFrameUrl", "lastFrameUrl", "fileUrl")
+    || (typeof version.previewUrl === "string" ? version.previewUrl : "");
+  const frames: PreviewFrame[] = [];
+  if (firstFrameUrl) {
+    frames.push({
+      role: "first",
+      label: "首帧",
+      url: firstFrameUrl,
+    });
+  }
+  if (lastFrameUrl && (!firstFrameUrl || lastFrameUrl !== firstFrameUrl || version.clipIndex === 1)) {
+    frames.push({
+      role: "last",
+      label: "尾帧",
+      url: lastFrameUrl,
+    });
+  }
+  return frames;
+}
+
+function characterSheetKey(sheet: WorkflowCharacterSheet) {
+  return sheet.id || `${characterSheetTitle(sheet)}-${characterSheetClipIndex(sheet) ?? "na"}`;
+}
+
+function characterSheetClipIndex(sheet: WorkflowCharacterSheet) {
+  const candidates = [sheet.syntheticClipIndex, sheet.clipIndex];
+  for (const candidate of candidates) {
+    const numericValue = Number(candidate);
+    if (Number.isInteger(numericValue) && numericValue > 0) {
+      return numericValue;
+    }
+  }
+  return null;
+}
+
+function characterSheetTitle(sheet: WorkflowCharacterSheet) {
+  return sheet.characterName?.trim()
+    || sheet.displayName?.trim()
+    || sheet.name?.trim()
+    || `角色 #${characterSheetClipIndex(sheet) ?? "-"}`;
+}
+
+function characterSheetAppearanceSummary(sheet: WorkflowCharacterSheet) {
+  return sheet.appearanceSummary?.trim()
+    || sheet.appearance?.trim()
+    || "暂无角色外观摘要";
+}
+
+function characterSheetVersions(sheet: WorkflowCharacterSheet) {
+  return sheet.versions?.length ? sheet.versions : (sheet.keyframeVersions ?? []);
+}
+
+function characterSheetPreviewFrames(version: StageVersion): PreviewFrame[] {
+  const outputSummary = version.outputSummary ?? {};
+  const frames: PreviewFrame[] = [];
+  const namedFrames = [
+    { role: "front", label: "正面", url: summaryUrlValue(outputSummary, "frontViewUrl", "frontImageUrl", "frontUrl") },
+    { role: "side", label: "侧面", url: summaryUrlValue(outputSummary, "sideViewUrl", "sideImageUrl", "sideUrl", "profileViewUrl") },
+    { role: "back", label: "背面", url: summaryUrlValue(outputSummary, "backViewUrl", "backImageUrl", "backUrl") },
+  ].filter((frame) => frame.url);
+  if (namedFrames.length) {
+    return namedFrames;
+  }
+  const listFrames = summaryUrlListValue(outputSummary, "threeViewUrls", "viewUrls", "sheetUrls", "images");
+  if (listFrames.length) {
+    const labels = ["正面", "侧面", "背面"];
+    return listFrames.map((url, index) => ({
+      role: `view-${index + 1}`,
+      label: labels[index] || `视图 ${index + 1}`,
+      url,
+    }));
+  }
+  const previewUrl = summaryUrlValue(outputSummary, "sheetUrl", "previewUrl", "fileUrl")
+    || (typeof version.previewUrl === "string" ? version.previewUrl : "");
+  if (previewUrl) {
+    frames.push({
+      role: "sheet",
+      label: "三视图",
+      url: previewUrl,
+    });
+  }
+  return frames;
+}
+
+function selectedCharacterSheetVersion(sheet: WorkflowCharacterSheet) {
+  return characterSheetVersions(sheet).find((version) => version.selected) ?? null;
+}
+
+function openImagePreview(url: string, alt: string) {
+  if (!url) {
+    return;
+  }
+  imagePreviewState.open = true;
+  imagePreviewState.url = url;
+  imagePreviewState.alt = alt;
+}
+
+function closeImagePreview() {
+  imagePreviewState.open = false;
+  imagePreviewState.url = "";
+  imagePreviewState.alt = "";
+}
+
 function selectedKeyframeVersion(slot: WorkflowClipSlot) {
   return slot.keyframeVersions.find((version) => version.selected) ?? null;
 }
+
+function selectedKeyframePreviewFrames(slot: WorkflowClipSlot) {
+  const version = selectedKeyframeVersion(slot);
+  return version ? keyframePreviewFrames(version) : [];
+}
+
+const normalizedStoryboardManualDurationSeconds = computed(() => parseStoryboardDurationSeconds(storyboardManualDurationSeconds.value));
+const storyboardManualDurationHint = computed(() =>
+  `手动模式下镜头时长限制为 ${STORYBOARD_MANUAL_DURATION_MIN_SECONDS}-${STORYBOARD_MANUAL_DURATION_MAX_SECONDS} 秒。`
+);
+const storyboardManualDurationValidationMessage = computed(() => {
+  if (storyboardDurationMode.value === "auto") {
+    return "";
+  }
+  if (!storyboardManualDurationSeconds.value.trim()) {
+    return `请先填写合法的镜头时长（${STORYBOARD_MANUAL_DURATION_MIN_SECONDS}-${STORYBOARD_MANUAL_DURATION_MAX_SECONDS} 秒）`;
+  }
+  if (normalizedStoryboardManualDurationSeconds.value === null) {
+    return `请先填写合法的镜头时长（${STORYBOARD_MANUAL_DURATION_MIN_SECONDS}-${STORYBOARD_MANUAL_DURATION_MAX_SECONDS} 秒）`;
+  }
+  if (
+    normalizedStoryboardManualDurationSeconds.value < STORYBOARD_MANUAL_DURATION_MIN_SECONDS
+    || normalizedStoryboardManualDurationSeconds.value > STORYBOARD_MANUAL_DURATION_MAX_SECONDS
+  ) {
+    return `手动模式的镜头时长需在 ${STORYBOARD_MANUAL_DURATION_MIN_SECONDS}-${STORYBOARD_MANUAL_DURATION_MAX_SECONDS} 秒之间`;
+  }
+  return "";
+});
+const isStoryboardDurationConfigured = computed(() => {
+  if (storyboardDurationMode.value === "auto") {
+    return true;
+  }
+  return Boolean(normalizedStoryboardManualDurationSeconds.value !== null && !storyboardManualDurationValidationMessage.value);
+});
 
 function setStageFieldIndex(index: number) {
   const maxIndex = Math.max(activeStageSteps.value.length - 1, 0);
@@ -1430,6 +1833,12 @@ function applyWorkflowDrafts(workflow: WorkflowDetail | null) {
   for (const version of workflow.storyboardVersions) {
     stageRatingDrafts[version.id] = String(version.rating ?? 5);
     stageNoteDrafts[version.id] = version.ratingNote ?? "";
+  }
+  for (const sheet of workflow.characterSheets ?? []) {
+    for (const version of characterSheetVersions(sheet)) {
+      stageRatingDrafts[version.id] = String(version.rating ?? 5);
+      stageNoteDrafts[version.id] = version.ratingNote ?? "";
+    }
   }
   for (const slot of workflow.clipSlots) {
     for (const version of [...slot.keyframeVersions, ...slot.videoVersions]) {
@@ -1514,6 +1923,7 @@ async function reloadCurrentWorkflow() {
 }
 
 function buildCreatePayload(): CreateWorkflowRequest {
+  const fixedDurationSeconds = storyboardDurationMode.value === "manual" ? normalizedStoryboardManualDurationSeconds.value : null;
   return {
     title: createForm.title.trim(),
     transcriptText: createForm.transcriptText.trim() || null,
@@ -1525,21 +1935,30 @@ function buildCreatePayload(): CreateWorkflowRequest {
     imageModel: createForm.imageModel,
     videoModel: createForm.videoModel,
     videoSize: createForm.videoSize || null,
-    seed: createForm.seed === "" ? null : Number(createForm.seed),
-    minDurationSeconds: createForm.minDurationSeconds === "" ? null : Number(createForm.minDurationSeconds),
-    maxDurationSeconds: createForm.maxDurationSeconds === "" ? null : Number(createForm.maxDurationSeconds),
+    keyframeSeed: createForm.keyframeSeed === "" ? null : Number(createForm.keyframeSeed),
+    videoSeed: createForm.videoSeed === "" ? null : Number(createForm.videoSeed),
+    minDurationSeconds: fixedDurationSeconds,
+    maxDurationSeconds: fixedDurationSeconds,
   };
 }
 
 async function handleCreateWorkflow() {
   createError.value = "";
+  if (storyboardDurationMode.value === "manual" && storyboardManualDurationValidationMessage.value) {
+    createError.value = storyboardManualDurationValidationMessage.value;
+    createReviewFlipped.value = false;
+    return;
+  }
   creatingWorkflow.value = true;
   try {
     const workflow = await createWorkflow(buildCreatePayload());
     createForm.title = "";
     createForm.transcriptText = "";
     createForm.globalPrompt = "";
-    createForm.seed = "";
+    createForm.keyframeSeed = "";
+    createForm.videoSeed = "";
+    storyboardDurationMode.value = "auto";
+    storyboardManualDurationSeconds.value = "8";
     createComposerVisible.value = false;
     createReviewFlipped.value = false;
     await loadWorkflows();
@@ -1667,17 +2086,6 @@ watch(
     void loadWorkflowDetail(workflowId);
   },
   { immediate: true }
-);
-
-watch(
-  () => createForm.minDurationSeconds,
-  (value) => {
-    const minDuration = Number(value);
-    const maxDuration = Number(createForm.maxDurationSeconds);
-    if (Number.isFinite(minDuration) && Number.isFinite(maxDuration) && minDuration > maxDuration) {
-      createForm.maxDurationSeconds = value;
-    }
-  }
 );
 
 onMounted(async () => {
@@ -1948,6 +2356,12 @@ onMounted(async () => {
   color: rgba(255, 255, 255, 0.58);
 }
 
+.surface-chip-quiet {
+  border-color: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.72);
+}
+
 .workflow-review-actions {
   display: flex;
   justify-content: flex-end;
@@ -2192,6 +2606,21 @@ onMounted(async () => {
   font-size: 0.9rem;
 }
 
+.stage-progress-form__field-note,
+.stage-progress-form__field-error {
+  margin: 0;
+  font-size: 0.86rem;
+  line-height: 1.5;
+}
+
+.stage-progress-form__field-note {
+  color: rgba(255, 255, 255, 0.58);
+}
+
+.stage-progress-form__field-error {
+  color: #ffb4b4;
+}
+
 .stage-progress-form__field-slider {
   max-width: 520px;
 }
@@ -2417,7 +2846,6 @@ onMounted(async () => {
 .workflow-summary__meta,
 .workflow-summary__actions,
 .rating-row,
-.tag-list,
 .version-card__actions,
 .clip-card__meta {
   display: flex;
@@ -2631,11 +3059,226 @@ onMounted(async () => {
   color: rgba(255, 255, 255, 0.84);
   font-size: 0.84rem;
   line-height: 1.6;
-  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.version-card__markdown :deep(h1),
+.version-card__markdown :deep(h2),
+.version-card__markdown :deep(h3),
+.version-card__markdown :deep(h4),
+.version-card__markdown :deep(h5),
+.version-card__markdown :deep(h6) {
+  margin: 0 0 14px;
+  color: #f8f4e8;
+  line-height: 1.4;
+}
+
+.version-card__markdown :deep(h1) {
+  font-size: 1.28rem;
+}
+
+.version-card__markdown :deep(h2) {
+  font-size: 1.08rem;
+}
+
+.version-card__markdown :deep(p),
+.version-card__markdown :deep(ul),
+.version-card__markdown :deep(ol),
+.version-card__markdown :deep(blockquote),
+.version-card__markdown :deep(table),
+.version-card__markdown :deep(pre) {
+  margin: 0 0 14px;
+}
+
+.version-card__markdown :deep(ul),
+.version-card__markdown :deep(ol) {
+  padding-left: 20px;
+}
+
+.version-card__markdown :deep(li + li) {
+  margin-top: 6px;
+}
+
+.version-card__markdown :deep(code) {
+  padding: 2px 6px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.08);
+  font-size: 0.78rem;
+}
+
+.version-card__markdown :deep(pre) {
+  padding: 12px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.05);
+  overflow: auto;
+}
+
+.version-card__markdown :deep(pre code) {
+  padding: 0;
+  background: transparent;
+}
+
+.version-card__markdown :deep(blockquote) {
+  padding-left: 12px;
+  border-left: 3px solid rgba(255, 180, 92, 0.5);
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.version-card__markdown :deep(table) {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.version-card__markdown :deep(th),
+.version-card__markdown :deep(td) {
+  padding: 8px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  text-align: left;
+  vertical-align: top;
+}
+
+.version-card__markdown :deep(th) {
+  background: rgba(255, 255, 255, 0.06);
+  color: #fff1cc;
+  font-weight: 700;
+}
+
+.version-card__markdown :deep(a) {
+  color: #ffcf7a;
+  text-decoration: none;
+}
+
+.version-card__markdown :deep(a:hover) {
+  text-decoration: underline;
+}
+
+.version-card__markdown :deep(:last-child) {
+  margin-bottom: 0;
 }
 
 .version-card__textarea {
   min-height: 86px;
+}
+
+.keyframe-frame-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.character-sheet-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.character-sheet-card {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 18px;
+  border-radius: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.character-sheet-frame-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.character-sheet-frame-grid-single {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.keyframe-frame-grid-compact {
+  max-width: 560px;
+}
+
+.keyframe-frame-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.keyframe-frame-card-compact {
+  padding: 10px;
+}
+
+.keyframe-frame-card__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.keyframe-frame-card__image {
+  aspect-ratio: 9 / 16;
+  object-fit: cover;
+}
+
+.character-sheet-frame-card__image {
+  object-fit: contain;
+  background: rgba(0, 0, 0, 0.22);
+}
+
+.character-sheet-frame-card-single {
+  width: 100%;
+}
+
+.character-sheet-frame-card__image-single {
+  aspect-ratio: auto;
+  min-height: 260px;
+  max-height: 420px;
+}
+
+.character-sheet-preview-trigger {
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: zoom-in;
+}
+
+.character-sheet-preview-trigger:focus-visible {
+  outline: 2px solid rgba(255, 180, 92, 0.9);
+  outline-offset: 4px;
+  border-radius: 18px;
+}
+
+.image-preview-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 32px;
+  background: rgba(8, 10, 18, 0.82);
+  backdrop-filter: blur(10px);
+}
+
+.image-preview-full {
+  max-width: min(92vw, 1440px);
+  max-height: 88vh;
+  border-radius: 20px;
+  box-shadow: 0 28px 60px rgba(0, 0, 0, 0.45);
+  background: rgba(12, 14, 20, 0.9);
+}
+
+.image-preview-close {
+  position: absolute;
+  top: 24px;
+  right: 24px;
+  padding: 10px 16px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(18, 22, 30, 0.8);
+  color: #f7f7f8;
+  cursor: pointer;
 }
 
 .version-card__image,
@@ -2660,6 +3303,57 @@ onMounted(async () => {
   display: flex;
   justify-content: space-between;
   gap: 18px;
+}
+
+.clip-card__selected-keyframes {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.clip-card__selected-keyframes-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.keyframe-thumb-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.keyframe-thumb-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  padding: 8px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.keyframe-thumb-card__image {
+  width: 52px;
+  height: 72px;
+  flex: 0 0 auto;
+  border-radius: 10px;
+  object-fit: cover;
+  background: rgba(0, 0, 0, 0.35);
+}
+
+.keyframe-thumb-card__meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
 }
 
 .clip-stack {
@@ -2701,8 +3395,7 @@ onMounted(async () => {
   flex: 0 0 min(360px, calc(100% - 8px));
 }
 
-.rating-pill,
-.tag-chip {
+.rating-pill {
   padding: 6px 10px;
   border-radius: 999px;
   border: 1px solid rgba(255, 255, 255, 0.12);
@@ -2792,6 +3485,17 @@ onMounted(async () => {
 
   .stage-switch-row {
     justify-content: flex-start;
+  }
+
+  .keyframe-frame-grid,
+  .character-sheet-frame-grid,
+  .keyframe-frame-grid-compact {
+    grid-template-columns: 1fr;
+    max-width: none;
+  }
+
+  .keyframe-thumb-list {
+    flex-direction: column;
   }
 }
 

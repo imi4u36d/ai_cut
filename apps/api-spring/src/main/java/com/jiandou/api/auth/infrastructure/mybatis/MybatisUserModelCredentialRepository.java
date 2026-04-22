@@ -60,18 +60,47 @@ public class MybatisUserModelCredentialRepository {
      * @return 处理结果
      */
     public String findApiKey(Long userId, String providerKey) {
-        String normalizedProviderKey = normalizeProviderKey(providerKey);
-        if (userId == null || normalizedProviderKey.isBlank()) {
+        return findApiKey(userId, List.of(providerKey));
+    }
+
+    /**
+     * 返回指定用户、指定 provider 候选列表的首个 API Key。
+     * @param userId 用户 ID
+     * @param providerKeys provider key 候选列表
+     * @return 处理结果
+     */
+    public String findApiKey(Long userId, List<String> providerKeys) {
+        List<String> normalizedProviderKeys = providerKeys == null
+            ? List.of()
+            : providerKeys.stream()
+                .map(this::normalizeProviderKey)
+                .filter(key -> !key.isBlank())
+                .distinct()
+                .toList();
+        if (userId == null || normalizedProviderKeys.isEmpty()) {
             return "";
         }
         try (SqlSession session = sqlSessionFactory.openSession()) {
-            SysUserModelCredentialEntity row = session.getMapper(SysUserModelCredentialMapper.class).selectOne(
+            List<SysUserModelCredentialEntity> rows = session.getMapper(SysUserModelCredentialMapper.class).selectList(
                 Wrappers.<SysUserModelCredentialEntity>lambdaQuery()
                     .eq(SysUserModelCredentialEntity::getUserId, userId)
-                    .eq(SysUserModelCredentialEntity::getProviderKey, normalizedProviderKey)
-                    .last("LIMIT 1")
+                    .in(SysUserModelCredentialEntity::getProviderKey, normalizedProviderKeys)
             );
-            return row == null ? "" : credentialCipher.decrypt(row.getEncryptedApiKey());
+            Map<String, String> apiKeysByProvider = new LinkedHashMap<>();
+            for (SysUserModelCredentialEntity row : rows) {
+                String providerKey = normalizeProviderKey(row.getProviderKey());
+                String apiKey = credentialCipher.decrypt(row.getEncryptedApiKey());
+                if (!providerKey.isBlank() && !apiKey.isBlank()) {
+                    apiKeysByProvider.put(providerKey, apiKey);
+                }
+            }
+            for (String providerKey : normalizedProviderKeys) {
+                String apiKey = apiKeysByProvider.get(providerKey);
+                if (apiKey != null && !apiKey.isBlank()) {
+                    return apiKey;
+                }
+            }
+            return "";
         }
     }
 
