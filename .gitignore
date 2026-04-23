@@ -23,8 +23,6 @@ storage/mysql/*
 storage/mysql.bak_*/
 storage/redis/*
 apps/api-spring/target
-!storage/gen/
-!storage/gen/**
 !storage/uploads/.gitkeep
 !storage/outputs/.gitkeep
 !storage/temp/.gitkeep
