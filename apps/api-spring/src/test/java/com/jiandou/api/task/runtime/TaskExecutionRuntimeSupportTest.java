@@ -1,6 +1,7 @@
 package com.jiandou.api.task.runtime;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -64,5 +65,51 @@ class TaskExecutionRuntimeSupportTest {
         assertEquals("https://example.com/first.png", input.get("firstFrameUrl"));
         assertEquals("https://example.com/last.png", input.get("lastFrameUrl"));
         assertTrue((Boolean) input.get("generateAudio"));
+    }
+
+    @Test
+    void buildImageRunRequestDerivesStableSeedWhenTaskSeedMissing() {
+        TaskRecord task = new TaskRecord();
+        task.setId("task_seedless");
+        task.setTitle("seedless-demo");
+        task.setRequestSnapshot(GenerationRequestSnapshot.fromMap(Map.of(
+            "textAnalysisModel", "gpt-text",
+            "imageModel", "image-1"
+        )));
+
+        Map<String, Object> firstRequest = runtimeSupport.buildImageRunRequest(
+            task,
+            1,
+            "prompt-1",
+            720,
+            1280,
+            ""
+        );
+        Map<String, Object> secondRequest = runtimeSupport.buildImageRunRequest(
+            task,
+            1,
+            "prompt-2",
+            720,
+            1280,
+            "https://example.com/reference.png"
+        );
+        Map<String, Object> thirdRequest = runtimeSupport.buildImageRunRequest(
+            task,
+            2,
+            "prompt-3",
+            720,
+            1280,
+            ""
+        );
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> firstInput = (Map<String, Object>) firstRequest.get("input");
+        @SuppressWarnings("unchecked")
+        Map<String, Object> secondInput = (Map<String, Object>) secondRequest.get("input");
+        @SuppressWarnings("unchecked")
+        Map<String, Object> thirdInput = (Map<String, Object>) thirdRequest.get("input");
+        assertTrue(((Integer) firstInput.get("seed")) > 0);
+        assertEquals(firstInput.get("seed"), secondInput.get("seed"));
+        assertNotEquals(firstInput.get("seed"), thirdInput.get("seed"));
     }
 }

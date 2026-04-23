@@ -1123,6 +1123,7 @@ export interface WorkflowClipSlot {
   scene?: string | null;
   durationHint?: string | null;
   targetDurationSeconds?: number | null;
+  matchedCharacters?: WorkflowCharacterSheet[] | null;
   keyframeVersions: StageVersion[];
   videoVersions: StageVersion[];
 }

@@ -7,8 +7,10 @@ import com.jiandou.api.task.domain.TaskArtifactNaming;
 import com.jiandou.api.task.domain.TaskStatus;
 import com.jiandou.api.task.exception.TaskExecutionAbortedException;
 import com.jiandou.api.task.persistence.TaskRepository;
+import java.nio.charset.StandardCharsets;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.UUID;
 import org.springframework.stereotype.Component;
 
 /**
@@ -178,9 +180,9 @@ class TaskExecutionRuntimeSupport {
         if (durationSeconds > 0) {
             input.put("durationSeconds", durationSeconds);
         }
-        Integer taskSeed = taskSeed(task);
-        if (taskSeed != null) {
-            input.put("seed", taskSeed);
+        Integer imageSeed = imageSeed(task, clipIndex);
+        if (imageSeed != null) {
+            input.put("seed", imageSeed);
         }
         if (referenceImageUrl != null && !referenceImageUrl.isBlank()) {
             input.put("referenceImageUrl", referenceImageUrl);
@@ -375,6 +377,22 @@ class TaskExecutionRuntimeSupport {
         return task == null ? null : task.taskSeed();
     }
 
+    private Integer imageSeed(TaskRecord task, int clipIndex) {
+        Integer configured = taskSeed(task);
+        if (configured != null) {
+            return configured;
+        }
+        String taskIdentity = firstNonBlank(
+            task == null ? "" : task.id(),
+            task == null ? "" : task.title(),
+            task == null ? "" : task.creativePrompt(),
+            "task"
+        );
+        String seedSource = taskIdentity + ":clip:" + Math.max(1, clipIndex) + ":keyframe";
+        int raw = UUID.nameUUIDFromBytes(seedSource.getBytes(StandardCharsets.UTF_8)).hashCode();
+        return Math.floorMod(raw, Integer.MAX_VALUE - 1) + 1;
+    }
+
     /**
      * 处理required快照模型。
      * @param task 要处理的任务对象
@@ -414,6 +432,18 @@ class TaskExecutionRuntimeSupport {
      */
     private String normalizeFrameRole(String frameRole) {
         return "last".equalsIgnoreCase(stringValue(frameRole)) ? "last" : "first";
+    }
+
+    private String firstNonBlank(String... values) {
+        if (values == null) {
+            return "";
+        }
+        for (String value : values) {
+            if (value != null && !value.isBlank()) {
+                return value;
+            }
+        }
+        return "";
     }
 
     /**

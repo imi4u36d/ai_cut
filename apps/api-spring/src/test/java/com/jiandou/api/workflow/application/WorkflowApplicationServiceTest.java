@@ -165,10 +165,16 @@ class WorkflowApplicationServiceTest {
         List<Map<String, Object>> requests = requestCaptor.getAllValues();
         assertEquals("first", mapValue(requests.get(0).get("input")).get("frameRole"));
         assertEquals("last", mapValue(requests.get(1).get("input")).get("frameRole"));
+        assertNotNull(mapValue(requests.get(0).get("input")).get("seed"));
+        assertEquals(mapValue(requests.get(0).get("input")).get("seed"), mapValue(requests.get(1).get("input")).get("seed"));
         assertEquals("https://cdn.example.com/clip1-first.png", mapValue(requests.get(1).get("input")).get("referenceImageUrl"));
         assertTrue(String.valueOf(mapValue(requests.get(1).get("input")).get("prompt")).contains("必须严格沿用参考图已经确定的同一场景"));
+        assertTrue(String.valueOf(mapValue(requests.get(1).get("input")).get("prompt")).contains("尾帧只允许在参考首帧基础上推进人物动作状态"));
         assertTrue(String.valueOf(mapValue(requests.get(1).get("input")).get("prompt")).contains("参考首帧描述：镜头开场，角色推门进入废弃图书馆。"));
+        assertTrue(String.valueOf(mapValue(requests.get(1).get("input")).get("prompt")).contains("场景锁定基准：镜头开场，角色推门进入废弃图书馆。"));
+        assertTrue(String.valueOf(mapValue(requests.get(1).get("input")).get("prompt")).contains("场景锚点：图书馆门口"));
         assertTrue(String.valueOf(mapValue(requests.get(1).get("input")).get("prompt")).contains("尾帧目标：角色停在门口，回望黑暗书架。"));
+        assertFalse(String.valueOf(mapValue(requests.get(1).get("input")).get("prompt")).contains("镜头过程："));
 
         StageVersionEntity keyframeVersion = listStageVersions(workflow.getWorkflowId()).stream()
             .filter(item -> WorkflowConstants.STAGE_KEYFRAME.equals(item.getStageType()))
@@ -266,9 +272,88 @@ class WorkflowApplicationServiceTest {
         Map<String, Object> request = requestCaptor.getValue();
         Map<String, Object> input = mapValue(request.get("input"));
         assertEquals("last", input.get("frameRole"));
+        assertNotNull(input.get("seed"));
         assertEquals("https://cdn.example.com/clip1-last-selected.png", input.get("referenceImageUrl"));
         assertTrue(String.valueOf(input.get("prompt")).contains("参考首帧描述：角色停在门口，回望黑暗书架。"));
+        assertTrue(String.valueOf(input.get("prompt")).contains("场景锚点：图书馆内部"));
         assertTrue(String.valueOf(input.get("prompt")).contains("尾帧目标：角色停在破旧书架前，抬头看见掉落尘埃。"));
+        assertFalse(String.valueOf(input.get("prompt")).contains("镜头过程："));
+    }
+
+    @Test
+    void generateKeyframeFallsBackSceneAnchorToStartFrameWhenSceneMissing() {
+        StageWorkflowEntity workflow = workflow("wf_scene_fallback");
+        workflows.put(workflow.getWorkflowId(), workflow);
+        Map<String, Object> clip = new LinkedHashMap<>(storyboardClips().get(0));
+        clip.put("scene", "");
+        versions.put("sv_story", storyboardVersion(workflow.getWorkflowId(), List.of(clip)));
+
+        when(generationApplicationService.createRun(any())).thenReturn(
+            imageRun("run_start_scene", "https://cdn.example.com/scene-fallback-first.png"),
+            imageRun("run_end_scene", "https://cdn.example.com/scene-fallback-last.png")
+        );
+
+        service.generateKeyframe("wf_scene_fallback", 1);
+
+        StageVersionEntity keyframeVersion = listStageVersions(workflow.getWorkflowId()).stream()
+            .filter(item -> WorkflowConstants.STAGE_KEYFRAME.equals(item.getStageType()))
+            .findFirst()
+            .orElseThrow();
+        Map<String, Object> outputSummary = WorkflowJsonSupport.readMap(keyframeVersion.getOutputSummaryJson());
+        Map<String, Object> normalizedClip = mapValue(outputSummary.get("clip"));
+        assertEquals("镜头开场，角色推门进入废弃图书馆。", normalizedClip.get("scene"));
+    }
+
+    @Test
+    void generateKeyframeMatchesCharacterFromClipMotionAndExposesItInClipSlot() {
+        StageWorkflowEntity workflow = workflow("wf_character_match");
+        workflows.put(workflow.getWorkflowId(), workflow);
+        Map<String, Object> clip = new LinkedHashMap<>(Map.of(
+            "clipIndex", 1,
+            "shotLabel", "01",
+            "scene", "咖啡馆靠窗座位",
+            "firstFramePrompt", "女人坐在窗边，手里攥着已经凉掉的咖啡杯。",
+            "lastFramePrompt", "她低下头，指尖摩挲杯沿，窗外雨痕映在玻璃上。",
+            "motion", "周泽沉默地看着她，林舒把杯子推回桌面后移开视线。",
+            "cameraMovement", "slow push",
+            "durationHint", "5s",
+            "imagePrompt", "女人坐在窗边，手里攥着已经凉掉的咖啡杯。",
+            "videoPrompt", "周泽沉默地看着她，林舒把杯子推回桌面后移开视线。"
+        ));
+        versions.put("sv_story", storyboardVersion(workflow.getWorkflowId(), List.of(clip), storyboardMarkdownWithCharacters()));
+        when(storyboardPlanner.extractCharacterDefinitions(anyString())).thenReturn(List.of(
+            new TaskStoryboardPlanner.CharacterDefinition(
+                "林舒",
+                "鬓角垂落一缕碎发，身着素色针织开衫与深色长裤",
+                "女性，约28岁。外观锚点：鬓角垂落一缕碎发，身着素色针织开衫与深色长裤。行为特征：情绪内敛克制。"
+            ),
+            new TaskStoryboardPlanner.CharacterDefinition(
+                "周泽",
+                "穿着深灰休闲西装外套，内搭素色衬衫",
+                "男性，约29岁。外观锚点：穿着深灰休闲西装外套，内搭素色衬衫。行为特征：主动开口但声音干涩。"
+            )
+        ));
+        when(generationApplicationService.createRun(any())).thenReturn(
+            imageRun("run_match_start", "https://cdn.example.com/match-first.png"),
+            imageRun("run_match_end", "https://cdn.example.com/match-last.png")
+        );
+
+        Map<String, Object> detail = service.generateKeyframe("wf_character_match", 1);
+
+        ArgumentCaptor<Map<String, Object>> requestCaptor = ArgumentCaptor.forClass(Map.class);
+        verify(generationApplicationService, times(4)).createRun(requestCaptor.capture());
+        List<Map<String, Object>> requests = requestCaptor.getAllValues();
+        String lastPrompt = String.valueOf(mapValue(requests.get(3).get("input")).get("prompt"));
+        assertTrue(lastPrompt.contains("角色一致性绑定"));
+        assertTrue(lastPrompt.contains("林舒：鬓角垂落一缕碎发"));
+        assertTrue(lastPrompt.contains("周泽：穿着深灰休闲西装外套"));
+
+        List<Map<String, Object>> clipSlots = listValue(detail.get("clipSlots"));
+        Map<String, Object> clipSlot = clipSlots.get(0);
+        List<Map<String, Object>> matchedCharacters = listValue(clipSlot.get("matchedCharacters"));
+        assertEquals(2, matchedCharacters.size());
+        assertEquals("林舒", matchedCharacters.get(0).get("characterName"));
+        assertEquals("周泽", matchedCharacters.get(1).get("characterName"));
     }
 
     @Test

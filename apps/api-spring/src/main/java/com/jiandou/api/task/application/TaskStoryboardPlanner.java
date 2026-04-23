@@ -314,7 +314,6 @@ public class TaskStoryboardPlanner {
             dataRowCount++;
             String shotIndex = normalizeStoryboardPromptValue(first);
             int sequentialIndex = shotPlans.size() + 1;
-            String scene = "";
             String durationHint = normalizeStoryboardPromptValue(schema.cell(cells, schema.durationIndex(), -1));
             String parsedFirstFramePrompt = augmentCharacterAppearanceDefinitions(
                 normalizeStoryboardPromptValue(schema.cell(cells, schema.firstFramePromptIndex(), -1)),
@@ -333,6 +332,7 @@ public class TaskStoryboardPlanner {
             String firstFramePrompt = sequentialIndex > 1 && !previousLastFramePrompt.isBlank()
                 ? previousLastFramePrompt
                 : parsedFirstFramePrompt;
+            String scene = firstNonBlank(firstFramePrompt, parsedFirstFramePrompt, lastFramePrompt);
             String imagePrompt = sequentialIndex == 1 ? firstFramePrompt : "";
             String videoPrompt = buildContinuousClipPrompt(
                 firstFramePrompt,
@@ -865,6 +865,18 @@ public class TaskStoryboardPlanner {
             return normalized;
         }
         return normalized.substring(0, Math.max(0, maxLength - 1)).trim() + "…";
+    }
+
+    private String firstNonBlank(String... values) {
+        if (values == null) {
+            return "";
+        }
+        for (String value : values) {
+            if (value != null && !value.isBlank()) {
+                return value;
+            }
+        }
+        return "";
     }
 
     /**

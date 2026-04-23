@@ -19,6 +19,7 @@ import com.jiandou.api.workflow.web.dto.RateWorkflowRequest;
 import com.jiandou.api.workflow.web.dto.ReuseMaterialRequest;
 import com.jiandou.api.workflow.web.dto.UpdateMaterialAssetRatingRequest;
 import com.jiandou.api.workflow.web.dto.UpdateMaterialAssetTagsRequest;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.OffsetDateTime;
@@ -302,6 +303,8 @@ public class WorkflowApplicationService {
             ensureCharacterSheetVersions(workflow, storyboardVersion);
         }
         Map<String, Object> clip = requireStoryboardClip(storyboardVersion, clipIndex);
+        List<CharacterSheetSlot> matchedCharacterSlots = matchedCharacterSheetSlots(storyboardVersion, clip);
+        String characterConstraintPrompt = buildCharacterConsistencyPrompt(matchedCharacterSlots);
         int versionNo = workflowRepository.nextStageVersionNo(workflowId, WorkflowConstants.STAGE_KEYFRAME, clipIndex);
         String continuitySource = clipIndex == 1 ? "generated_start_frame" : "previous_clip_end_frame";
         Map<String, Object> startFrameRun = Map.of();
@@ -315,6 +318,7 @@ public class WorkflowApplicationService {
                 clipIndex,
                 versionNo,
                 firstNonBlank(stringValue(clip.get("startFrame")), stringValue(clip.get("firstFramePrompt"))),
+                characterConstraintPrompt,
                 "",
                 "first",
                 "clip" + clipIndex + "-first-v" + versionNo
@@ -345,6 +349,7 @@ public class WorkflowApplicationService {
             clipIndex,
             versionNo,
             firstNonBlank(stringValue(clip.get("endFrame")), stringValue(clip.get("lastFramePrompt"))),
+            characterConstraintPrompt,
             startFrameUrl,
             "last",
             "clip" + clipIndex + "-last-v" + versionNo
@@ -420,7 +425,7 @@ public class WorkflowApplicationService {
         keyframeInputSummary.put("endFrameRemoteUrl", endFrameRemoteUrl);
         keyframeInputSummary.put("lastFrameRemoteUrl", endFrameRemoteUrl);
         keyframeInputSummary.put("continuitySource", continuitySource);
-        Integer keyframeSeed = resolvedKeyframeSeed(workflow);
+        Integer keyframeSeed = resolvedKeyframeSeed(workflow, clipIndex);
         if (keyframeSeed != null) {
             keyframeInputSummary.put("seed", keyframeSeed);
         }
@@ -962,6 +967,7 @@ public class WorkflowApplicationService {
         List<Map<String, Object>> clipSlots = new ArrayList<>();
         for (Map<String, Object> clip : clips) {
             int clipIndex = intValue(clip.get("clipIndex"), 0);
+            List<CharacterSheetSlot> matchedCharacterSlots = selectedStoryboard == null ? List.of() : matchedCharacterSheetSlots(selectedStoryboard, clip);
             List<StageVersionEntity> keyframeVersions = versions.stream()
                 .filter(item -> WorkflowConstants.STAGE_KEYFRAME.equals(item.getStageType()) && intValue(item.getClipIndex(), 0) == clipIndex)
                 .sorted(Comparator.comparing(StageVersionEntity::getVersionNo).reversed())
@@ -986,6 +992,7 @@ public class WorkflowApplicationService {
             slot.put("continuityHint", stringValue(clip.get("continuityHint")));
             slot.put("durationHint", stringValue(clip.get("durationHint")));
             slot.put("targetDurationSeconds", intValue(clip.get("targetDurationSeconds"), 0));
+            slot.put("matchedCharacters", matchedCharacterSlots.stream().map(this::toCharacterMatchRow).toList());
             slot.put("keyframeVersions", keyframeVersions.stream().map(item -> toStageVersionRow(item, assetMap.get(item.getMaterialAssetId()), tagMap.getOrDefault(item.getMaterialAssetId(), List.of()))).toList());
             slot.put("videoVersions", videoVersions.stream().map(item -> toStageVersionRow(item, assetMap.get(item.getMaterialAssetId()), tagMap.getOrDefault(item.getMaterialAssetId(), List.of()))).toList());
             clipSlots.add(slot);
@@ -1755,13 +1762,14 @@ public class WorkflowApplicationService {
         int clipIndex,
         int versionNo,
         String prompt,
+        String characterConstraintPrompt,
         String referenceImageUrl,
         String frameRole,
         String fileStem
     ) {
         Map<String, Object> request = new LinkedHashMap<>();
         Map<String, Object> input = new LinkedHashMap<>();
-        input.put("prompt", composeVisualPrompt(workflow, buildKeyframeContinuityPrompt(clip, prompt, referenceImageUrl, frameRole)));
+        input.put("prompt", composeVisualPrompt(workflow, joinPromptSections(characterConstraintPrompt, buildKeyframeContinuityPrompt(clip, prompt, referenceImageUrl, frameRole))));
         int[] dimensions = dimensionsFromAspectRatio(workflow.getAspectRatio());
         input.put("width", dimensions[0]);
         input.put("height", dimensions[1]);
@@ -1769,7 +1777,7 @@ public class WorkflowApplicationService {
         if (!isBlank(referenceImageUrl)) {
             input.put("referenceImageUrl", referenceImageUrl);
         }
-        Integer keyframeSeed = resolvedKeyframeSeed(workflow);
+        Integer keyframeSeed = resolvedKeyframeSeed(workflow, clipIndex);
         if (keyframeSeed != null) {
             input.put("seed", keyframeSeed);
         }
@@ -1807,6 +1815,7 @@ public class WorkflowApplicationService {
         }
         List<String> parts = new ArrayList<>();
         parts.add("你现在要生成同一镜头连续动作后的尾帧，必须严格沿用参考图已经确定的同一场景、同一机位体系、同一空间锚点、同一人物外观与服装、同一道具位置关系，禁止跳到另一个房间、另一侧街道或完全不同的构图。");
+        parts.add("尾帧只允许在参考首帧基础上推进人物动作状态、视线方向、手部位置或道具使用结果，禁止新增、删除或替换背景布局、门窗桌椅书架等场景元素。");
         String startFramePrompt = firstNonBlank(
             stringValue(clip.get("startFrame")),
             stringValue(clip.get("firstFramePrompt")),
@@ -1814,6 +1823,17 @@ public class WorkflowApplicationService {
         );
         if (!startFramePrompt.isBlank()) {
             parts.add("参考首帧描述：" + startFramePrompt);
+            parts.add("场景锁定基准：" + startFramePrompt);
+        }
+        String sceneAnchor = firstNonBlank(
+            stringValue(clip.get("scene")),
+            stringValue(clip.get("startFrame")),
+            stringValue(clip.get("firstFramePrompt")),
+            stringValue(clip.get("endFrame")),
+            stringValue(clip.get("lastFramePrompt"))
+        );
+        if (!sceneAnchor.isBlank()) {
+            parts.add("场景锚点：" + sceneAnchor);
         }
         String continuityHint = firstNonBlank(
             stringValue(clip.get("continuityHint")),
@@ -1821,14 +1841,6 @@ public class WorkflowApplicationService {
         );
         if (!continuityHint.isBlank()) {
             parts.add("连续性要求：" + continuityHint);
-        }
-        String motionDescription = firstNonBlank(
-            stringValue(clip.get("actionPath")),
-            stringValue(clip.get("motion")),
-            stringValue(clip.get("videoPrompt"))
-        );
-        if (!motionDescription.isBlank()) {
-            parts.add("镜头过程：" + motionDescription);
         }
         if (!basePrompt.isBlank()) {
             parts.add("尾帧目标：" + basePrompt);
@@ -2007,6 +2019,7 @@ public class WorkflowApplicationService {
             row.put("shotLabel", firstNonBlank(stringValue(raw.get("shotLabel")), String.valueOf(clipIndex)));
             row.put("startFrame", startFrame);
             row.put("endFrame", endFrame);
+            row.put("scene", firstNonBlank(stringValue(raw.get("scene")), startFrame, stringValue(raw.get("firstFramePrompt")), endFrame));
             row.put("firstFramePrompt", firstNonBlank(inheritedStartFrame, stringValue(raw.get("firstFramePrompt")), startFrame));
             row.put("lastFramePrompt", firstNonBlank(stringValue(raw.get("lastFramePrompt")), endFrame));
             row.put("actionPath", actionPath);
@@ -2071,6 +2084,21 @@ public class WorkflowApplicationService {
 
     private Integer resolvedKeyframeSeed(StageWorkflowEntity workflow) {
         return workflow.getKeyframeSeed() != null ? workflow.getKeyframeSeed() : workflow.getTaskSeed();
+    }
+
+    private Integer resolvedKeyframeSeed(StageWorkflowEntity workflow, int clipIndex) {
+        Integer configured = resolvedKeyframeSeed(workflow);
+        if (configured != null) {
+            return configured;
+        }
+        String workflowIdentity = firstNonBlank(
+            workflow == null ? "" : workflow.getWorkflowId(),
+            workflow == null ? "" : workflow.getTitle(),
+            "workflow"
+        );
+        String seedSource = workflowIdentity + ":clip:" + Math.max(1, clipIndex) + ":keyframe";
+        int raw = UUID.nameUUIDFromBytes(seedSource.getBytes(StandardCharsets.UTF_8)).hashCode();
+        return Math.floorMod(raw, Integer.MAX_VALUE - 1) + 1;
     }
 
     private Integer resolvedVideoSeed(StageWorkflowEntity workflow) {
@@ -2392,6 +2420,66 @@ public class WorkflowApplicationService {
         return metadata;
     }
 
+    private List<CharacterSheetSlot> matchedCharacterSheetSlots(StageVersionEntity storyboardVersion, Map<String, Object> clip) {
+        List<CharacterSheetSlot> slots = characterSheetSlots(storyboardVersion);
+        if (slots.isEmpty()) {
+            return List.of();
+        }
+        String corpus = buildClipCharacterMatchCorpus(clip);
+        if (corpus.isBlank()) {
+            return List.of();
+        }
+        List<CharacterSheetSlot> matches = new ArrayList<>();
+        for (CharacterSheetSlot slot : slots) {
+            String characterName = trimmed(slot.characterName(), "");
+            if (!characterName.isBlank() && corpus.contains(characterName)) {
+                matches.add(slot);
+            }
+        }
+        return matches;
+    }
+
+    private String buildClipCharacterMatchCorpus(Map<String, Object> clip) {
+        if (clip == null || clip.isEmpty()) {
+            return "";
+        }
+        return String.join(
+            "\n",
+            stringValue(clip.get("scene")),
+            stringValue(clip.get("startFrame")),
+            stringValue(clip.get("endFrame")),
+            stringValue(clip.get("firstFramePrompt")),
+            stringValue(clip.get("lastFramePrompt")),
+            stringValue(clip.get("actionPath")),
+            stringValue(clip.get("motion")),
+            stringValue(clip.get("videoPrompt"))
+        );
+    }
+
+    private String buildCharacterConsistencyPrompt(List<CharacterSheetSlot> matchedCharacterSlots) {
+        if (matchedCharacterSlots == null || matchedCharacterSlots.isEmpty()) {
+            return "";
+        }
+        List<String> parts = new ArrayList<>();
+        parts.add("角色一致性绑定：");
+        for (CharacterSheetSlot slot : matchedCharacterSlots) {
+            parts.add("- " + slot.characterName() + "：" + firstNonBlank(slot.characterAppearance(), slot.characterDefinition()));
+        }
+        parts.add("若镜头中出现上述角色，必须严格沿用对应外观锚点，禁止换脸、换发型、换服装、换年龄感。");
+        return String.join("\n", parts);
+    }
+
+    private Map<String, Object> toCharacterMatchRow(CharacterSheetSlot slot) {
+        Map<String, Object> row = new LinkedHashMap<>();
+        row.put("characterName", slot.characterName());
+        row.put("displayName", slot.characterName());
+        row.put("appearanceSummary", slot.characterAppearance());
+        row.put("appearance", slot.characterAppearance());
+        row.put("syntheticClipIndex", slot.syntheticClipIndex());
+        row.put("clipIndex", slot.syntheticClipIndex());
+        return row;
+    }
+
     private CharacterSheetSlot resolveCharacterSheetSlot(StageVersionEntity storyboardVersion, int clipIndex) {
         if (!isCharacterSheetClipIndex(clipIndex)) {
             return null;
@@ -2695,6 +2783,20 @@ public class WorkflowApplicationService {
             return visualConstraint;
         }
         return visualConstraint + "\n" + normalizedPrompt;
+    }
+
+    private String joinPromptSections(String... sections) {
+        List<String> parts = new ArrayList<>();
+        if (sections == null) {
+            return "";
+        }
+        for (String section : sections) {
+            String normalized = trimmed(section, "");
+            if (!normalized.isBlank()) {
+                parts.add(normalized);
+            }
+        }
+        return String.join("\n", parts);
     }
 
     private String visualStyleConstraintBlock(StageWorkflowEntity workflow) {

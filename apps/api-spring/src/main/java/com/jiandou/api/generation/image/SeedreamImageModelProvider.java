@@ -80,7 +80,7 @@ public class SeedreamImageModelProvider implements ImageModelProvider {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("model", providerModel);
         body.put("prompt", prompt);
-        body.put("sequential_image_generation", referenceImageUrl != null && !referenceImageUrl.isBlank() ? "enabled" : "disabled");
+        body.put("sequential_image_generation", referenceImageUrl != null && !referenceImageUrl.isBlank() ? "auto" : "disabled");
         body.put("response_format", "url");
         body.put("size", size);
         body.put("stream", false);

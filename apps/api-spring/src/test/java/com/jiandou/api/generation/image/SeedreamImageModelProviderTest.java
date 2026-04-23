@@ -78,7 +78,7 @@ class SeedreamImageModelProviderTest {
         @SuppressWarnings("unchecked")
         java.util.List<String> referenceImages = (java.util.List<String>) body.get("reference_images");
         assertIterableEquals(java.util.List.of("https://example.com/clip1-first.png"), referenceImages);
-        assertEquals("enabled", body.get("sequential_image_generation"));
+        assertEquals("auto", body.get("sequential_image_generation"));
     }
 
     @Test

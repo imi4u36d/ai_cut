@@ -276,8 +276,11 @@ class TaskWorkerRenderStageServiceTest {
         Map<String, Object> secondVideoInput = (Map<String, Object>) capturedRequests.get(4).get("input");
         assertEquals("first-frame-1", firstImageInput.get("prompt"));
         assertEquals(true, String.valueOf(firstLastImageInput.get("prompt")).contains("必须严格沿用参考图已经确定的同一场景"));
+        assertEquals(true, String.valueOf(firstLastImageInput.get("prompt")).contains("尾帧只允许在参考首帧基础上推进人物动作状态"));
         assertEquals(true, String.valueOf(firstLastImageInput.get("prompt")).contains("参考首帧描述：first-frame-1"));
+        assertEquals(true, String.valueOf(firstLastImageInput.get("prompt")).contains("场景锁定基准：first-frame-1"));
         assertEquals(true, String.valueOf(firstLastImageInput.get("prompt")).contains("尾帧目标：clip-1-last"));
+        assertEquals(false, String.valueOf(firstLastImageInput.get("prompt")).contains("镜头过程：raises head"));
         assertEquals("https://example.com/clip1-first.png", firstLastImageInput.get("referenceImageUrl"));
         assertEquals("https://example.com/clip1-last-keyframe.png", firstVideoInput.get("lastFrameUrl"));
         assertEquals(true, String.valueOf(secondLastImageInput.get("prompt")).contains("场景锚点：scene-1"));

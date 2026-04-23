@@ -38,7 +38,7 @@
                   class="workflow-list__item"
                   :class="{ 'workflow-list__item-active': item.id === selectedWorkflowId }"
                 >
-                  <button type="button" class="workflow-list__open" @click="openWorkflow(item.id)">
+                  <button type="button" class="workflow-list__open" @click="openWorkflow(item.id, item.currentStage)">
                     <div class="workflow-list__top">
                       <strong>{{ item.title }}</strong>
                       <span class="surface-chip">{{ item.currentStage }}</span>
@@ -549,7 +549,7 @@
                   type="button"
                   class="stage-switch-btn"
                   :class="{ 'stage-switch-btn-active': activeCreateStage === stage.key }"
-                  @click="activeCreateStage = stage.key"
+                  @click="switchWorkflowStage(stage.key)"
                 >
                   {{ stage.shortLabel }}
                 </button>
@@ -651,7 +651,7 @@
                   type="button"
                   class="stage-switch-btn"
                   :class="{ 'stage-switch-btn-active': activeCreateStage === stage.key }"
-                  @click="activeCreateStage = stage.key"
+                  @click="switchWorkflowStage(stage.key)"
                 >
                   {{ stage.shortLabel }}
                 </button>
@@ -813,6 +813,15 @@
                   <p class="workflow-eyebrow">Clip {{ slot.clipIndex }}</p>
                   <h3>{{ slot.shotLabel || `镜头 #${slot.clipIndex}` }}</h3>
                   <p class="clip-card__desc">{{ slot.scene || "暂无场景描述" }}</p>
+                  <div v-if="slot.matchedCharacters?.length" class="clip-card__meta clip-card__meta-inline">
+                    <span
+                      v-for="character in slot.matchedCharacters"
+                      :key="`${slot.clipIndex}-${character.clipIndex}-${character.characterName}`"
+                      class="surface-chip surface-chip-quiet"
+                    >
+                      {{ character.characterName }}
+                    </span>
+                  </div>
                 </div>
                 <div class="clip-card__meta">
                   <span class="surface-chip">{{ slot.durationHint || `${slot.targetDurationSeconds || 0}s` }}</span>
@@ -848,7 +857,14 @@
                       <div class="keyframe-frame-card__head">
                         <span class="surface-chip surface-chip-quiet">{{ frame.label }}</span>
                       </div>
-                      <img class="version-card__image keyframe-frame-card__image" :src="frame.url" :alt="`${version.title}${frame.label}`" />
+                      <button
+                        type="button"
+                        class="character-sheet-preview-trigger"
+                        :aria-label="`查看${version.title}${frame.label}原图`"
+                        @click="openImagePreview(frame.url, `${version.title}${frame.label}`)"
+                      >
+                        <img class="version-card__image keyframe-frame-card__image" :src="frame.url" :alt="`${version.title}${frame.label}`" />
+                      </button>
                     </article>
                   </div>
                   <div v-else class="workflow-empty workflow-empty-nested">
@@ -918,7 +934,7 @@
                   type="button"
                   class="stage-switch-btn"
                   :class="{ 'stage-switch-btn-active': activeCreateStage === stage.key }"
-                  @click="activeCreateStage = stage.key"
+                  @click="switchWorkflowStage(stage.key)"
                 >
                   {{ stage.shortLabel }}
                 </button>
@@ -1253,6 +1269,7 @@ const createStageOptions = [
     description: "视觉模型、视频模型、视频 Seed",
   },
 ];
+const detailStageKeys: CreateStageKey[] = ["storyboard", "keyframe", "video"];
 
 const workflowRatingDraft = ref("5");
 const workflowRatingNoteDraft = ref("");
@@ -1284,6 +1301,18 @@ const selectedWorkflowId = computed(() => {
   const workflowId = route.params.workflowId;
   return typeof workflowId === "string" ? workflowId : "";
 });
+
+function normalizeDetailStage(value: unknown): CreateStageKey | null {
+  const rawValue = Array.isArray(value) ? value[0] : value;
+  if (typeof rawValue !== "string") {
+    return null;
+  }
+  const normalizedValue = rawValue.trim().toLowerCase();
+  if (normalizedValue === "joined") {
+    return "video";
+  }
+  return detailStageKeys.includes(normalizedValue as CreateStageKey) ? normalizedValue as CreateStageKey : null;
+}
 
 const workflowCharacterSheets = computed(() => selectedWorkflow.value?.characterSheets ?? []);
 
@@ -1873,10 +1902,32 @@ function applyWorkflowDrafts(workflow: WorkflowDetail | null) {
   }
 }
 
-function openWorkflow(workflowId: string) {
+function openWorkflow(workflowId: string, preferredStage?: string | null) {
   createComposerVisible.value = false;
   createReviewFlipped.value = false;
-  void router.push(`/workflows/${workflowId}`);
+  const nextStage = normalizeDetailStage(preferredStage) ?? normalizeDetailStage(route.query.stage) ?? activeCreateStage.value;
+  void router.push({
+    path: `/workflows/${workflowId}`,
+    query: { stage: nextStage },
+  });
+}
+
+function switchWorkflowStage(stage: CreateStageKey) {
+  activeCreateStage.value = stage;
+  if (!selectedWorkflowId.value) {
+    return;
+  }
+  const currentRouteStage = normalizeDetailStage(route.query.stage);
+  if (currentRouteStage === stage) {
+    return;
+  }
+  void router.replace({
+    path: route.path,
+    query: {
+      ...route.query,
+      stage,
+    },
+  });
 }
 
 function setStageRatingDraft(versionId: string, score: number) {
@@ -1931,6 +1982,18 @@ async function loadWorkflowDetail(workflowId: string) {
   detailError.value = "";
   try {
     selectedWorkflow.value = await fetchWorkflow(workflowId);
+    const routeStage = normalizeDetailStage(route.query.stage);
+    const resolvedStage = routeStage ?? normalizeDetailStage(selectedWorkflow.value?.currentStage) ?? "storyboard";
+    activeCreateStage.value = resolvedStage;
+    if (routeStage !== resolvedStage) {
+      await router.replace({
+        path: route.path,
+        query: {
+          ...route.query,
+          stage: resolvedStage,
+        },
+      });
+    }
     applyWorkflowDrafts(selectedWorkflow.value);
   } catch (error) {
     detailError.value = error instanceof Error ? error.message : "工作流详情加载失败";
@@ -1987,7 +2050,7 @@ async function handleCreateWorkflow() {
     createComposerVisible.value = false;
     createReviewFlipped.value = false;
     await loadWorkflows();
-    openWorkflow(workflow.id);
+    openWorkflow(workflow.id, workflow.currentStage);
   } catch (error) {
     createError.value = error instanceof Error ? error.message : "创建工作流失败";
     createReviewFlipped.value = false;
@@ -2163,13 +2226,26 @@ async function handleReuseAsset(assetId: string, versionId: string) {
   try {
     const workflow = await reuseMaterialAsset(assetId, { mode: "clone" });
     await loadWorkflows();
-    openWorkflow(workflow.id);
+    openWorkflow(workflow.id, workflow.currentStage);
   } catch (error) {
     detailError.value = error instanceof Error ? error.message : "素材复用失败";
   } finally {
     busyActionKey.value = "";
   }
 }
+
+watch(
+  () => route.query.stage,
+  (stage) => {
+    if (!selectedWorkflowId.value) {
+      return;
+    }
+    const resolvedStage = normalizeDetailStage(stage);
+    if (resolvedStage && resolvedStage !== activeCreateStage.value) {
+      activeCreateStage.value = resolvedStage;
+    }
+  }
+);
 
 watch(
   () => selectedWorkflowId.value,

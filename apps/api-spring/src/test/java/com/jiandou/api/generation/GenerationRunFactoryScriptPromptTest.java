@@ -2,6 +2,7 @@ package com.jiandou.api.generation;
 
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.jiandou.api.config.JiandouStorageProperties;
@@ -48,8 +49,8 @@ class GenerationRunFactoryScriptPromptTest {
         从第二个镜头开始，首帧描述 (Start Frame) 必须直接继承上一镜头 尾帧描述 (End Frame) 的同一句核心画面
         每个镜头时长必须限制在 `5-12s`
         不能凭空添加原文没有的人声内容
-        首尾帧描述都必须保留上下文情境信息
-        首尾帧描述都必须详细交代场景和布置
+        首尾帧描述和分镜内容描述都只能描述当前镜头内部已经发生或正在发生的内容
+        首尾帧描述只允许写当前画面中实际可见且会影响构图的场景和布置
         首尾帧描述必须明确写出相同的场景坐标锚点与物件关系
         若该镜头首尾帧发生在同一场景内，尾帧必须沿用与首帧相同的场景描述骨架、空间锚点和布置信息
         同一场景内的首尾帧区别只能主要体现在人物动作状态、视线、手部位置、道具被拿起/放下、局势推进结果上
@@ -57,6 +58,7 @@ class GenerationRunFactoryScriptPromptTest {
         写尾帧时，先检查首帧中出现过的场景锚点、方位词、关键物件名词
         首尾帧描述建议严格按照这个句式组织
         场景布置只能写与当前镜头动作、人物调度、关键道具、空间关系直接相关的内容
+        若某些场景信息在当前帧并不可见、只存在于镜头外、被遮挡、或需要靠常识补全，均不要写进首帧/尾帧描述
         当首帧描述或尾帧描述中出现角色名时，必须把该角色对应的外观锚点紧跟追加在角色名后，格式为 `角色名（外观锚点）`
         | 镜号 | 首帧描述 (Start Frame) | 尾帧描述 (End Frame) | 分镜内容描述 | 时长 |
         """;
@@ -75,8 +77,8 @@ class GenerationRunFactoryScriptPromptTest {
             "从第二个镜头开始，首帧描述 (Start Frame) 必须直接继承上一镜头 尾帧描述 (End Frame) 的同一句核心画面",
             "每个镜头时长必须限制在 `5-12s`",
             "不能凭空添加原文没有的人声内容",
-            "首尾帧描述都必须保留上下文情境信息",
-            "首尾帧描述都必须详细交代场景和布置",
+            "首尾帧描述和分镜内容描述都只能描述当前镜头内部已经发生或正在发生的内容",
+            "首尾帧描述只允许写当前画面中实际可见且会影响构图的场景和布置",
             "首尾帧描述必须明确写出相同的场景坐标锚点与物件关系",
             "若该镜头首尾帧发生在同一场景内，尾帧必须沿用与首帧相同的场景描述骨架、空间锚点和布置信息",
             "同一场景内的首尾帧区别只能主要体现在人物动作状态、视线、手部位置、道具被拿起/放下、局势推进结果上",
@@ -84,6 +86,7 @@ class GenerationRunFactoryScriptPromptTest {
             "写尾帧时，先检查首帧中出现过的场景锚点、方位词、关键物件名词",
             "首尾帧描述建议严格按照这个句式组织",
             "场景布置只能写与当前镜头动作、人物调度、关键道具、空间关系直接相关的内容",
+            "若某些场景信息在当前帧并不可见、只存在于镜头外、被遮挡、或需要靠常识补全，均不要写进首帧/尾帧描述",
             "当首帧描述或尾帧描述中出现角色名时，必须把该角色对应的外观锚点紧跟追加在角色名后，格式为 `角色名（外观锚点）`",
             "| 镜号 | 首帧描述 (Start Frame) | 尾帧描述 (End Frame) | 分镜内容描述 | 时长 |"
         );
@@ -169,6 +172,9 @@ class GenerationRunFactoryScriptPromptTest {
         for (String row : promptRows) {
             assertTrue(capturedSystemPrompt[0].contains(row));
         }
+        assertFalse(capturedSystemPrompt[0].contains("首尾帧描述都必须保留上下文情境信息"));
+        assertFalse(capturedSystemPrompt[0].contains("首尾帧描述都必须详细交代场景和布置"));
+        assertFalse(capturedSystemPrompt[0].contains("下一拍衔接"));
         assertEquals(2, invocationCount[0]);
         assertTrue(capturedUserPrompt[0].contains("请严格遵循 system prompt 的输出格式与规则"));
         assertTrue(capturedReviewSystemPrompt[0].contains("二次审校要求"));
