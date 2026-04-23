@@ -161,7 +161,7 @@ public class GenerationRunFactory {
         }
         String prompt = buildScriptUserPrompt(sourceText, visualStyle);
         List<Map<String, Object>> callChain = new ArrayList<>();
-        TextModelResponse response = textModelProviderRegistry.resolve(profile).generate(
+        TextModelResponse draftResponse = textModelProviderRegistry.resolve(profile).generate(
             profile,
             new TextCompletionInvocation(
                 buildScriptSystemPrompt(),
@@ -170,28 +170,86 @@ public class GenerationRunFactory {
                 Math.max(800, profile.maxTokens())
             )
         );
-        String scriptMarkdown = support.stripMarkdownFence(response.text());
+        String draftScriptMarkdown = support.stripMarkdownFence(draftResponse.text());
         callChain.add(support.callLog("script", "script.requested", "success", "脚本生成请求已发送到文本模型。", Map.of(
             "provider", profile.provider(),
             "modelName", profile.modelName(),
-            "endpointHost", response.endpointHost()
+            "endpointHost", draftResponse.endpointHost()
         )));
-        callChain.add(support.callLog("script", "script.completed", "success", "脚本生成已完成。", Map.of(
-            "latencyMs", response.latencyMs(),
-            "responsesApi", response.responsesApi(),
-            "responseId", response.responseId()
+        callChain.add(support.callLog("script", "script.draft_completed", "success", "分镜脚本初稿已生成。", Map.of(
+            "latencyMs", draftResponse.latencyMs(),
+            "responsesApi", draftResponse.responsesApi(),
+            "responseId", draftResponse.responseId()
+        )));
+        String reviewPrompt = buildScriptReviewUserPrompt(sourceText, visualStyle, draftScriptMarkdown);
+        String scriptMarkdown = draftScriptMarkdown;
+        TextModelResponse finalResponse = draftResponse;
+        TextModelResponse reviewResponse = null;
+        boolean reviewApplied = false;
+        String reviewFallbackReason = "";
+        try {
+            reviewResponse = textModelProviderRegistry.resolve(profile).generate(
+                profile,
+                new TextCompletionInvocation(
+                    buildScriptReviewSystemPrompt(),
+                    reviewPrompt,
+                    support.boundedTemperature(profile.temperature(), 0.0, 0.2),
+                    Math.max(800, profile.maxTokens())
+                )
+            );
+            callChain.add(support.callLog("script", "script.review_requested", "success", "分镜脚本审校请求已发送到文本模型。", Map.of(
+                "provider", profile.provider(),
+                "modelName", profile.modelName(),
+                "endpointHost", reviewResponse.endpointHost()
+            )));
+            String reviewedScriptMarkdown = support.stripMarkdownFence(reviewResponse.text());
+            String invalidReviewReason = invalidStoryboardMarkdownReason(reviewedScriptMarkdown);
+            if (invalidReviewReason.isBlank()) {
+                scriptMarkdown = reviewedScriptMarkdown;
+                finalResponse = reviewResponse;
+                reviewApplied = true;
+            } else {
+                reviewFallbackReason = invalidReviewReason;
+                callChain.add(support.callLog("script", "script.review_fallback", "warning", "分镜脚本审校结果无效，已回退初稿。", Map.of(
+                    "reason", invalidReviewReason,
+                    "responseId", reviewResponse.responseId()
+                )));
+            }
+        } catch (RuntimeException ex) {
+            reviewFallbackReason = support.truncateText(ex.getMessage(), 240);
+            callChain.add(support.callLog("script", "script.review_failed", "warning", "分镜脚本审校失败，已回退初稿。", Map.of(
+                "error", reviewFallbackReason,
+                "provider", profile.provider(),
+                "modelName", profile.modelName()
+            )));
+        }
+        callChain.add(support.callLog("script", "script.completed", "success", reviewApplied
+            ? "分镜脚本审校完成，已输出最终版本。"
+            : "分镜脚本已回退到初稿并输出最终版本。", Map.of(
+            "latencyMs", finalResponse.latencyMs(),
+            "responsesApi", finalResponse.responsesApi(),
+            "responseId", finalResponse.responseId(),
+            "reviewApplied", reviewApplied
         )));
         TextArtifact markdownArtifact = support.writeTextArtifact(runId, request, "script.md", scriptMarkdown);
         Map<String, Object> modelInfo = support.buildModelInfo(
             profile,
             requestedModel,
             "script",
-            response,
+            finalResponse,
             "spring-text-script"
         );
         Map<String, Object> metadata = new LinkedHashMap<>();
         metadata.put("visualStyle", visualStyle);
+        metadata.put("draftScriptMarkdown", draftScriptMarkdown);
         metadata.put("scriptMarkdown", scriptMarkdown);
+        metadata.put("reviewApplied", reviewApplied);
+        metadata.put("draftResponseId", draftResponse.responseId());
+        metadata.put("reviewResponseId", reviewResponse == null ? "" : reviewResponse.responseId());
+        metadata.put("finalResponseId", finalResponse.responseId());
+        if (!reviewFallbackReason.isBlank()) {
+            metadata.put("reviewFallbackReason", reviewFallbackReason);
+        }
         metadata.put("fileUrl", markdownArtifact.publicUrl());
         metadata.put("configSource", profile.source());
         Map<String, Object> result = new LinkedHashMap<>();
@@ -758,6 +816,77 @@ public class GenerationRunFactory {
 
             请严格遵循 system prompt 的输出格式与规则，不要输出解释性文字。
             """.formatted(styleLine, sourceText);
+    }
+
+    private String buildScriptReviewSystemPrompt() {
+        return buildScriptSystemPrompt() + """
+
+            #### 二次审校要求
+            你现在不是重新发散创作，而是作为分镜总审校，对已有分镜初稿做严格修正。
+            重点检查并修正：
+            1. 首帧/尾帧是否存在不合理、割裂、缺少场景锚点或首尾场景描述不一致。
+            2. 分镜内容描述是否过度强调运镜、光影、抒情，而没有把重点放在谁在什么场景做什么。
+            3. 是否出现与当前场景无关的场景布置、无依据新增元素、无依据新增人声。
+            4. 同一镜头内首尾帧是否真正属于同一场景、同一空间坐标系、同一 seed 理解下的连续画面。
+            5. 是否存在复杂运镜、氛围词、空泛修辞，若有必须删减为简单直接的可执行描述。
+
+            你的任务是输出“修正后的完整最终版分镜脚本”，不是输出审校意见。
+            只输出最终的 `【角色定义信息】` 和 `【分镜脚本】`。
+            """;
+    }
+
+    private String buildScriptReviewUserPrompt(String sourceText, String visualStyle, String draftScriptMarkdown) {
+        String styleLine = "AI 自动决策".equalsIgnoreCase(visualStyle) || visualStyle.isBlank()
+            ? "请保持题材匹配但不要额外发散风格。"
+            : "额外视觉风格要求：" + visualStyle + "。";
+        return """
+            # 任务说明
+            请基于原始正文与已有分镜初稿，逐镜审校并修正所有不合理的首帧描述、尾帧描述、分镜内容描述。
+
+            # 原始正文
+            %s
+
+            # 额外要求
+            %s
+
+            # 当前分镜初稿
+            %s
+
+            ---
+
+            请直接输出修正后的完整最终版分镜脚本，不要解释改了什么，不要输出审校说明。
+            """.formatted(sourceText, styleLine, draftScriptMarkdown);
+    }
+
+    private String invalidStoryboardMarkdownReason(String storyboardMarkdown) {
+        String normalized = storyboardMarkdown == null ? "" : storyboardMarkdown.trim();
+        if (normalized.isBlank()) {
+            return "review output is blank";
+        }
+        if (!normalized.contains("【角色定义信息】")) {
+            return "review output missing character definitions";
+        }
+        if (!normalized.contains("【分镜脚本】")) {
+            return "review output missing storyboard section";
+        }
+        boolean hasTableHeader = normalized.contains("| 镜号 |")
+            && normalized.contains("首帧描述")
+            && normalized.contains("尾帧描述")
+            && normalized.contains("分镜内容描述")
+            && normalized.contains("时长");
+        if (!hasTableHeader) {
+            return "review output missing storyboard table header";
+        }
+        boolean hasShotRows = normalized.lines()
+            .map(String::trim)
+            .anyMatch(line -> line.startsWith("|")
+                && !line.contains("镜号")
+                && !line.contains(":---")
+                && line.chars().filter(ch -> ch == '|').count() >= 6);
+        if (!hasShotRows) {
+            return "review output missing storyboard rows";
+        }
+        return "";
     }
 
     /**
