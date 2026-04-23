@@ -78,6 +78,22 @@ class SeedreamImageModelProviderTest {
         @SuppressWarnings("unchecked")
         java.util.List<String> referenceImages = (java.util.List<String>) body.get("reference_images");
         assertIterableEquals(java.util.List.of("https://example.com/clip1-first.png"), referenceImages);
+        assertEquals("enabled", body.get("sequential_image_generation"));
+    }
+
+    @Test
+    void buildRequestBodyDisablesSequentialGenerationWithoutReferenceImage() {
+        SeedreamImageModelProvider provider = new SeedreamImageModelProvider(new ImageProviderTransport(new com.fasterxml.jackson.databind.ObjectMapper()));
+
+        Map<String, Object> body = provider.buildSeedreamImageRequestBody(
+            "doubao-seedream-4-5-251128",
+            "a prompt",
+            "2K",
+            "",
+            null
+        );
+
+        assertEquals("disabled", body.get("sequential_image_generation"));
     }
 
     private MediaProviderProfile profile() {

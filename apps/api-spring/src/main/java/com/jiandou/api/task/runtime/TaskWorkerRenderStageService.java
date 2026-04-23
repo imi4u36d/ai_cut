@@ -157,7 +157,7 @@ final class TaskWorkerRenderStageService {
             FrameResolution endFrame = generateFrame(
                 task,
                 clipIndex,
-                lastFramePrompt,
+                buildFrameContinuityPrompt(shotPlan, lastFramePrompt, startFrame.prompt(), startFrame.videoInputUrl(), "last"),
                 request.width(),
                 request.height(),
                 startFrame.videoInputUrl(),
@@ -389,6 +389,48 @@ final class TaskWorkerRenderStageService {
         throw new IllegalStateException(
             "video run wait timeout: runId=" + runId + ", status=" + currentStatus + ", maxPolls=" + videoRunMaxPolls
         );
+    }
+
+    private String buildFrameContinuityPrompt(
+        TaskStoryboardPlanner.StoryboardShotPlan shotPlan,
+        String prompt,
+        String startFramePrompt,
+        String referenceImageUrl,
+        String frameRole
+    ) {
+        String basePrompt = firstNonBlank(
+            prompt,
+            shotPlan == null ? "" : shotPlan.lastFramePrompt(),
+            shotPlan == null ? "" : shotPlan.firstFramePrompt(),
+            shotPlan == null ? "" : shotPlan.videoPrompt(),
+            shotPlan == null ? "" : shotPlan.scene()
+        );
+        if (!"last".equalsIgnoreCase(stringValue(frameRole)) || stringValue(referenceImageUrl).isBlank()) {
+            return basePrompt;
+        }
+        List<String> parts = new ArrayList<>();
+        parts.add("你现在要生成同一镜头连续动作后的尾帧，必须严格沿用参考图已经确定的同一场景、同一机位体系、同一空间锚点、同一人物外观与服装、同一道具位置关系，禁止漂移到新的场景。");
+        String resolvedStartFramePrompt = firstNonBlank(
+            startFramePrompt,
+            shotPlan == null ? "" : shotPlan.firstFramePrompt(),
+            shotPlan == null ? "" : shotPlan.lastFramePrompt()
+        );
+        if (!resolvedStartFramePrompt.isBlank()) {
+            parts.add("参考首帧描述：" + resolvedStartFramePrompt);
+        }
+        if (shotPlan != null && !shotPlan.scene().isBlank()) {
+            parts.add("场景锚点：" + shotPlan.scene());
+        }
+        if (shotPlan != null && !shotPlan.motion().isBlank()) {
+            parts.add("镜头过程：" + shotPlan.motion());
+        }
+        if (shotPlan != null && !shotPlan.cameraMovement().isBlank() && !"static".equalsIgnoreCase(shotPlan.cameraMovement())) {
+            parts.add("运镜：" + shotPlan.cameraMovement());
+        }
+        if (!basePrompt.isBlank()) {
+            parts.add("尾帧目标：" + basePrompt);
+        }
+        return String.join("\n", parts);
     }
 
     /**

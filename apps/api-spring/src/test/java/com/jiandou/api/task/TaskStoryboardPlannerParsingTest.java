@@ -30,7 +30,7 @@ class TaskStoryboardPlannerParsingTest {
             | 镜号 | 首帧描述 (Start Frame) | 尾帧描述 (End Frame) | 分镜内容描述 | 时长 |
             | :--- | :--- | :--- | :--- | :--- |
             | 001 | Close-up of a hand pushing a heavy, weathered wooden door, cinematic lighting, dust particles in the air. | Medium shot of Lin Feng standing in the doorway, looking into the dark library, silhouette against the bright outdoor light. | 烟尘在门缝边缘轻微翻涌，镜头先紧贴手部推门动作，随后缓慢后拉并轻微右摇，带出林峰整个人物轮廓和门后的黑暗图书馆空间。木门开启时伴随连续摩擦声与鞋底碾过灰尘的闷响，远处空旷回响持续压低氛围。林峰在镜头后段压低声音说“他们来了”，尾帧固定在他站在门口的逆光剪影上，并明确为下一镜延续同一机位方向与门外逆光关系做衔接。 | 10s |
-            | 002 | Medium shot of Lin Feng standing in the doorway, looking into the dark library, silhouette against the bright outdoor light. | Close-up of Lin Feng turning his head toward the right-side bookshelf, pupils tightening as a shadow moves deeper inside. | 镜头从门口剪影位置手持贴近林峰侧脸，他向右迈一步并转头锁定书架深处的异动，背景亮部逐渐收窄，图书馆内部低照度氛围持续加深。全程无人声，仅环境声，衣料摩擦、木地板轻响和书架深处传来的细微碰撞声交替推进。尾帧落在林峰朝右侧书架锁定视线的瞬间，方便下一镜顺接同一视线方向。 | 9s |
+            | 002 | Close-up of Lin Feng already stepping deeper between the shelves, his shoulder brushing past the dust-covered spines. | Close-up of Lin Feng turning his head toward the right-side bookshelf, pupils tightening as a shadow moves deeper inside. | 镜头从门口剪影位置手持贴近林峰侧脸，他向右迈一步并转头锁定书架深处的异动，背景亮部逐渐收窄，图书馆内部低照度氛围持续加深。全程无人声，仅环境声，衣料摩擦、木地板轻响和书架深处传来的细微碰撞声交替推进。尾帧落在林峰朝右侧书架锁定视线的瞬间，方便下一镜顺接同一视线方向。 | 9s |
             """;
 
         List<TaskStoryboardPlanner.StoryboardShotPlan> shotPlans = planner.buildStoryboardShotPlans(task, storyboardMarkdown);
@@ -43,6 +43,8 @@ class TaskStoryboardPlannerParsingTest {
         assertTrue(shotPlans.get(0).videoPrompt().contains("分镜内容：烟尘在门缝边缘轻微翻涌"));
         assertEquals("Close-up of a hand pushing a heavy, weathered wooden door, cinematic lighting, dust particles in the air.", shotPlans.get(0).startFramePrompt());
         assertEquals("Medium shot of Lin Feng standing in the doorway, looking into the dark library, silhouette against the bright outdoor light.", shotPlans.get(0).endFramePrompt());
+        assertEquals(shotPlans.get(0).endFramePrompt(), shotPlans.get(1).startFramePrompt());
+        assertTrue(shotPlans.get(1).videoPrompt().contains("首帧：Medium shot of Lin Feng standing in the doorway, looking into the dark library"));
         assertTrue(shotPlans.get(1).videoPrompt().contains("无人声，仅环境声"));
         assertArrayEquals(new int[] {10, 10}, ranges.get(0));
         assertArrayEquals(new int[] {9, 9}, ranges.get(1));

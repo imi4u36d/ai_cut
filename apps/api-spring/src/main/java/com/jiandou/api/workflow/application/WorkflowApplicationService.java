@@ -1761,14 +1761,7 @@ public class WorkflowApplicationService {
     ) {
         Map<String, Object> request = new LinkedHashMap<>();
         Map<String, Object> input = new LinkedHashMap<>();
-        input.put("prompt", composeVisualPrompt(workflow, firstNonBlank(
-            prompt,
-            stringValue(clip.get("imagePrompt")),
-            stringValue(clip.get("firstFramePrompt")),
-            stringValue(clip.get("lastFramePrompt")),
-            stringValue(clip.get("videoPrompt")),
-            stringValue(clip.get("scene"))
-        )));
+        input.put("prompt", composeVisualPrompt(workflow, buildKeyframeContinuityPrompt(clip, prompt, referenceImageUrl, frameRole)));
         int[] dimensions = dimensionsFromAspectRatio(workflow.getAspectRatio());
         input.put("width", dimensions[0]);
         input.put("height", dimensions[1]);
@@ -1793,6 +1786,54 @@ public class WorkflowApplicationService {
             "fileStem", trimmed(fileStem, "clip" + clipIndex + "-" + trimmed(frameRole, "first") + "-v" + versionNo)
         ));
         return request;
+    }
+
+    private String buildKeyframeContinuityPrompt(
+        Map<String, Object> clip,
+        String prompt,
+        String referenceImageUrl,
+        String frameRole
+    ) {
+        String basePrompt = firstNonBlank(
+            prompt,
+            stringValue(clip.get("imagePrompt")),
+            stringValue(clip.get("firstFramePrompt")),
+            stringValue(clip.get("lastFramePrompt")),
+            stringValue(clip.get("videoPrompt")),
+            stringValue(clip.get("scene"))
+        );
+        if (!"last".equalsIgnoreCase(trimmed(frameRole, "first")) || isBlank(referenceImageUrl)) {
+            return basePrompt;
+        }
+        List<String> parts = new ArrayList<>();
+        parts.add("你现在要生成同一镜头连续动作后的尾帧，必须严格沿用参考图已经确定的同一场景、同一机位体系、同一空间锚点、同一人物外观与服装、同一道具位置关系，禁止跳到另一个房间、另一侧街道或完全不同的构图。");
+        String startFramePrompt = firstNonBlank(
+            stringValue(clip.get("startFrame")),
+            stringValue(clip.get("firstFramePrompt")),
+            stringValue(clip.get("imagePrompt"))
+        );
+        if (!startFramePrompt.isBlank()) {
+            parts.add("参考首帧描述：" + startFramePrompt);
+        }
+        String continuityHint = firstNonBlank(
+            stringValue(clip.get("continuityHint")),
+            stringValue(clip.get("continuity"))
+        );
+        if (!continuityHint.isBlank()) {
+            parts.add("连续性要求：" + continuityHint);
+        }
+        String motionDescription = firstNonBlank(
+            stringValue(clip.get("actionPath")),
+            stringValue(clip.get("motion")),
+            stringValue(clip.get("videoPrompt"))
+        );
+        if (!motionDescription.isBlank()) {
+            parts.add("镜头过程：" + motionDescription);
+        }
+        if (!basePrompt.isBlank()) {
+            parts.add("尾帧目标：" + basePrompt);
+        }
+        return String.join("\n", parts);
     }
 
     private Map<String, Object> buildVideoRunRequest(
@@ -1938,8 +1979,14 @@ public class WorkflowApplicationService {
         for (int index = 0; index < rawClips.size(); index++) {
             Map<String, Object> raw = rawClips.get(index) == null ? Map.of() : rawClips.get(index);
             Map<String, Object> row = new LinkedHashMap<>(raw);
+            Map<String, Object> previous = normalized.isEmpty() ? null : normalized.get(normalized.size() - 1);
             int clipIndex = intValue(raw.get("clipIndex"), index + 1);
+            String inheritedStartFrame = previous == null ? "" : firstNonBlank(
+                stringValue(previous.get("endFrame")),
+                stringValue(previous.get("lastFramePrompt"))
+            );
             String startFrame = firstNonBlank(
+                inheritedStartFrame,
                 stringValue(raw.get("startFrame")),
                 stringValue(raw.get("firstFramePrompt")),
                 stringValue(raw.get("imagePrompt")),
@@ -1960,7 +2007,7 @@ public class WorkflowApplicationService {
             row.put("shotLabel", firstNonBlank(stringValue(raw.get("shotLabel")), String.valueOf(clipIndex)));
             row.put("startFrame", startFrame);
             row.put("endFrame", endFrame);
-            row.put("firstFramePrompt", firstNonBlank(stringValue(raw.get("firstFramePrompt")), startFrame));
+            row.put("firstFramePrompt", firstNonBlank(inheritedStartFrame, stringValue(raw.get("firstFramePrompt")), startFrame));
             row.put("lastFramePrompt", firstNonBlank(stringValue(raw.get("lastFramePrompt")), endFrame));
             row.put("actionPath", actionPath);
             row.put("motion", firstNonBlank(stringValue(raw.get("motion")), actionPath));

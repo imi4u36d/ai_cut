@@ -296,6 +296,7 @@ public class TaskStoryboardPlanner {
         validateStructuredStoryboardSchema(schema);
         List<StoryboardShotPlan> shotPlans = new ArrayList<>();
         int dataRowCount = 0;
+        String previousLastFramePrompt = "";
 
         for (String rawLine : lines) {
             String stripped = rawLine.trim();
@@ -315,7 +316,7 @@ public class TaskStoryboardPlanner {
             int sequentialIndex = shotPlans.size() + 1;
             String scene = "";
             String durationHint = normalizeStoryboardPromptValue(schema.cell(cells, schema.durationIndex(), -1));
-            String firstFramePrompt = augmentCharacterAppearanceDefinitions(
+            String parsedFirstFramePrompt = augmentCharacterAppearanceDefinitions(
                 normalizeStoryboardPromptValue(schema.cell(cells, schema.firstFramePromptIndex(), -1)),
                 characterAppearances
             );
@@ -328,7 +329,10 @@ public class TaskStoryboardPlanner {
             if (cameraMovement.isBlank()) {
                 cameraMovement = "static";
             }
-            assertStructuredStoryboardRow(shotIndex, firstFramePrompt, lastFramePrompt, contentDescription, durationHint);
+            assertStructuredStoryboardRow(shotIndex, parsedFirstFramePrompt, lastFramePrompt, contentDescription, durationHint);
+            String firstFramePrompt = sequentialIndex > 1 && !previousLastFramePrompt.isBlank()
+                ? previousLastFramePrompt
+                : parsedFirstFramePrompt;
             String imagePrompt = sequentialIndex == 1 ? firstFramePrompt : "";
             String videoPrompt = buildContinuousClipPrompt(
                 firstFramePrompt,
@@ -349,6 +353,7 @@ public class TaskStoryboardPlanner {
                 imagePrompt,
                 videoPrompt
             ));
+            previousLastFramePrompt = lastFramePrompt;
         }
         if (dataRowCount == 0) {
             throw new IllegalStateException("分镜解析失败，结构化分镜表未识别到任何镜头数据行。");

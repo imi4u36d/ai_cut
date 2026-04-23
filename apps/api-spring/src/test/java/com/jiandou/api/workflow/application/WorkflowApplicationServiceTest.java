@@ -166,6 +166,9 @@ class WorkflowApplicationServiceTest {
         assertEquals("first", mapValue(requests.get(0).get("input")).get("frameRole"));
         assertEquals("last", mapValue(requests.get(1).get("input")).get("frameRole"));
         assertEquals("https://cdn.example.com/clip1-first.png", mapValue(requests.get(1).get("input")).get("referenceImageUrl"));
+        assertTrue(String.valueOf(mapValue(requests.get(1).get("input")).get("prompt")).contains("必须严格沿用参考图已经确定的同一场景"));
+        assertTrue(String.valueOf(mapValue(requests.get(1).get("input")).get("prompt")).contains("参考首帧描述：镜头开场，角色推门进入废弃图书馆。"));
+        assertTrue(String.valueOf(mapValue(requests.get(1).get("input")).get("prompt")).contains("尾帧目标：角色停在门口，回望黑暗书架。"));
 
         StageVersionEntity keyframeVersion = listStageVersions(workflow.getWorkflowId()).stream()
             .filter(item -> WorkflowConstants.STAGE_KEYFRAME.equals(item.getStageType()))
@@ -242,6 +245,30 @@ class WorkflowApplicationServiceTest {
         assertEquals(2, characterSheets.size());
         assertEquals("林舒", characterSheets.get(0).get("characterName"));
         assertFalse(listValue(characterSheets.get(0).get("versions")).isEmpty());
+    }
+
+    @Test
+    void generateKeyframeForLaterClipCarriesCurrentStartFrameIntoContinuityPrompt() {
+        StageWorkflowEntity workflow = workflow("wf_later_clip");
+        workflows.put(workflow.getWorkflowId(), workflow);
+        versions.put("sv_story", storyboardVersion(workflow.getWorkflowId(), storyboardClips()));
+        versions.put("sv_key_1", keyframeVersion(workflow.getWorkflowId(), 1, "asset_key_1", "https://cdn.example.com/clip1-last-selected.png"));
+        assets.put("asset_key_1", asset(workflow.getWorkflowId(), "asset_key_1", WorkflowConstants.STAGE_KEYFRAME, 1, "https://cdn.example.com/clip1-last-selected.png", "image/png"));
+
+        when(generationApplicationService.createRun(any())).thenReturn(
+            imageRun("run_end_clip2", "https://cdn.example.com/clip2-last.png")
+        );
+
+        service.generateKeyframe("wf_later_clip", 2);
+
+        ArgumentCaptor<Map<String, Object>> requestCaptor = ArgumentCaptor.forClass(Map.class);
+        verify(generationApplicationService, times(1)).createRun(requestCaptor.capture());
+        Map<String, Object> request = requestCaptor.getValue();
+        Map<String, Object> input = mapValue(request.get("input"));
+        assertEquals("last", input.get("frameRole"));
+        assertEquals("https://cdn.example.com/clip1-last-selected.png", input.get("referenceImageUrl"));
+        assertTrue(String.valueOf(input.get("prompt")).contains("参考首帧描述：角色停在门口，回望黑暗书架。"));
+        assertTrue(String.valueOf(input.get("prompt")).contains("尾帧目标：角色停在破旧书架前，抬头看见掉落尘埃。"));
     }
 
     @Test
@@ -751,7 +778,7 @@ class WorkflowApplicationServiceTest {
                 "clipIndex", 2,
                 "shotLabel", "02",
                 "scene", "图书馆内部",
-                "firstFramePrompt", "镜头承接门口定格，角色迈步进入书架之间。",
+                "firstFramePrompt", "角色停在门口，回望黑暗书架。",
                 "lastFramePrompt", "角色停在破旧书架前，抬头看见掉落尘埃。",
                 "motion", "人物向前两步，镜头轻微平移",
                 "cameraMovement", "slow pan",
