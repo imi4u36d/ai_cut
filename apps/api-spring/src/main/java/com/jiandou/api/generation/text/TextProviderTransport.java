@@ -43,15 +43,22 @@ public class TextProviderTransport {
             .timeout(Duration.ofSeconds(Math.max(30, timeoutSeconds)))
             .POST(HttpRequest.BodyPublishers.ofString(encode(body)))
             .build();
-        return send(request, errorPrefix);
+        return send(request, errorPrefix, Map.of("method", "POST", "url", endpoint, "body", body));
     }
 
     public HttpResponse<String> send(HttpRequest request, String errorPrefix) {
+        return send(request, errorPrefix, Map.of("method", request.method(), "url", request.uri().toString()));
+    }
+
+    public HttpResponse<String> send(HttpRequest request, String errorPrefix, Map<String, Object> requestPayload) {
         try {
             HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
             if (response.statusCode() < 200 || response.statusCode() >= 300) {
                 throw new GenerationProviderException(
-                    errorPrefix + ": http " + response.statusCode() + " " + truncate(response.body(), 320)
+                    errorPrefix + ": http " + response.statusCode() + " " + truncate(response.body(), 320),
+                    requestPayload,
+                    response.body(),
+                    response.statusCode()
                 );
             }
             return response;
@@ -59,7 +66,7 @@ public class TextProviderTransport {
             if (ex instanceof InterruptedException) {
                 Thread.currentThread().interrupt();
             }
-            throw new GenerationProviderException(errorPrefix + ": " + ex.getMessage());
+            throw new GenerationProviderException(errorPrefix + ": " + ex.getMessage(), requestPayload, null, 0);
         }
     }
 

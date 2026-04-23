@@ -91,6 +91,9 @@ class SeedanceVideoModelProviderTest {
         assertEquals("k", request.headers().firstValue("X-Api-Key").orElse(""));
         assertEquals("task_seedance_1", submission.taskId());
         assertEquals("doubao-seedance-1-5-pro-251215", submission.providerModel());
+        assertEquals(200, submission.httpStatus());
+        assertEquals("https://ark.cn-beijing.volces.com/api/v3/contents/generations/tasks", submission.providerRequest().get("endpoint"));
+        assertEquals("task_seedance_1", submission.providerResponse().get("id"));
     }
 
     @Test
@@ -114,6 +117,8 @@ class SeedanceVideoModelProviderTest {
         assertEquals("k", request.headers().firstValue("X-Api-Key").orElse(""));
         assertEquals("https://example.com/video.mp4", result.videoUrl());
         assertEquals("SUCCEEDED", result.status());
+        assertEquals(200, result.httpStatus());
+        assertEquals("https://ark.cn-beijing.volces.com/api/v3/contents/generations/tasks/task%2F123", result.requestPayload().get("url"));
     }
 
     private MediaProviderProfile profile() {

@@ -6,6 +6,7 @@ import com.jiandou.api.generation.runtime.ModelRuntimeProfile;
 import com.jiandou.api.generation.TextModelResponse;
 import java.net.http.HttpResponse;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import org.springframework.core.Ordered;
@@ -51,9 +52,18 @@ public class OpenAiCompatibleTextModelProvider implements TextModelProvider {
         );
         int latencyMs = (int) ((System.nanoTime() - startedAt) / 1_000_000L);
         Map<String, Object> responseMap = transport.decode(response.body());
+        Map<String, Object> providerRequest = new LinkedHashMap<>();
+        providerRequest.put("method", "POST");
+        providerRequest.put("endpoint", prepared.endpoint());
+        providerRequest.put("body", prepared.body());
         String text = transport.extractText(responseMap).trim();
         if (text.isBlank()) {
-            throw new GenerationProviderException((invocation.vision() ? "vision" : "text") + " model response is empty");
+            throw new GenerationProviderException(
+                (invocation.vision() ? "vision" : "text") + " model response is empty",
+                providerRequest,
+                responseMap,
+                response.statusCode()
+            );
         }
         return new TextModelResponse(
             text,
@@ -61,7 +71,10 @@ public class OpenAiCompatibleTextModelProvider implements TextModelProvider {
             transport.endpointHost(prepared.endpoint()),
             latencyMs,
             prepared.responsesApi(),
-            transport.stringValue(responseMap.get("id"))
+            transport.stringValue(responseMap.get("id")),
+            providerRequest,
+            responseMap,
+            response.statusCode()
         );
     }
 

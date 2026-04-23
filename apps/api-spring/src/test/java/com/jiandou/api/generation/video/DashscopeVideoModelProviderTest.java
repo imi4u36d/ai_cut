@@ -72,6 +72,9 @@ class DashscopeVideoModelProviderTest {
         assertEquals("enable", request.headers().firstValue("X-DashScope-Async").orElse(""));
         assertEquals("task_123", submission.taskId());
         assertEquals("wan2.2-i2v-plus", submission.providerModel());
+        assertEquals(200, submission.httpStatus());
+        assertEquals("https://dashscope.aliyuncs.com/api/v1/services/aigc/video-generation/video-synthesis", submission.providerRequest().get("endpoint"));
+        assertEquals("task_123", ((Map<?, ?>) submission.providerResponse().get("output")).get("task_id"));
     }
 
     @Test
@@ -94,6 +97,8 @@ class DashscopeVideoModelProviderTest {
         assertEquals("GET", request.method());
         assertEquals("https://example.com/video.mp4", result.videoUrl());
         assertEquals("SUCCEEDED", result.status());
+        assertEquals(200, result.httpStatus());
+        assertEquals("https://dashscope.aliyuncs.com/api/v1/tasks/task%20123", result.requestPayload().get("url"));
     }
 
     private MediaProviderProfile profile() {

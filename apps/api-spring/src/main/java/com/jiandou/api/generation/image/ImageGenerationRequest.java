@@ -1,5 +1,7 @@
 package com.jiandou.api.generation.image;
 
+import java.util.List;
+
 /**
  * 统一描述图片模型调用请求。
  * @param requestedModel 请求模型值
@@ -7,6 +9,7 @@ package com.jiandou.api.generation.image;
  * @param width width值
  * @param height height值
  * @param referenceImageUrl 参考图 URL 值
+ * @param referenceImageUrls 参考图 URL 列表值
  * @param seed 种子值
  */
 public record ImageGenerationRequest(
@@ -15,6 +18,7 @@ public record ImageGenerationRequest(
     int width,
     int height,
     String referenceImageUrl,
+    List<String> referenceImageUrls,
     Integer seed
 ) {
 }

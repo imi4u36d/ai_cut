@@ -52,7 +52,7 @@ public class ImageProviderTransport {
         for (Map.Entry<String, String> entry : extraHeaders.entrySet()) {
             builder.header(entry.getKey(), entry.getValue());
         }
-        return send(builder.build(), "provider request failed");
+        return send(builder.build(), "provider request failed", Map.of("method", "POST", "url", endpoint, "body", body));
     }
 
     public DownloadedBinary downloadBinary(String url, int timeoutSeconds) {
@@ -78,11 +78,18 @@ public class ImageProviderTransport {
     }
 
     public HttpResponse<String> send(HttpRequest request, String errorPrefix) {
+        return send(request, errorPrefix, Map.of("method", request.method(), "url", request.uri().toString()));
+    }
+
+    public HttpResponse<String> send(HttpRequest request, String errorPrefix, Map<String, Object> requestPayload) {
         try {
             HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
             if (response.statusCode() < 200 || response.statusCode() >= 300) {
                 throw new GenerationProviderException(
-                    errorPrefix + ": http " + response.statusCode() + " " + truncate(response.body(), 320)
+                    errorPrefix + ": http " + response.statusCode() + " " + truncate(response.body(), 320),
+                    requestPayload,
+                    response.body(),
+                    response.statusCode()
                 );
             }
             return response;
@@ -90,7 +97,7 @@ public class ImageProviderTransport {
             if (ex instanceof InterruptedException) {
                 Thread.currentThread().interrupt();
             }
-            throw new GenerationProviderException(errorPrefix + ": " + ex.getMessage());
+            throw new GenerationProviderException(errorPrefix + ": " + ex.getMessage(), requestPayload, null, 0);
         }
     }
 

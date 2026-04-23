@@ -117,6 +117,10 @@ public class GenerationRunFactory {
             metadata.put("latencyMs", response.latencyMs());
             metadata.put("endpointHost", response.endpointHost());
             metadata.put("messagePreview", support.truncateText(response.text(), 80));
+            metadata.put("providerRequest", response.providerRequest());
+            metadata.put("providerResponse", response.providerResponse());
+            metadata.put("providerHttpStatus", response.httpStatus());
+            metadata.put("providerInteraction", textProviderInteraction("probe", response));
             callChain.add(support.callLog("probe", "probe.completed", "success", "文本模型探活已完成。", Map.of(
                 "latencyMs", response.latencyMs(),
                 "responsesApi", response.responsesApi()
@@ -132,6 +136,12 @@ public class GenerationRunFactory {
         } catch (RuntimeException ex) {
             metadata.put("latencyMs", 0);
             metadata.put("messagePreview", support.truncateText(ex.getMessage(), 120));
+            if (ex instanceof GenerationProviderException providerException) {
+                metadata.put("providerRequest", providerException.providerRequest());
+                metadata.put("providerResponse", providerException.providerResponse());
+                metadata.put("providerHttpStatus", providerException.httpStatus());
+                metadata.put("providerInteraction", providerInteraction("probe", providerException));
+            }
             callChain.add(support.callLog("probe", "probe.failed", "error", "文本模型探活失败。", Map.of("error", support.truncateText(ex.getMessage(), 240))));
             Map<String, Object> result = new LinkedHashMap<>();
             result.put("runId", runId);
@@ -161,6 +171,7 @@ public class GenerationRunFactory {
         }
         String prompt = buildScriptUserPrompt(sourceText, visualStyle);
         List<Map<String, Object>> callChain = new ArrayList<>();
+        List<Map<String, Object>> providerInteractions = new ArrayList<>();
         TextModelResponse draftResponse = textModelProviderRegistry.resolve(profile).generate(
             profile,
             new TextCompletionInvocation(
@@ -171,6 +182,7 @@ public class GenerationRunFactory {
             )
         );
         String draftScriptMarkdown = support.stripMarkdownFence(draftResponse.text());
+        providerInteractions.add(textProviderInteraction("draft", draftResponse));
         callChain.add(support.callLog("script", "script.requested", "success", "脚本生成请求已发送到文本模型。", Map.of(
             "provider", profile.provider(),
             "modelName", profile.modelName(),
@@ -197,6 +209,7 @@ public class GenerationRunFactory {
                     Math.max(800, profile.maxTokens())
                 )
             );
+            providerInteractions.add(textProviderInteraction("review", reviewResponse));
             callChain.add(support.callLog("script", "script.review_requested", "success", "分镜脚本审校请求已发送到文本模型。", Map.of(
                 "provider", profile.provider(),
                 "modelName", profile.modelName(),
@@ -216,6 +229,9 @@ public class GenerationRunFactory {
                 )));
             }
         } catch (RuntimeException ex) {
+            if (ex instanceof GenerationProviderException providerException) {
+                providerInteractions.add(providerInteraction("review", providerException));
+            }
             reviewFallbackReason = support.truncateText(ex.getMessage(), 240);
             callChain.add(support.callLog("script", "script.review_failed", "warning", "分镜脚本审校失败，已回退初稿。", Map.of(
                 "error", reviewFallbackReason,
@@ -247,6 +263,10 @@ public class GenerationRunFactory {
         metadata.put("draftResponseId", draftResponse.responseId());
         metadata.put("reviewResponseId", reviewResponse == null ? "" : reviewResponse.responseId());
         metadata.put("finalResponseId", finalResponse.responseId());
+        metadata.put("providerInteractions", providerInteractions);
+        metadata.put("providerRequest", finalResponse.providerRequest());
+        metadata.put("providerResponse", finalResponse.providerResponse());
+        metadata.put("providerHttpStatus", finalResponse.httpStatus());
         if (!reviewFallbackReason.isBlank()) {
             metadata.put("reviewFallbackReason", reviewFallbackReason);
         }
@@ -279,6 +299,13 @@ public class GenerationRunFactory {
         Long userId = userIdFromRequest(request);
         String prompt = support.nestedValue(request, "input", "prompt", "");
         String referenceImageUrl = support.nestedValue(request, "input", "referenceImageUrl", "");
+        List<String> referenceImageUrls = new ArrayList<>(support.nestedStringList(request, "input", "referenceImageUrls"));
+        if (referenceImageUrls.isEmpty() && !referenceImageUrl.isBlank()) {
+            referenceImageUrls.add(referenceImageUrl);
+        }
+        if (referenceImageUrl.isBlank() && !referenceImageUrls.isEmpty()) {
+            referenceImageUrl = referenceImageUrls.get(0);
+        }
         String frameRole = support.normalizeFrameRole(support.nestedValue(request, "input", "frameRole", "first"));
         int width = support.nestedInt(request, "input", "width", 1024);
         int height = support.nestedInt(request, "input", "height", 1024);
@@ -303,6 +330,7 @@ public class GenerationRunFactory {
                 width,
                 height,
                 referenceImageUrl,
+                referenceImageUrls,
                 appliedImageSeed
             )
         );
@@ -347,6 +375,7 @@ public class GenerationRunFactory {
         metadata.put("promptRewriteSkipped", true);
         metadata.put("visionAnalysisSkipped", true);
         metadata.put("referenceImageUrl", referenceImageUrl);
+        metadata.put("referenceImageUrls", referenceImageUrls);
         metadata.put("requestedSeed", requestedSeed);
         metadata.put("imageGenerationSeed", appliedImageSeed);
         metadata.put("watermark", false);
@@ -354,6 +383,16 @@ public class GenerationRunFactory {
         metadata.put("provider", remoteImage.provider());
         metadata.put("providerModel", remoteImage.providerModel());
         metadata.put("requestedSize", remoteImage.requestedSize());
+        metadata.put("providerRequest", remoteImage.providerRequest());
+        metadata.put("providerResponse", remoteImage.providerResponse());
+        metadata.put("providerHttpStatus", remoteImage.httpStatus());
+        metadata.put("providerInteraction", providerInteraction(
+            "image.generate",
+            remoteImage.providerRequest(),
+            remoteImage.providerResponse(),
+            remoteImage.httpStatus(),
+            remoteImage.endpointHost()
+        ));
         result.put("metadata", metadata);
         result.put("modelInfo", support.buildMediaModelInfo(
             textProfile,
@@ -417,6 +456,7 @@ public class GenerationRunFactory {
         List<Map<String, Object>> callChain = new ArrayList<>();
         TextModelResponse visionResponse = null;
         String visionAnalysisNotes = "";
+        List<Map<String, Object>> providerInteractions = new ArrayList<>();
         if (!firstFrameUrl.isBlank()) {
             List<String> images = new ArrayList<>();
             String normalizedFirstFrameUrl = normalizeExternalMediaUrl(firstFrameUrl);
@@ -439,6 +479,7 @@ public class GenerationRunFactory {
                 )
             );
             visionAnalysisNotes = support.stripMarkdownFence(visionResponse.text());
+            providerInteractions.add(textProviderInteraction("vision", visionResponse));
             callChain.add(support.callLog("vision", "video.reference_analyzed", "success", "视觉模型已完成首尾帧分析。", Map.of(
                 "latencyMs", visionResponse.latencyMs(),
                 "endpointHost", visionResponse.endpointHost(),
@@ -467,6 +508,13 @@ public class GenerationRunFactory {
                 generateAudio
             )
         );
+        providerInteractions.add(providerInteraction(
+            "video.submit",
+            submission.providerRequest(),
+            submission.providerResponse(),
+            submission.httpStatus(),
+            submission.endpointHost()
+        ));
 
         callChain.add(support.callLog("generation", "video.submitted", "running", "远端视频任务已提交。", Map.of(
             "provider", submission.provider(),
@@ -501,6 +549,9 @@ public class GenerationRunFactory {
         metadata.put("visionAnalysisModel", visionProfile.modelName());
         metadata.put("visionAnalysisEndpointHost", visionResponse == null ? visionProfile.endpointHost() : visionResponse.endpointHost());
         metadata.put("visionAnalysisNotes", visionAnalysisNotes);
+        if (visionResponse != null) {
+            metadata.put("visionProviderInteraction", textProviderInteraction("vision", visionResponse));
+        }
         metadata.put("configSource", videoProfile.source());
         metadata.put("remoteSourceUrl", "");
         metadata.put("provider", submission.provider());
@@ -522,6 +573,17 @@ public class GenerationRunFactory {
         metadata.put("cameraFixed", cameraFixed);
         metadata.put("watermark", watermark);
         metadata.put("taskStatus", "SUBMITTED");
+        metadata.put("providerInteractions", providerInteractions);
+        metadata.put("videoSubmitRequest", submission.providerRequest());
+        metadata.put("videoSubmitResponse", submission.providerResponse());
+        metadata.put("videoSubmitHttpStatus", submission.httpStatus());
+        metadata.put("videoSubmitInteraction", providerInteraction(
+            "video.submit",
+            submission.providerRequest(),
+            submission.providerResponse(),
+            submission.httpStatus(),
+            submission.endpointHost()
+        ));
         metadata.put("storageRelativeDir", support.storageRelativeDir(request, runId));
         metadata.put("storageFileStem", support.storageFileStem(request, "video"));
         metadata.put("nextPollAt", System.currentTimeMillis());
@@ -586,6 +648,9 @@ public class GenerationRunFactory {
             if (isTransientVideoPollingError(ex)) {
                 String message = normalizeVideoPollingErrorMessage(ex);
                 metadata.put("taskMessage", message);
+                if (ex instanceof GenerationProviderException providerException) {
+                    appendProviderQueryHistory(metadata, providerInteraction("video.query", providerException));
+                }
                 metadata.put("nextPollAt", now + Math.max(1, profile.pollIntervalSeconds()) * 1000L);
                 callChain.add(support.callLog("generation", "video.poll.retry", "running", "远端视频任务轮询暂时失败，将继续重试。", Map.of(
                     "taskId", taskId,
@@ -602,6 +667,14 @@ public class GenerationRunFactory {
         }
         String remoteStatus = support.stringValue(query.status()).toUpperCase(Locale.ROOT);
         metadata.put("taskStatus", remoteStatus);
+        metadata.put("providerPayload", query.payload());
+        appendProviderQueryHistory(metadata, providerInteraction(
+            "video.query",
+            query.requestPayload(),
+            query.payload(),
+            query.httpStatus(),
+            profile.taskEndpointHost()
+        ));
         if (!support.stringValue(query.message()).isBlank()) {
             metadata.put("taskMessage", query.message());
         }
@@ -639,7 +712,6 @@ public class GenerationRunFactory {
                 providerLastFrameUrl,
                 support.stringValue(metadata.get("requestedLastFrameUrl"))
             );
-            metadata.put("providerPayload", query.payload());
             metadata.put("providerLastFrameUrl", providerLastFrameUrl);
             metadata.put("lastFrameUrl", resolvedLastFrameUrl);
             metadata.put("last_frame_url", resolvedLastFrameUrl);
@@ -1020,6 +1092,88 @@ public class GenerationRunFactory {
             }
         }
         return "";
+    }
+
+    private Map<String, Object> textProviderInteraction(String step, TextModelResponse response) {
+        Map<String, Object> interaction = providerInteraction(
+            step,
+            response == null ? Map.of() : response.providerRequest(),
+            response == null ? Map.of() : response.providerResponse(),
+            response == null ? 0 : response.httpStatus(),
+            response == null ? "" : response.endpointHost()
+        );
+        interaction.put("responseId", response == null ? "" : response.responseId());
+        interaction.put("responsesApi", response != null && response.responsesApi());
+        interaction.put("latencyMs", response == null ? 0 : response.latencyMs());
+        return interaction;
+    }
+
+    private Map<String, Object> providerInteraction(String step, GenerationProviderException ex) {
+        Map<String, Object> interaction = providerInteraction(
+            step,
+            ex == null ? Map.of() : ex.providerRequest(),
+            ex == null ? null : ex.providerResponse(),
+            ex == null ? 0 : ex.httpStatus(),
+            endpointHostFromProviderRequest(ex == null ? Map.of() : ex.providerRequest())
+        );
+        interaction.put("success", false);
+        interaction.put("error", ex == null ? "" : support.stringValue(ex.getMessage()));
+        return interaction;
+    }
+
+    private Map<String, Object> providerInteraction(
+        String step,
+        Map<String, Object> providerRequest,
+        Object providerResponse,
+        int httpStatus,
+        String endpointHost
+    ) {
+        Map<String, Object> interaction = new LinkedHashMap<>();
+        interaction.put("step", step);
+        interaction.put("providerRequest", providerRequest == null ? Map.of() : providerRequest);
+        interaction.put("providerResponse", providerResponse);
+        interaction.put("httpStatus", httpStatus);
+        interaction.put("endpointHost", endpointHost == null ? "" : endpointHost);
+        interaction.put("success", httpStatus <= 0 || (httpStatus >= 200 && httpStatus < 300));
+        return interaction;
+    }
+
+    @SuppressWarnings("unchecked")
+    private void appendProviderQueryHistory(Map<String, Object> metadata, Map<String, Object> interaction) {
+        List<Map<String, Object>> history = new ArrayList<>();
+        Object raw = metadata.get("providerQueryHistory");
+        if (raw instanceof List<?> list) {
+            for (Object item : list) {
+                if (item instanceof Map<?, ?> map) {
+                    Map<String, Object> row = new LinkedHashMap<>();
+                    for (Map.Entry<?, ?> entry : map.entrySet()) {
+                        row.put(String.valueOf(entry.getKey()), entry.getValue());
+                    }
+                    history.add(row);
+                }
+            }
+        }
+        history.add(interaction);
+        metadata.put("providerQueryHistory", history);
+    }
+
+    private String endpointHostFromProviderRequest(Map<String, Object> providerRequest) {
+        if (providerRequest == null || providerRequest.isEmpty()) {
+            return "";
+        }
+        String endpoint = support.firstNonBlank(
+            support.stringValue(providerRequest.get("endpoint")),
+            support.stringValue(providerRequest.get("url"))
+        );
+        if (endpoint.isBlank()) {
+            return "";
+        }
+        try {
+            String host = URI.create(endpoint).getHost();
+            return host == null ? "" : host;
+        } catch (Exception ignored) {
+            return "";
+        }
     }
 
     /**

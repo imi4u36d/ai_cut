@@ -126,6 +126,24 @@ public class GenerationRunSupport {
         return defaultValue;
     }
 
+    public List<String> nestedStringList(Map<String, Object> payload, String parentKey, String childKey) {
+        Object parent = payload.get(parentKey);
+        if (!(parent instanceof Map<?, ?> map)) {
+            return List.of();
+        }
+        Object child = map.get(childKey);
+        if (!(child instanceof List<?> values)) {
+            return List.of();
+        }
+        List<String> result = new ArrayList<>();
+        for (Object value : values) {
+            if (value instanceof String text && !text.isBlank()) {
+                result.add(text.trim());
+            }
+        }
+        return result;
+    }
+
     /**
      * 映射值。
      * @param value 待处理的值

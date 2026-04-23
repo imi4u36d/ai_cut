@@ -266,6 +266,8 @@ class GenerationRunFactoryVideoAsyncTest {
         Map<String, Object> metadata = (Map<String, Object>) result.get("metadata");
         assertEquals("task_123", metadata.get("taskId"));
         assertEquals("", result.get("outputUrl"));
+        assertNotNull(metadata.get("videoSubmitInteraction"));
+        assertEquals(1, ((java.util.List<?>) metadata.get("providerInteractions")).size());
         assertTrue(String.valueOf(result.get("negativePrompt")).contains("前0.5秒和后0.5秒"));
         assertTrue(String.valueOf(result.get("negativePrompt")).contains("物理规律"));
         assertTrue(String.valueOf(result.get("shapedPrompt")).contains("违背基本物理规律"));
@@ -286,6 +288,7 @@ class GenerationRunFactoryVideoAsyncTest {
         assertEquals("https://example.com/generated-last-frame.png", refreshedMetadata.get("lastFrameUrl"));
         assertEquals("https://example.com/generated-last-frame.png", refreshedMetadata.get("last_frame_url"));
         assertNotNull(refreshedMetadata.get("providerPayload"));
+        assertEquals(1, ((java.util.List<?>) refreshedMetadata.get("providerQueryHistory")).size());
         assertNotNull(refreshedResult.get("callChain"));
     }
 
@@ -581,6 +584,7 @@ class GenerationRunFactoryVideoAsyncTest {
         Map<String, Object> refreshedMetadata = (Map<String, Object>) refreshedResult.get("metadata");
         assertEquals("seedance task query failed: http 504 upstream gateway timeout", refreshedMetadata.get("taskMessage"));
         assertNotNull(refreshedMetadata.get("nextPollAt"));
+        assertEquals(1, ((java.util.List<?>) refreshedMetadata.get("providerQueryHistory")).size());
         assertTrue(String.valueOf(refreshedResult.get("callChain")).contains("video.poll.retry"));
     }
 

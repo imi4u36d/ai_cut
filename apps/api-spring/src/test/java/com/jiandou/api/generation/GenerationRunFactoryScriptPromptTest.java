@@ -136,7 +136,10 @@ class GenerationRunFactoryScriptPromptTest {
                         "api.example.com",
                         10,
                         true,
-                        "resp_script_draft"
+                        "resp_script_draft",
+                        Map.of("endpoint", "https://api.example.com/v1/responses", "body", Map.of("model", "gpt-text")),
+                        Map.of("id", "resp_script_draft"),
+                        200
                     );
                 }
                 capturedReviewSystemPrompt[0] = textInvocation.systemPrompt();
@@ -155,7 +158,10 @@ class GenerationRunFactoryScriptPromptTest {
                     "api.example.com",
                     10,
                     true,
-                    "resp_script_review"
+                    "resp_script_review",
+                    Map.of("endpoint", "https://api.example.com/v1/responses", "body", Map.of("model", "gpt-text")),
+                    Map.of("id", "resp_script_review"),
+                    200
                 );
             }
         });
@@ -187,6 +193,8 @@ class GenerationRunFactoryScriptPromptTest {
         Map<String, Object> metadata = (Map<String, Object>) result.get("metadata");
         assertTrue(String.valueOf(metadata.get("draftScriptMarkdown")).contains("林舒站在桌边。"));
         assertEquals(true, metadata.get("reviewApplied"));
+        assertEquals(2, ((java.util.List<?>) metadata.get("providerInteractions")).size());
+        assertTrue(String.valueOf(metadata.get("providerRequest")).contains("https://api.example.com/v1/responses"));
     }
 
     /**
@@ -222,7 +230,10 @@ class GenerationRunFactoryScriptPromptTest {
                         "api.example.com",
                         10,
                         true,
-                        "resp_script_draft"
+                        "resp_script_draft",
+                        Map.of("endpoint", "https://api.example.com/v1/responses", "body", Map.of("model", "gpt-text")),
+                        Map.of("id", "resp_script_draft"),
+                        200
                     );
                 }
                 return new TextModelResponse(
@@ -231,7 +242,10 @@ class GenerationRunFactoryScriptPromptTest {
                     "api.example.com",
                     12,
                     true,
-                    "resp_script_review_invalid"
+                    "resp_script_review_invalid",
+                    Map.of("endpoint", "https://api.example.com/v1/responses", "body", Map.of("model", "gpt-text")),
+                    Map.of("id", "resp_script_review_invalid"),
+                    200
                 );
             }
         });
@@ -255,6 +269,7 @@ class GenerationRunFactoryScriptPromptTest {
         assertEquals("resp_script_draft", metadata.get("finalResponseId"));
         assertEquals("resp_script_review_invalid", metadata.get("reviewResponseId"));
         assertEquals("review output missing character definitions", metadata.get("reviewFallbackReason"));
+        assertEquals(2, ((java.util.List<?>) metadata.get("providerInteractions")).size());
     }
 
     /**

@@ -1,6 +1,7 @@
 package com.jiandou.api.generation.text;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -44,6 +45,10 @@ class OpenAiCompatibleTextModelProviderTest {
         assertEquals("POST", request.method());
         assertEquals("OK", result.text());
         assertEquals(true, result.responsesApi());
+        assertEquals(200, result.httpStatus());
+        assertEquals("https://api.example.com/v1/responses", result.providerRequest().get("endpoint"));
+        assertEquals("resp_1", result.providerResponse().get("id"));
+        assertTrue(String.valueOf(result.providerRequest().get("body")).contains("gpt-text"));
     }
 
     @Test
@@ -69,6 +74,9 @@ class OpenAiCompatibleTextModelProviderTest {
         assertEquals(URI.create("https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions"), request.uri());
         assertEquals(false, result.responsesApi());
         assertEquals("vision notes", result.text());
+        assertEquals(200, result.httpStatus());
+        assertEquals("https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions", result.providerRequest().get("endpoint"));
+        assertEquals("resp_2", result.providerResponse().get("id"));
     }
 
     private ModelRuntimeProfile responsesProfile() {

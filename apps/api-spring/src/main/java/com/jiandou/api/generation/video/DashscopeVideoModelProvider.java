@@ -57,7 +57,12 @@ public class DashscopeVideoModelProvider implements VideoModelProvider {
         Map<String, Object> submitPayload = transport.decode(submitResponse.body());
         String taskId = transport.extractTaskId(submitPayload);
         if (taskId.isBlank()) {
-            throw new GenerationProviderException("dashscope video task response missing task id");
+            throw new GenerationProviderException(
+                "dashscope video task response missing task id",
+                Map.of("method", "POST", "endpoint", profile.baseUrl(), "body", body),
+                submitPayload,
+                submitResponse.statusCode()
+            );
         }
         return new RemoteVideoTaskSubmission(
             profile.provider(),
@@ -71,7 +76,10 @@ public class DashscopeVideoModelProvider implements VideoModelProvider {
             false,
             true,
             request.prompt(),
-            0
+            0,
+            Map.of("method", "POST", "endpoint", profile.baseUrl(), "body", body),
+            submitPayload,
+            submitResponse.statusCode()
         );
     }
 
@@ -93,12 +101,15 @@ public class DashscopeVideoModelProvider implements VideoModelProvider {
             .build();
         HttpResponse<String> response = transport.send(request, "dashscope task query failed");
         Map<String, Object> payload = transport.decode(response.body());
+        Map<String, Object> requestPayload = Map.of("method", "GET", "url", pollUrl);
         return new RemoteTaskQueryResult(
             blankTo(transport.extractTaskId(payload), normalizedTaskId),
             transport.extractTaskStatus(payload),
             transport.extractVideoUrl(payload),
             transport.extractTaskMessage(payload),
-            payload
+            payload,
+            requestPayload,
+            response.statusCode()
         );
     }
 

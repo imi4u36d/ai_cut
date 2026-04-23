@@ -19,6 +19,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.jiandou.api.auth.security.CurrentUserPrincipal;
+import com.jiandou.api.generation.exception.GenerationProviderException;
 import com.jiandou.api.generation.application.GenerationApplicationService;
 import com.jiandou.api.media.LocalMediaArtifactService;
 import com.jiandou.api.task.application.TaskStoryboardPlanner;
@@ -334,8 +335,10 @@ class WorkflowApplicationServiceTest {
             )
         ));
         when(generationApplicationService.createRun(any())).thenReturn(
-            imageRun("run_match_start", "https://cdn.example.com/match-first.png"),
-            imageRun("run_match_end", "https://cdn.example.com/match-last.png")
+            imageRun("run_sheet_match_1", "/storage/workflows/wf_character_match/keyframes/character-sheet-1.png", "https://cdn.example.com/character-sheet-1-remote.png"),
+            imageRun("run_sheet_match_2", "/storage/workflows/wf_character_match/keyframes/character-sheet-2.png", "https://cdn.example.com/character-sheet-2-remote.png"),
+            imageRun("run_match_start", "/storage/workflows/wf_character_match/keyframes/match-first.png", "https://cdn.example.com/match-first-remote.png"),
+            imageRun("run_match_end", "/storage/workflows/wf_character_match/keyframes/match-last.png", "https://cdn.example.com/match-last-remote.png")
         );
 
         Map<String, Object> detail = service.generateKeyframe("wf_character_match", 1);
@@ -347,6 +350,14 @@ class WorkflowApplicationServiceTest {
         assertTrue(lastPrompt.contains("角色一致性绑定"));
         assertTrue(lastPrompt.contains("林舒：鬓角垂落一缕碎发"));
         assertTrue(lastPrompt.contains("周泽：穿着深灰休闲西装外套"));
+        assertEquals(
+            List.of(
+                "https://cdn.example.com/match-first-remote.png",
+                "https://cdn.example.com/character-sheet-1-remote.png",
+                "https://cdn.example.com/character-sheet-2-remote.png"
+            ),
+            listValue(mapValue(requests.get(3).get("input")).get("referenceImageUrls"))
+        );
 
         List<Map<String, Object>> clipSlots = listValue(detail.get("clipSlots"));
         Map<String, Object> clipSlot = clipSlots.get(0);
@@ -471,9 +482,14 @@ class WorkflowApplicationServiceTest {
         StageWorkflowEntity workflow = workflow("wf_story_fail");
         workflow.setSelectedStoryboardVersionId("");
         workflows.put(workflow.getWorkflowId(), workflow);
-        when(generationApplicationService.createRun(any())).thenThrow(new IllegalStateException("text model response is empty"));
+        when(generationApplicationService.createRun(any())).thenThrow(new GenerationProviderException(
+            "text model response is empty",
+            Map.of("method", "POST", "endpoint", "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions", "body", Map.of("model", "qwen3.6-flash")),
+            Map.of("id", "resp_empty", "choices", List.of()),
+            200
+        ));
 
-        IllegalStateException exception = assertThrows(IllegalStateException.class, () -> service.generateStoryboard("wf_story_fail"));
+        GenerationProviderException exception = assertThrows(GenerationProviderException.class, () -> service.generateStoryboard("wf_story_fail"));
 
         assertEquals("text model response is empty", exception.getMessage());
         verify(workflowRepository, times(2)).saveSystemLog(
@@ -485,7 +501,14 @@ class WorkflowApplicationServiceTest {
             anyString(),
             any()
         );
-        verify(workflowRepository).saveModelCall(org.mockito.ArgumentMatchers.eq("wf_story_fail"), any());
+        ArgumentCaptor<Map<String, Object>> captor = ArgumentCaptor.forClass(Map.class);
+        verify(workflowRepository).saveModelCall(org.mockito.ArgumentMatchers.eq("wf_story_fail"), captor.capture());
+        Map<String, Object> modelCall = captor.getValue();
+        Map<String, Object> responsePayload = mapValue(modelCall.get("responsePayload"));
+        assertEquals(200, modelCall.get("httpStatus"));
+        assertEquals(200, responsePayload.get("httpStatus"));
+        assertFalse(mapValue(responsePayload.get("providerRequest")).isEmpty());
+        assertFalse(mapValue(responsePayload.get("providerResponse")).isEmpty());
     }
 
     @Test
@@ -514,6 +537,9 @@ class WorkflowApplicationServiceTest {
         assertEquals("run_story_1", modelCall.get("requestId"));
         assertFalse(mapValue(modelCall.get("requestPayload")).isEmpty());
         assertFalse(mapValue(modelCall.get("responsePayload")).isEmpty());
+        Map<String, Object> run = mapValue(mapValue(modelCall.get("responsePayload")).get("run"));
+        Map<String, Object> metadata = mapValue(mapValue(run.get("result")).get("metadata"));
+        assertFalse(listValue(metadata.get("providerInteractions")).isEmpty());
     }
 
     @Test
@@ -928,6 +954,19 @@ class WorkflowApplicationServiceTest {
                 "markdownUrl", markdownUrl,
                 "mimeType", "text/markdown",
                 "latencyMs", 321,
+                "metadata", Map.of(
+                    "providerRequest", Map.of("endpoint", "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions"),
+                    "providerResponse", Map.of("id", "resp_story_1"),
+                    "providerHttpStatus", 200,
+                    "providerInteractions", List.of(
+                        Map.of(
+                            "step", "draft",
+                            "providerRequest", Map.of("endpoint", "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions"),
+                            "providerResponse", Map.of("id", "resp_story_1"),
+                            "httpStatus", 200
+                        )
+                    )
+                ),
                 "modelInfo", Map.of(
                     "provider", "qwen",
                     "providerModel", "qwen3.6-plus",

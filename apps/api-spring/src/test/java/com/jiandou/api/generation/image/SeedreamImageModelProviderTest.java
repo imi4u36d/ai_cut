@@ -22,7 +22,7 @@ class SeedreamImageModelProviderTest {
             "doubao-seedream-5-0-260128",
             "a prompt",
             "1K",
-            "",
+            java.util.List.of(),
             42
         );
 
@@ -53,7 +53,7 @@ class SeedreamImageModelProviderTest {
 
         RemoteImageGenerationResult result = provider.generate(
             profile(),
-            new ImageGenerationRequest("seedream-4.5", "a prompt", 720, 1280, "", null)
+            new ImageGenerationRequest("seedream-4.5", "a prompt", 720, 1280, "", java.util.List.of(), null)
         );
 
         assertArrayEquals(new byte[] {1, 2, 3}, result.data());
@@ -61,6 +61,9 @@ class SeedreamImageModelProviderTest {
         assertEquals("https://example.com/image.png", result.remoteSourceUrl());
         assertEquals("doubao-seedream-4-5-251128", result.providerModel());
         assertEquals("2K", result.requestedSize());
+        assertEquals(200, result.httpStatus());
+        assertEquals("https://api.example.com/v1/images", result.providerRequest().get("endpoint"));
+        assertEquals("https://example.com/image.png", result.providerResponse().toString().contains("https://example.com/image.png") ? "https://example.com/image.png" : "");
     }
 
     @Test
@@ -71,13 +74,11 @@ class SeedreamImageModelProviderTest {
             "doubao-seedream-4-5-251128",
             "a prompt",
             "2K",
-            "https://example.com/clip1-first.png",
+            java.util.List.of("https://example.com/clip1-first.png"),
             null
         );
 
-        @SuppressWarnings("unchecked")
-        java.util.List<String> referenceImages = (java.util.List<String>) body.get("reference_images");
-        assertIterableEquals(java.util.List.of("https://example.com/clip1-first.png"), referenceImages);
+        assertEquals("https://example.com/clip1-first.png", body.get("image"));
         assertEquals("auto", body.get("sequential_image_generation"));
     }
 
@@ -89,11 +90,29 @@ class SeedreamImageModelProviderTest {
             "doubao-seedream-4-5-251128",
             "a prompt",
             "2K",
-            "",
+            java.util.List.of(),
             null
         );
 
         assertEquals("disabled", body.get("sequential_image_generation"));
+    }
+
+    @Test
+    void buildRequestBodyIncludesMultipleReferenceImages() {
+        SeedreamImageModelProvider provider = new SeedreamImageModelProvider(new ImageProviderTransport(new com.fasterxml.jackson.databind.ObjectMapper()));
+
+        Map<String, Object> body = provider.buildSeedreamImageRequestBody(
+            "doubao-seedream-4-5-251128",
+            "a prompt",
+            "2K",
+            java.util.List.of("https://example.com/character-1.png", "https://example.com/character-2.png"),
+            null
+        );
+
+        @SuppressWarnings("unchecked")
+        java.util.List<String> referenceImages = (java.util.List<String>) body.get("image");
+        assertIterableEquals(java.util.List.of("https://example.com/character-1.png", "https://example.com/character-2.png"), referenceImages);
+        assertEquals("auto", body.get("sequential_image_generation"));
     }
 
     private MediaProviderProfile profile() {
