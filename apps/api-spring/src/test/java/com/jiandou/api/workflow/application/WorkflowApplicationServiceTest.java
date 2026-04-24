@@ -453,6 +453,29 @@ class WorkflowApplicationServiceTest {
     }
 
     @Test
+    void generateVideoAppendsExtraPromptToVideoRequest() {
+        StageWorkflowEntity workflow = workflow("wf_video_extra");
+        workflows.put(workflow.getWorkflowId(), workflow);
+        versions.put("sv_story", storyboardVersion(workflow.getWorkflowId(), storyboardClips()));
+        versions.put("sv_key_extra", keyframeVersion(workflow.getWorkflowId(), 1, "asset_key_extra", "https://cdn.example.com/clip1-last-extra.png"));
+        assets.put("asset_key_extra", asset(workflow.getWorkflowId(), "asset_key_extra", WorkflowConstants.STAGE_KEYFRAME, 1, "https://cdn.example.com/clip1-last-extra.png", "image/png"));
+        when(generationApplicationService.createRun(any())).thenReturn(videoRun(
+            "run_video_extra",
+            "https://cdn.example.com/clip1-extra.mp4",
+            "https://cdn.example.com/clip1-first-extra.png",
+            "https://cdn.example.com/clip1-last-extra.png",
+            "https://cdn.example.com/clip1-generated-last-extra.png"
+        ));
+
+        service.generateVideo("wf_video_extra", 1, "补充要求：镜头运动更稳定，结尾停顿半秒。");
+
+        ArgumentCaptor<Map<String, Object>> requestCaptor = ArgumentCaptor.forClass(Map.class);
+        verify(generationApplicationService).createRun(requestCaptor.capture());
+        Map<String, Object> input = mapValue(requestCaptor.getValue().get("input"));
+        assertTrue(String.valueOf(input.get("prompt")).contains("额外追加生成要求：补充要求：镜头运动更稳定，结尾停顿半秒。"));
+    }
+
+    @Test
     void workflowDetailResolvesSecondClipStartFrameFromCurrentPreviousSelection() {
         StageWorkflowEntity workflow = workflow("wf_detail_sync");
         workflow.setSelectedStoryboardVersionId("sv_story");
@@ -543,6 +566,44 @@ class WorkflowApplicationServiceTest {
     }
 
     @Test
+    void generateStoryboardPassesExtraPromptToScriptRun() {
+        StageWorkflowEntity workflow = workflow("wf_story_extra");
+        workflow.setSelectedStoryboardVersionId("");
+        workflows.put(workflow.getWorkflowId(), workflow);
+        when(generationApplicationService.createRun(any())).thenReturn(scriptRun(
+            "run_story_extra",
+            generatedStoryboardMarkdown(),
+            "https://cdn.example.com/storyboard-extra.md"
+        ));
+
+        service.generateStoryboard("wf_story_extra", "补充要求：加强结尾停顿感。");
+
+        ArgumentCaptor<Map<String, Object>> requestCaptor = ArgumentCaptor.forClass(Map.class);
+        verify(generationApplicationService).createRun(requestCaptor.capture());
+        Map<String, Object> input = mapValue(requestCaptor.getValue().get("input"));
+        assertEquals("补充要求：加强结尾停顿感。", input.get("extraPrompt"));
+    }
+
+    @Test
+    void generateKeyframeAppendsExtraPromptToImageRequests() {
+        StageWorkflowEntity workflow = workflow("wf_key_extra");
+        workflows.put(workflow.getWorkflowId(), workflow);
+        versions.put("sv_story", storyboardVersion(workflow.getWorkflowId(), storyboardClips()));
+        when(generationApplicationService.createRun(any())).thenReturn(
+            imageRun("run_start_extra", "https://cdn.example.com/clip1-first-extra.png"),
+            imageRun("run_end_extra", "https://cdn.example.com/clip1-last-extra.png")
+        );
+
+        service.generateKeyframe("wf_key_extra", 1, "补充要求：人物抬手动作再克制一点。");
+
+        ArgumentCaptor<Map<String, Object>> requestCaptor = ArgumentCaptor.forClass(Map.class);
+        verify(generationApplicationService, times(2)).createRun(requestCaptor.capture());
+        List<Map<String, Object>> requests = requestCaptor.getAllValues();
+        assertTrue(String.valueOf(mapValue(requests.get(0).get("input")).get("prompt")).contains("额外追加生成要求：补充要求：人物抬手动作再克制一点。"));
+        assertTrue(String.valueOf(mapValue(requests.get(1).get("input")).get("prompt")).contains("额外追加生成要求：补充要求：人物抬手动作再克制一点。"));
+    }
+
+    @Test
     void selectCharacterSheetKeepsWorkflowInKeyframeStage() {
         StageWorkflowEntity workflow = workflow("wf_select_sheet");
         workflows.put(workflow.getWorkflowId(), workflow);
@@ -561,6 +622,31 @@ class WorkflowApplicationServiceTest {
         List<Map<String, Object>> characterSheets = listValue(detail.get("characterSheets"));
         List<Map<String, Object>> sheetVersions = listValue(characterSheets.get(0).get("versions"));
         assertTrue(sheetVersions.stream().anyMatch(item -> "sv_sheet_2".equals(item.get("id")) && Boolean.TRUE.equals(item.get("selected"))));
+    }
+
+    @Test
+    void selectStoryboardHidesKeyframesAndVideosFromPreviousStoryboardVersion() {
+        StageWorkflowEntity workflow = workflow("wf_select_storyboard");
+        workflow.setSelectedStoryboardVersionId("sv_story_old");
+        workflows.put(workflow.getWorkflowId(), workflow);
+        versions.put("sv_story_old", customStoryboardVersion(workflow.getWorkflowId(), "sv_story_old", 1, true, storyboardClips()));
+        versions.put("sv_story_new", customStoryboardVersion(workflow.getWorkflowId(), "sv_story_new", 2, false, storyboardClips()));
+        versions.put("sv_key_old", customKeyframeVersion(workflow.getWorkflowId(), "sv_key_old", 1, 1, "sv_story_old", "asset_key_old", true));
+        versions.put("sv_video_old", customVideoVersion(workflow.getWorkflowId(), "sv_video_old", 1, 1, "sv_key_old", "asset_video_old", true));
+        assets.put("asset_key_old", asset(workflow.getWorkflowId(), "asset_key_old", WorkflowConstants.STAGE_KEYFRAME, 1, "https://cdn.example.com/key-old.png", "image/png"));
+        assets.put("asset_video_old", asset(workflow.getWorkflowId(), "asset_video_old", WorkflowConstants.STAGE_VIDEO, 1, "https://cdn.example.com/video-old.mp4", "video/mp4"));
+
+        Map<String, Object> detail = service.selectStoryboard("wf_select_storyboard", "sv_story_new");
+
+        assertEquals("sv_story_new", detail.get("selectedStoryboardVersionId"));
+        List<Map<String, Object>> clipSlots = listValue(detail.get("clipSlots"));
+        assertFalse(clipSlots.isEmpty());
+        assertTrue(listValue(clipSlots.get(0).get("keyframeVersions")).isEmpty());
+        assertTrue(listValue(clipSlots.get(0).get("videoVersions")).isEmpty());
+        assertEquals(0, versions.get("sv_key_old").getSelected());
+        assertEquals(0, versions.get("sv_video_old").getSelected());
+        assertEquals(0, versions.get("sv_key_old").getIsDeleted());
+        assertEquals(0, versions.get("sv_video_old").getIsDeleted());
     }
 
     @Test

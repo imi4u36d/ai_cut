@@ -11,6 +11,11 @@ import type {
   WorkflowSummary,
 } from "@/types";
 
+function buildGeneratePayload(extraPrompt?: string | null) {
+  const normalized = typeof extraPrompt === "string" ? extraPrompt.trim() : "";
+  return normalized ? { extraPrompt: normalized } : {};
+}
+
 export function createWorkflow(payload: CreateWorkflowRequest) {
   return postJson<WorkflowDetail>("/workflows", payload);
 }
@@ -27,8 +32,8 @@ export function deleteWorkflow(workflowId: string) {
   return deleteJson<WorkflowDeleteResult>(`/workflows/${encodeURIComponent(workflowId)}`);
 }
 
-export function generateStoryboard(workflowId: string) {
-  return postJson<WorkflowDetail>(`/workflows/${encodeURIComponent(workflowId)}/storyboards/generate`, {});
+export function generateStoryboard(workflowId: string, extraPrompt?: string | null) {
+  return postJson<WorkflowDetail>(`/workflows/${encodeURIComponent(workflowId)}/storyboards/generate`, buildGeneratePayload(extraPrompt));
 }
 
 export function selectStoryboard(workflowId: string, versionId: string) {
@@ -38,8 +43,8 @@ export function selectStoryboard(workflowId: string, versionId: string) {
   );
 }
 
-export function generateKeyframe(workflowId: string, clipIndex: number) {
-  return postJson<WorkflowDetail>(`/workflows/${encodeURIComponent(workflowId)}/clips/${clipIndex}/keyframes/generate`, {});
+export function generateKeyframe(workflowId: string, clipIndex: number, extraPrompt?: string | null) {
+  return postJson<WorkflowDetail>(`/workflows/${encodeURIComponent(workflowId)}/clips/${clipIndex}/keyframes/generate`, buildGeneratePayload(extraPrompt));
 }
 
 export function selectKeyframe(workflowId: string, clipIndex: number, versionId: string) {
@@ -49,8 +54,8 @@ export function selectKeyframe(workflowId: string, clipIndex: number, versionId:
   );
 }
 
-export function generateVideo(workflowId: string, clipIndex: number) {
-  return postJson<WorkflowDetail>(`/workflows/${encodeURIComponent(workflowId)}/clips/${clipIndex}/videos/generate`, {});
+export function generateVideo(workflowId: string, clipIndex: number, extraPrompt?: string | null) {
+  return postJson<WorkflowDetail>(`/workflows/${encodeURIComponent(workflowId)}/clips/${clipIndex}/videos/generate`, buildGeneratePayload(extraPrompt));
 }
 
 export function selectVideo(workflowId: string, clipIndex: number, versionId: string) {

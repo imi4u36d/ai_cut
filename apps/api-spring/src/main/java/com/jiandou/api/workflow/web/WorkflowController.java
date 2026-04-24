@@ -3,6 +3,7 @@ package com.jiandou.api.workflow.web;
 import com.jiandou.api.config.ApiPathConstants;
 import com.jiandou.api.workflow.application.WorkflowApplicationService;
 import com.jiandou.api.workflow.web.dto.CreateWorkflowRequest;
+import com.jiandou.api.workflow.web.dto.GenerateStageRequest;
 import com.jiandou.api.workflow.web.dto.RateStageVersionRequest;
 import com.jiandou.api.workflow.web.dto.RateWorkflowRequest;
 import java.util.List;
@@ -48,8 +49,11 @@ public class WorkflowController {
     }
 
     @PostMapping("/{workflowId}/storyboards/generate")
-    public Map<String, Object> generateStoryboard(@PathVariable String workflowId) {
-        return workflowService.generateStoryboard(workflowId);
+    public Map<String, Object> generateStoryboard(
+        @PathVariable String workflowId,
+        @RequestBody(required = false) GenerateStageRequest request
+    ) {
+        return workflowService.generateStoryboard(workflowId, request == null ? "" : request.extraPrompt());
     }
 
     @PostMapping("/{workflowId}/storyboards/{versionId}/select")
@@ -58,8 +62,12 @@ public class WorkflowController {
     }
 
     @PostMapping("/{workflowId}/clips/{clipIndex}/keyframes/generate")
-    public Map<String, Object> generateKeyframe(@PathVariable String workflowId, @PathVariable int clipIndex) {
-        return workflowService.generateKeyframe(workflowId, clipIndex);
+    public Map<String, Object> generateKeyframe(
+        @PathVariable String workflowId,
+        @PathVariable int clipIndex,
+        @RequestBody(required = false) GenerateStageRequest request
+    ) {
+        return workflowService.generateKeyframe(workflowId, clipIndex, request == null ? "" : request.extraPrompt());
     }
 
     @PostMapping("/{workflowId}/clips/{clipIndex}/keyframes/{versionId}/select")
@@ -68,8 +76,12 @@ public class WorkflowController {
     }
 
     @PostMapping("/{workflowId}/clips/{clipIndex}/videos/generate")
-    public Map<String, Object> generateVideo(@PathVariable String workflowId, @PathVariable int clipIndex) {
-        return workflowService.generateVideo(workflowId, clipIndex);
+    public Map<String, Object> generateVideo(
+        @PathVariable String workflowId,
+        @PathVariable int clipIndex,
+        @RequestBody(required = false) GenerateStageRequest request
+    ) {
+        return workflowService.generateVideo(workflowId, clipIndex, request == null ? "" : request.extraPrompt());
     }
 
     @PostMapping("/{workflowId}/clips/{clipIndex}/videos/{versionId}/select")

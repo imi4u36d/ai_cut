@@ -52,6 +52,7 @@ class GenerationRunFactoryScriptPromptTest {
         首尾帧描述和分镜内容描述都只能描述当前镜头内部已经发生或正在发生的内容
         首尾帧描述只允许写当前画面中实际可见且会影响构图的场景和布置
         首尾帧描述必须明确写出相同的场景坐标锚点与物件关系
+        若当前帧中有多人同场，首尾帧描述必须交代他们共享的背景平面以及至少一个其他环境锚点
         若该镜头首尾帧发生在同一场景内，尾帧必须沿用与首帧相同的场景描述骨架、空间锚点和布置信息
         同一场景内的首尾帧区别只能主要体现在人物动作状态、视线、手部位置、道具被拿起/放下、局势推进结果上
         若首帧已经写出明确场景锚点或关键物件
@@ -60,6 +61,18 @@ class GenerationRunFactoryScriptPromptTest {
         场景布置只能写与当前镜头动作、人物调度、关键道具、空间关系直接相关的内容
         若某些场景信息在当前帧并不可见、只存在于镜头外、被遮挡、或需要靠常识补全，均不要写进首帧/尾帧描述
         当首帧描述或尾帧描述中出现角色名时，必须把该角色对应的外观锚点紧跟追加在角色名后，格式为 `角色名（外观锚点）`
+        【空间方位与构图约束】
+        建立全局坐标系：先统一整个镜头的空间框架
+        定义镜头视角：必须明确镜头是“正视”“侧视”还是“俯视”
+        定义背景层：背景元素（如窗户、墙壁、门）必须被定义为贯穿画面的连续平面或明确的左右分区
+        定义深度层：必须明确前景（靠近镜头）、中景（人物活动区）、远景（背景）的层级关系
+        共享背景原则：如果多人处于同一场景（如靠窗座位），必须明确他们是否共享同一背景平面
+        环境锚点补全：除共同背景平面外，还必须写出与人物调度直接相关的其他环境锚点
+        相对位置锚定：描述人物位置时，必须使用“画面左侧/右侧”加“背景参照物”的双重锚定
+        无障碍原则：人物的移动路径（从 A 点到 B 点）必须避开固定的物理障碍（如桌子、墙壁）
+        朝向逻辑：如果两人“相对而坐”，他们的面部朝向必须相对
+        动作空间预留：在描述起身、转身等大幅度动作时，必须确认该方向有足够的物理空间
+        首尾帧一致性检查：同一镜头内背景元素（门窗位置）不得发生位移或左右互换；尾帧的人物位置必须是首帧动作的自然延续，严禁瞬移
         | 镜号 | 首帧描述 (Start Frame) | 尾帧描述 (End Frame) | 分镜内容描述 | 时长 |
         """;
 
@@ -80,6 +93,7 @@ class GenerationRunFactoryScriptPromptTest {
             "首尾帧描述和分镜内容描述都只能描述当前镜头内部已经发生或正在发生的内容",
             "首尾帧描述只允许写当前画面中实际可见且会影响构图的场景和布置",
             "首尾帧描述必须明确写出相同的场景坐标锚点与物件关系",
+            "若当前帧中有多人同场，首尾帧描述必须交代他们共享的背景平面以及至少一个其他环境锚点",
             "若该镜头首尾帧发生在同一场景内，尾帧必须沿用与首帧相同的场景描述骨架、空间锚点和布置信息",
             "同一场景内的首尾帧区别只能主要体现在人物动作状态、视线、手部位置、道具被拿起/放下、局势推进结果上",
             "若首帧已经写出明确场景锚点或关键物件",
@@ -88,6 +102,18 @@ class GenerationRunFactoryScriptPromptTest {
             "场景布置只能写与当前镜头动作、人物调度、关键道具、空间关系直接相关的内容",
             "若某些场景信息在当前帧并不可见、只存在于镜头外、被遮挡、或需要靠常识补全，均不要写进首帧/尾帧描述",
             "当首帧描述或尾帧描述中出现角色名时，必须把该角色对应的外观锚点紧跟追加在角色名后，格式为 `角色名（外观锚点）`",
+            "【空间方位与构图约束】",
+            "建立全局坐标系：先统一整个镜头的空间框架",
+            "定义镜头视角：必须明确镜头是“正视”“侧视”还是“俯视”",
+            "定义背景层：背景元素（如窗户、墙壁、门）必须被定义为贯穿画面的连续平面或明确的左右分区",
+            "定义深度层：必须明确前景（靠近镜头）、中景（人物活动区）、远景（背景）的层级关系",
+            "共享背景原则：如果多人处于同一场景（如靠窗座位），必须明确他们是否共享同一背景平面",
+            "环境锚点补全：除共同背景平面外，还必须写出与人物调度直接相关的其他环境锚点",
+            "相对位置锚定：描述人物位置时，必须使用“画面左侧/右侧”加“背景参照物”的双重锚定",
+            "无障碍原则：人物的移动路径（从 A 点到 B 点）必须避开固定的物理障碍（如桌子、墙壁）",
+            "朝向逻辑：如果两人“相对而坐”，他们的面部朝向必须相对",
+            "动作空间预留：在描述起身、转身等大幅度动作时，必须确认该方向有足够的物理空间",
+            "首尾帧一致性检查：同一镜头内背景元素（门窗位置）不得发生位移或左右互换；尾帧的人物位置必须是首帧动作的自然延续，严禁瞬移",
             "| 镜号 | 首帧描述 (Start Frame) | 尾帧描述 (End Frame) | 分镜内容描述 | 时长 |"
         );
         String[] capturedSystemPrompt = new String[1];
@@ -169,7 +195,10 @@ class GenerationRunFactoryScriptPromptTest {
 
         Map<String, Object> request = new LinkedHashMap<>();
         request.put("kind", "script");
-        request.put("input", Map.of("text", "女主在雨夜街头看见失踪多年的哥哥。"));
+        request.put("input", Map.of(
+            "text", "女主在雨夜街头看见失踪多年的哥哥。",
+            "extraPrompt", "补充要求：人物表情更克制，离别氛围更冷。"
+        ));
         request.put("model", Map.of("textAnalysisModel", "gpt-text"));
         request.put("options", Map.of("visualStyle", "电影写实"));
 
@@ -183,8 +212,23 @@ class GenerationRunFactoryScriptPromptTest {
         assertFalse(capturedSystemPrompt[0].contains("下一拍衔接"));
         assertEquals(2, invocationCount[0]);
         assertTrue(capturedUserPrompt[0].contains("请严格遵循 system prompt 的输出格式与规则"));
+        assertTrue(capturedUserPrompt[0].contains("【额外追加要求】"));
+        assertTrue(capturedUserPrompt[0].contains("补充要求：人物表情更克制，离别氛围更冷。"));
         assertTrue(capturedReviewSystemPrompt[0].contains("二次审校要求"));
+        assertTrue(capturedReviewSystemPrompt[0].contains("遗漏共同背景平面/其他环境锚点"));
+        assertTrue(capturedReviewSystemPrompt[0].contains("空间定位逻辑"));
+        assertTrue(capturedReviewSystemPrompt[0].contains("建立全局坐标系"));
+        assertTrue(capturedReviewSystemPrompt[0].contains("镜头视角（正视/侧视/俯视）"));
+        assertTrue(capturedReviewSystemPrompt[0].contains("双重锚定"));
+        assertTrue(capturedReviewSystemPrompt[0].contains("桌子、门、过道、墙角、书架等其他环境锚点"));
         assertTrue(capturedReviewUserPrompt[0].contains("当前分镜初稿"));
+        assertTrue(capturedReviewUserPrompt[0].contains("二次检查时必须特别校验空间定位"));
+        assertTrue(capturedReviewUserPrompt[0].contains("明确镜头视角（正视/侧视/俯视）、背景层和前景/中景/远景深度层"));
+        assertTrue(capturedReviewUserPrompt[0].contains("是否写出桌子、门、过道、墙角、书架等其他环境锚点"));
+        assertTrue(capturedReviewUserPrompt[0].contains("人物位置是否使用“画面左侧/右侧 + 背景参照物”的双重锚定"));
+        assertTrue(capturedReviewUserPrompt[0].contains("尾帧人物位置是首帧动作的自然延续"));
+        assertTrue(capturedReviewUserPrompt[0].contains("【额外追加要求】"));
+        assertTrue(capturedReviewUserPrompt[0].contains("补充要求：人物表情更克制，离别氛围更冷。"));
         assertTrue(capturedReviewUserPrompt[0].contains("林舒站在桌边。"));
         @SuppressWarnings("unchecked")
         Map<String, Object> result = (Map<String, Object>) run.get("result");
@@ -192,6 +236,7 @@ class GenerationRunFactoryScriptPromptTest {
         @SuppressWarnings("unchecked")
         Map<String, Object> metadata = (Map<String, Object>) result.get("metadata");
         assertTrue(String.valueOf(metadata.get("draftScriptMarkdown")).contains("林舒站在桌边。"));
+        assertEquals("补充要求：人物表情更克制，离别氛围更冷。", metadata.get("extraPrompt"));
         assertEquals(true, metadata.get("reviewApplied"));
         assertEquals(2, ((java.util.List<?>) metadata.get("providerInteractions")).size());
         assertTrue(String.valueOf(metadata.get("providerRequest")).contains("https://api.example.com/v1/responses"));

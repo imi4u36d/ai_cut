@@ -555,6 +555,12 @@
                 </button>
               </div>
               <div class="workflow-summary__actions">
+                <input
+                  v-model="storyboardExtraPromptDraft"
+                  class="field-input workflow-inline-prompt__input"
+                  type="text"
+                  placeholder="补充本次分镜生成要求，提交时追加到提示词末尾"
+                />
                 <button class="btn-primary btn-sm" type="button" :disabled="busyActionKey === 'storyboard'" @click="handleGenerateStoryboard">
                   {{ busyActionKey === "storyboard" ? "生成中..." : "生成分镜版本" }}
                 </button>
@@ -569,9 +575,9 @@
             </div>
             <div v-else>
               <div v-if="selectedWorkflow.storyboardVersions.length > 1" class="workflow-scroll-hint">
-                左右滑动选择分镜版本
+                向下滚动选择分镜版本
               </div>
-              <div class="version-grid">
+              <div class="version-grid storyboard-version-list">
                 <article v-for="version in selectedWorkflow.storyboardVersions" :key="version.id" class="surface-tile version-card">
                   <div class="version-card__head">
                     <div>
@@ -825,6 +831,12 @@
                 </div>
                 <div class="clip-card__meta">
                   <span class="surface-chip">{{ slot.durationHint || `${slot.targetDurationSeconds || 0}s` }}</span>
+                  <input
+                    v-model="keyframeExtraPromptDrafts[slot.clipIndex]"
+                    class="field-input workflow-inline-prompt__input workflow-inline-prompt__input-clip"
+                    type="text"
+                    placeholder="补充本次关键帧生成要求"
+                  />
                   <button class="btn-secondary btn-sm" type="button" :disabled="busyActionKey === `keyframe-${slot.clipIndex}`" @click="handleGenerateKeyframe(slot.clipIndex)">
                     {{ busyActionKey === `keyframe-${slot.clipIndex}` ? "生成中..." : "生成关键帧" }}
                   </button>
@@ -839,7 +851,12 @@
                   左右滑动选择关键帧版本（含首帧与尾帧）
                 </div>
                 <div class="clip-version-list clip-version-list-grid">
-                <article v-for="version in slot.keyframeVersions" :key="version.id" class="version-card version-card-compact">
+                <article
+                  v-for="version in slot.keyframeVersions"
+                  :key="version.id"
+                  class="version-card version-card-compact"
+                  :class="{ 'version-card-keyframe-landscape': isLandscapeKeyframeVersion(version) }"
+                >
                   <div class="version-card__head">
                     <div class="version-card__meta">
                       <strong>{{ version.title }}</strong>
@@ -852,7 +869,11 @@
                     </button>
                   </div>
 
-                  <div v-if="keyframePreviewFrames(version).length" class="keyframe-frame-grid">
+                  <div
+                    v-if="keyframePreviewFrames(version).length"
+                    class="keyframe-frame-grid"
+                    :class="{ 'keyframe-frame-grid-landscape': isLandscapeKeyframeVersion(version) }"
+                  >
                     <article v-for="frame in keyframePreviewFrames(version)" :key="`${version.id}-${frame.role}`" class="keyframe-frame-card">
                       <div class="keyframe-frame-card__head">
                         <span class="surface-chip surface-chip-quiet">{{ frame.label }}</span>
@@ -861,9 +882,14 @@
                         type="button"
                         class="character-sheet-preview-trigger"
                         :aria-label="`查看${version.title}${frame.label}原图`"
-                        @click="openImagePreview(frame.url, `${version.title}${frame.label}`)"
+                        @click="openKeyframeImagePreview(version, frame)"
                       >
-                        <img class="version-card__image keyframe-frame-card__image" :src="frame.url" :alt="`${version.title}${frame.label}`" />
+                        <img
+                          class="version-card__image keyframe-frame-card__image"
+                          :class="{ 'keyframe-frame-card__image-landscape': isLandscapeKeyframeVersion(version) }"
+                          :src="frame.url"
+                          :alt="`${version.title}${frame.label}`"
+                        />
                       </button>
                     </article>
                   </div>
@@ -940,14 +966,6 @@
                 </button>
               </div>
               <div class="workflow-summary__actions">
-                <button
-                  class="btn-primary btn-sm"
-                  type="button"
-                  :disabled="!canFinalize || busyActionKey === 'finalize'"
-                  @click="handleFinalize"
-                >
-                  {{ busyActionKey === "finalize" ? "拼接中..." : "生成最终结果" }}
-                </button>
                 <span class="surface-chip">{{ selectedWorkflow.clipSlots.length }} 个镜头</span>
               </div>
             </div>
@@ -977,6 +995,20 @@
               <button class="btn-secondary btn-sm" type="button" :disabled="busyActionKey === 'workflow-rating'" @click="handleRateWorkflow">
                 {{ busyActionKey === "workflow-rating" ? "保存中..." : "保存评分" }}
               </button>
+
+              <div class="workflow-finalize-box">
+                <button
+                  class="btn-primary btn-sm workflow-finalize-box__button"
+                  type="button"
+                  :disabled="!canFinalize || busyActionKey === 'finalize'"
+                  @click="handleFinalize"
+                >
+                  {{ busyActionKey === "finalize" ? "拼接中..." : finalizeButtonLabel }}
+                </button>
+                <p class="workflow-finalize-box__hint">
+                  {{ finalizeHint }}
+                </p>
+              </div>
 
               <div v-if="selectedWorkflow.finalResult" class="workflow-final-compact">
                 <video
@@ -1027,6 +1059,12 @@
                       <span class="surface-chip">
                         {{ selectedKeyframeVersion(slot)?.title || "未选择关键帧" }}
                       </span>
+                      <input
+                        v-model="videoExtraPromptDrafts[slot.clipIndex]"
+                        class="field-input workflow-inline-prompt__input workflow-inline-prompt__input-clip"
+                        type="text"
+                        placeholder="补充本次视频生成要求"
+                      />
                       <button
                         class="btn-primary btn-sm"
                         type="button"
@@ -1147,6 +1185,10 @@
   </section>
 
   <div v-if="imagePreviewState.open" class="image-preview-overlay" role="dialog" aria-modal="true" @click.self="closeImagePreview">
+    <div class="image-preview-caption">
+      <strong>{{ imagePreviewCaption }}</strong>
+      <span v-if="imagePreviewState.gallery.length > 1">按 ← / → 切换首尾帧</span>
+    </div>
     <button type="button" class="image-preview-close" aria-label="关闭原图预览" @click="closeImagePreview">
       关闭
     </button>
@@ -1155,7 +1197,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref, watch } from "vue";
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { fetchGenerationOptions } from "@/api/generation";
 import { reuseMaterialAsset } from "@/api/material-assets";
@@ -1217,6 +1259,12 @@ interface PreviewFrame {
   url: string;
 }
 
+interface ImagePreviewItem {
+  url: string;
+  alt: string;
+  caption: string;
+}
+
 const router = useRouter();
 const route = useRoute();
 
@@ -1240,10 +1288,16 @@ const stageFieldIndexMap = reactive<Record<CreateStageKey, number>>({
 const listError = ref("");
 const detailError = ref("");
 const createError = ref("");
+const storyboardExtraPromptDraft = ref("");
+const keyframeExtraPromptDrafts = reactive<Record<number, string>>({});
+const videoExtraPromptDrafts = reactive<Record<number, string>>({});
 const imagePreviewState = reactive({
   open: false,
   url: "",
   alt: "",
+  caption: "",
+  gallery: [] as ImagePreviewItem[],
+  currentIndex: 0,
 });
 
 const workflows = ref<WorkflowSummary[]>([]);
@@ -1315,6 +1369,7 @@ function normalizeDetailStage(value: unknown): CreateStageKey | null {
 }
 
 const workflowCharacterSheets = computed(() => selectedWorkflow.value?.characterSheets ?? []);
+const imagePreviewCaption = computed(() => imagePreviewState.caption || imagePreviewState.alt || "图片预览");
 
 const filteredWorkflows = computed(() => {
   const keyword = workflowSearch.value.trim().toLowerCase();
@@ -1353,6 +1408,19 @@ const canFinalize = computed(() => {
     return false;
   }
   return workflow.clipSlots.every((slot) => slot.videoVersions.some((version) => version.selected));
+});
+
+const finalizeButtonLabel = computed(() => selectedWorkflow.value?.finalResult ? "重新拼接完整视频" : "拼接完整视频");
+
+const finalizeHint = computed(() => {
+  const workflow = selectedWorkflow.value;
+  if (!workflow || !workflow.clipSlots.length) {
+    return "先生成并选中每个分镜的视频版本，才能按分镜顺序拼接成完整视频。";
+  }
+  if (canFinalize.value) {
+    return "会按当前选中的视频版本，依照分镜顺序拼接为完整视频。";
+  }
+  return "所有分镜都需要先有一个选中的视频版本，之后才能进行拼接。";
 });
 
 const activeStageSteps = computed<StageFieldStep[]>(() => {
@@ -1688,6 +1756,28 @@ function summaryUrlListValue(summary: Record<string, unknown> | null | undefined
   return [];
 }
 
+function summaryNumberValue(summary: Record<string, unknown> | null | undefined, ...keys: string[]) {
+  for (const key of keys) {
+    const value = summary?.[key];
+    const numericValue = Number(value);
+    if (Number.isFinite(numericValue) && numericValue > 0) {
+      return numericValue;
+    }
+  }
+  return 0;
+}
+
+function isLandscapeKeyframeVersion(version: StageVersion) {
+  const outputSummary = version.outputSummary ?? {};
+  const width = summaryNumberValue(outputSummary, "width") || Number(version.asset?.width ?? 0);
+  const height = summaryNumberValue(outputSummary, "height") || Number(version.asset?.height ?? 0);
+  if (Number.isFinite(width) && Number.isFinite(height) && width > 0 && height > 0) {
+    return width > height;
+  }
+  const aspectRatio = selectedWorkflow.value?.aspectRatio || "";
+  return aspectRatio.trim().startsWith("16:");
+}
+
 function keyframePreviewFrames(version: StageVersion): PreviewFrame[] {
   const outputSummary = version.outputSummary ?? {};
   const firstFrameUrl = summaryUrlValue(outputSummary, "startFrameUrl", "firstFrameUrl");
@@ -1779,19 +1869,76 @@ function selectedCharacterSheetVersion(sheet: WorkflowCharacterSheet) {
   return characterSheetVersions(sheet).find((version) => version.selected) ?? null;
 }
 
+function applyImagePreviewItem(item: ImagePreviewItem, index: number) {
+  imagePreviewState.url = item.url;
+  imagePreviewState.alt = item.alt;
+  imagePreviewState.caption = item.caption;
+  imagePreviewState.currentIndex = index;
+}
+
 function openImagePreview(url: string, alt: string) {
   if (!url) {
     return;
   }
+  const item = { url, alt, caption: alt };
   imagePreviewState.open = true;
-  imagePreviewState.url = url;
-  imagePreviewState.alt = alt;
+  imagePreviewState.gallery = [item];
+  applyImagePreviewItem(item, 0);
+}
+
+function openKeyframeImagePreview(version: StageVersion, frame: PreviewFrame) {
+  const frames = keyframePreviewFrames(version);
+  const gallery = frames.map((item) => ({
+    url: item.url,
+    alt: `${version.title}${item.label}`,
+    caption: `${version.title} ${item.label}`,
+  }));
+  const currentIndex = Math.max(0, frames.findIndex((item) => item.role === frame.role));
+  const currentItem = gallery[currentIndex];
+  if (!currentItem) {
+    openImagePreview(frame.url, `${version.title}${frame.label}`);
+    return;
+  }
+  imagePreviewState.open = true;
+  imagePreviewState.gallery = gallery;
+  applyImagePreviewItem(currentItem, currentIndex);
 }
 
 function closeImagePreview() {
   imagePreviewState.open = false;
   imagePreviewState.url = "";
   imagePreviewState.alt = "";
+  imagePreviewState.caption = "";
+  imagePreviewState.gallery = [];
+  imagePreviewState.currentIndex = 0;
+}
+
+function switchImagePreviewFrame(direction: 1 | -1) {
+  if (!imagePreviewState.open || imagePreviewState.gallery.length < 2) {
+    return;
+  }
+  const nextIndex = (imagePreviewState.currentIndex + direction + imagePreviewState.gallery.length) % imagePreviewState.gallery.length;
+  applyImagePreviewItem(imagePreviewState.gallery[nextIndex], nextIndex);
+}
+
+function handleImagePreviewKeydown(event: KeyboardEvent) {
+  if (!imagePreviewState.open) {
+    return;
+  }
+  if (event.key === "Escape") {
+    event.preventDefault();
+    closeImagePreview();
+    return;
+  }
+  if (event.key === "ArrowLeft") {
+    event.preventDefault();
+    switchImagePreviewFrame(-1);
+    return;
+  }
+  if (event.key === "ArrowRight") {
+    event.preventDefault();
+    switchImagePreviewFrame(1);
+  }
 }
 
 function selectedKeyframeVersion(slot: WorkflowClipSlot) {
@@ -2059,6 +2206,16 @@ async function handleCreateWorkflow() {
   }
 }
 
+function resetGenerationExtraPrompts() {
+  storyboardExtraPromptDraft.value = "";
+  for (const key of Object.keys(keyframeExtraPromptDrafts)) {
+    delete keyframeExtraPromptDrafts[Number(key)];
+  }
+  for (const key of Object.keys(videoExtraPromptDrafts)) {
+    delete videoExtraPromptDrafts[Number(key)];
+  }
+}
+
 async function runAndRefresh(actionKey: string, runner: () => Promise<WorkflowDetail>) {
   busyActionKey.value = actionKey;
   detailError.value = "";
@@ -2066,8 +2223,10 @@ async function runAndRefresh(actionKey: string, runner: () => Promise<WorkflowDe
     selectedWorkflow.value = await runner();
     applyWorkflowDrafts(selectedWorkflow.value);
     await loadWorkflows();
+    return true;
   } catch (error) {
     detailError.value = error instanceof Error ? error.message : "操作失败";
+    return false;
   } finally {
     busyActionKey.value = "";
   }
@@ -2077,7 +2236,11 @@ async function handleGenerateStoryboard() {
   if (!selectedWorkflowId.value) {
     return;
   }
-  await runAndRefresh("storyboard", () => generateStoryboard(selectedWorkflowId.value));
+  const extraPrompt = storyboardExtraPromptDraft.value.trim();
+  const succeeded = await runAndRefresh("storyboard", () => generateStoryboard(selectedWorkflowId.value, extraPrompt));
+  if (succeeded) {
+    storyboardExtraPromptDraft.value = "";
+  }
 }
 
 async function handleSelectStoryboard(versionId: string) {
@@ -2091,7 +2254,11 @@ async function handleGenerateKeyframe(clipIndex: number) {
   if (!selectedWorkflowId.value) {
     return;
   }
-  await runAndRefresh(`keyframe-${clipIndex}`, () => generateKeyframe(selectedWorkflowId.value, clipIndex));
+  const extraPrompt = (keyframeExtraPromptDrafts[clipIndex] || "").trim();
+  const succeeded = await runAndRefresh(`keyframe-${clipIndex}`, () => generateKeyframe(selectedWorkflowId.value, clipIndex, extraPrompt));
+  if (succeeded) {
+    keyframeExtraPromptDrafts[clipIndex] = "";
+  }
 }
 
 async function handleSelectKeyframe(clipIndex: number, versionId: string) {
@@ -2105,7 +2272,11 @@ async function handleGenerateVideo(clipIndex: number) {
   if (!selectedWorkflowId.value) {
     return;
   }
-  await runAndRefresh(`video-${clipIndex}`, () => generateVideo(selectedWorkflowId.value, clipIndex));
+  const extraPrompt = (videoExtraPromptDrafts[clipIndex] || "").trim();
+  const succeeded = await runAndRefresh(`video-${clipIndex}`, () => generateVideo(selectedWorkflowId.value, clipIndex, extraPrompt));
+  if (succeeded) {
+    videoExtraPromptDrafts[clipIndex] = "";
+  }
 }
 
 async function handleSelectVideo(clipIndex: number, versionId: string) {
@@ -2252,16 +2423,23 @@ watch(
   (workflowId) => {
     if (!workflowId) {
       selectedWorkflow.value = null;
+      resetGenerationExtraPrompts();
       return;
     }
+    resetGenerationExtraPrompts();
     void loadWorkflowDetail(workflowId);
   },
   { immediate: true }
 );
 
 onMounted(async () => {
+  window.addEventListener("keydown", handleImagePreviewKeydown);
   await loadOptions();
   await loadWorkflows();
+});
+
+onBeforeUnmount(() => {
+  window.removeEventListener("keydown", handleImagePreviewKeydown);
 });
 </script>
 
@@ -3041,10 +3219,36 @@ onMounted(async () => {
   justify-content: flex-end;
 }
 
+.workflow-inline-prompt__input {
+  min-width: min(360px, 100%);
+  flex: 1 1 280px;
+}
+
+.workflow-inline-prompt__input-clip {
+  min-width: 220px;
+}
+
 .workflow-list__meta,
 .clip-card__desc {
   color: rgba(255, 255, 255, 0.68);
   font-size: 0.88rem;
+}
+
+.workflow-finalize-box {
+  display: grid;
+  gap: 10px;
+}
+
+.workflow-finalize-box__button {
+  width: 100%;
+  justify-content: center;
+}
+
+.workflow-finalize-box__hint {
+  margin: 0;
+  color: rgba(255, 255, 255, 0.62);
+  font-size: 0.84rem;
+  line-height: 1.5;
 }
 
 .workflow-banner {
@@ -3206,6 +3410,20 @@ onMounted(async () => {
   scrollbar-gutter: stable both-edges;
 }
 
+.storyboard-version-list {
+  flex-direction: column;
+  overflow-x: hidden;
+  overflow-y: visible;
+  padding-right: 0;
+  scroll-snap-type: none;
+  scrollbar-gutter: auto;
+}
+
+.storyboard-version-list .version-card {
+  flex: 1 1 auto;
+  width: 100%;
+}
+
 .version-card {
   display: flex;
   flex-direction: column;
@@ -3354,6 +3572,10 @@ onMounted(async () => {
   gap: 12px;
 }
 
+.keyframe-frame-grid-landscape {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 .character-sheet-stack {
   display: flex;
   flex-direction: column;
@@ -3408,6 +3630,11 @@ onMounted(async () => {
   object-fit: cover;
 }
 
+.keyframe-frame-card__image-landscape {
+  aspect-ratio: 16 / 9;
+  object-fit: contain;
+}
+
 .character-sheet-frame-card__image {
   object-fit: contain;
   background: rgba(0, 0, 0, 0.22);
@@ -3449,9 +3676,39 @@ onMounted(async () => {
   backdrop-filter: blur(10px);
 }
 
+.image-preview-caption {
+  position: absolute;
+  top: 24px;
+  left: 50%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  min-width: min(420px, calc(100vw - 180px));
+  padding: 10px 18px;
+  border: 1px solid rgba(255, 180, 92, 0.44);
+  border-radius: 14px;
+  background: rgba(18, 22, 30, 0.78);
+  color: #ffd38a;
+  text-align: center;
+  transform: translateX(-50%);
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.28);
+}
+
+.image-preview-caption strong {
+  color: #ff6b6b;
+  font-size: 0.98rem;
+  font-weight: 800;
+}
+
+.image-preview-caption span {
+  color: rgba(255, 255, 255, 0.62);
+  font-size: 0.78rem;
+}
+
 .image-preview-full {
   max-width: min(92vw, 1440px);
-  max-height: 88vh;
+  max-height: 82vh;
   border-radius: 20px;
   box-shadow: 0 28px 60px rgba(0, 0, 0, 0.45);
   background: rgba(12, 14, 20, 0.9);
@@ -3581,6 +3838,10 @@ onMounted(async () => {
 
 .clip-version-list-grid .version-card {
   flex: 0 0 min(360px, calc(100% - 8px));
+}
+
+.clip-version-list-grid .version-card-keyframe-landscape {
+  flex-basis: min(640px, calc(100% - 8px));
 }
 
 .rating-pill {

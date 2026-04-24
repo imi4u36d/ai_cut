@@ -193,9 +193,14 @@ public class WorkflowApplicationService {
     }
 
     public Map<String, Object> generateStoryboard(String workflowId) {
+        return generateStoryboard(workflowId, "");
+    }
+
+    public Map<String, Object> generateStoryboard(String workflowId, String extraPrompt) {
         StageWorkflowEntity workflow = requireWorkflow(workflowId);
         int versionNo = workflowRepository.nextStageVersionNo(workflowId, WorkflowConstants.STAGE_STORYBOARD, 0);
-        Map<String, Object> storyboardRequest = buildStoryboardRunRequest(workflow, versionNo);
+        String normalizedExtraPrompt = trimmed(extraPrompt, "");
+        Map<String, Object> storyboardRequest = buildStoryboardRunRequest(workflow, versionNo, normalizedExtraPrompt);
         Map<String, Object> run = createLoggedGenerationRun(
             workflow,
             WorkflowConstants.STAGE_STORYBOARD,
@@ -252,7 +257,8 @@ public class WorkflowApplicationService {
         version.setInputSummaryJson(WorkflowJsonSupport.write(Map.of(
             "title", workflow.getTitle(),
             "transcriptLength", safeLength(workflow.getTranscriptText()),
-            "globalPrompt", workflow.getGlobalPrompt()
+            "globalPrompt", workflow.getGlobalPrompt(),
+            "extraPrompt", normalizedExtraPrompt
         )));
         version.setOutputSummaryJson(WorkflowJsonSupport.write(Map.of(
             "scriptMarkdown", scriptMarkdown,
@@ -293,8 +299,13 @@ public class WorkflowApplicationService {
     }
 
     public Map<String, Object> generateKeyframe(String workflowId, int clipIndex) {
+        return generateKeyframe(workflowId, clipIndex, "");
+    }
+
+    public Map<String, Object> generateKeyframe(String workflowId, int clipIndex, String extraPrompt) {
         StageWorkflowEntity workflow = requireWorkflow(workflowId);
         StageVersionEntity storyboardVersion = requireSelectedStoryboard(workflow);
+        String normalizedExtraPrompt = trimmed(extraPrompt, "");
         CharacterSheetSlot characterSheetSlot = resolveCharacterSheetSlot(storyboardVersion, clipIndex);
         if (characterSheetSlot != null) {
             generateCharacterSheetVersion(workflow, storyboardVersion, characterSheetSlot);
@@ -324,7 +335,8 @@ public class WorkflowApplicationService {
                 List.of(),
                 characterReferenceImageUrls,
                 "first",
-                "clip" + clipIndex + "-first-v" + versionNo
+                "clip" + clipIndex + "-first-v" + versionNo,
+                normalizedExtraPrompt
             );
             startFrameRun = createLoggedGenerationRun(
                 workflow,
@@ -356,7 +368,8 @@ public class WorkflowApplicationService {
             firstNonBlank(startFrameRemoteUrl, startFrameUrl).isBlank() ? List.of() : List.of(firstNonBlank(startFrameRemoteUrl, startFrameUrl)),
             characterReferenceImageUrls,
             "last",
-            "clip" + clipIndex + "-last-v" + versionNo
+            "clip" + clipIndex + "-last-v" + versionNo,
+            normalizedExtraPrompt
         );
         Map<String, Object> run = createLoggedGenerationRun(
             workflow,
@@ -420,6 +433,7 @@ public class WorkflowApplicationService {
         keyframeInputSummary.put("motion", stringValue(clip.get("motion")));
         keyframeInputSummary.put("cameraMovement", stringValue(clip.get("cameraMovement")));
         keyframeInputSummary.put("continuityHint", stringValue(clip.get("continuityHint")));
+        keyframeInputSummary.put("extraPrompt", normalizedExtraPrompt);
         keyframeInputSummary.put("matchedCharacters", matchedCharacterSlots.stream().map(this::toCharacterMatchRow).toList());
         keyframeInputSummary.put("characterReferenceImageUrls", characterReferenceImageUrls);
         keyframeInputSummary.put("startFrameUrl", startFrameUrl);
@@ -499,6 +513,10 @@ public class WorkflowApplicationService {
     }
 
     public Map<String, Object> generateVideo(String workflowId, int clipIndex) {
+        return generateVideo(workflowId, clipIndex, "");
+    }
+
+    public Map<String, Object> generateVideo(String workflowId, int clipIndex, String extraPrompt) {
         StageWorkflowEntity workflow = requireWorkflow(workflowId);
         StageVersionEntity storyboardVersion = requireSelectedStoryboard(workflow);
         StageVersionEntity keyframeVersion = requireSelectedStageVersion(workflowId, WorkflowConstants.STAGE_KEYFRAME, clipIndex);
@@ -506,7 +524,8 @@ public class WorkflowApplicationService {
         int versionNo = workflowRepository.nextStageVersionNo(workflowId, WorkflowConstants.STAGE_VIDEO, clipIndex);
         String firstFrameUrl = resolveWorkflowVideoFirstFrameUrl(workflowId, clipIndex, keyframeVersion);
         String lastFrameUrl = resolveWorkflowVideoLastFrameUrl(keyframeVersion);
-        Map<String, Object> videoRequest = buildVideoRunRequest(workflow, clip, clipIndex, versionNo, firstFrameUrl, lastFrameUrl);
+        String normalizedExtraPrompt = trimmed(extraPrompt, "");
+        Map<String, Object> videoRequest = buildVideoRunRequest(workflow, clip, clipIndex, versionNo, firstFrameUrl, lastFrameUrl, normalizedExtraPrompt);
         Map<String, Object> run = createLoggedGenerationRun(
             workflow,
             WorkflowConstants.STAGE_VIDEO,
@@ -564,6 +583,7 @@ public class WorkflowApplicationService {
         videoInputSummary.put("keyframeAssetId", keyframeVersion.getMaterialAssetId());
         videoInputSummary.put("firstFrameUrl", firstFrameUrl);
         videoInputSummary.put("requestedLastFrameUrl", lastFrameUrl);
+        videoInputSummary.put("extraPrompt", normalizedExtraPrompt);
         Integer videoSeed = resolvedVideoSeed(workflow);
         if (videoSeed != null) {
             videoInputSummary.put("seed", videoSeed);
@@ -971,15 +991,21 @@ public class WorkflowApplicationService {
         );
         List<Map<String, Object>> clips = selectedStoryboard == null ? List.of() : readClips(selectedStoryboard);
         List<Map<String, Object>> clipSlots = new ArrayList<>();
+        String selectedStoryboardVersionId = selectedStoryboard == null ? "" : trimmed(selectedStoryboard.getStageVersionId(), "");
         for (Map<String, Object> clip : clips) {
             int clipIndex = intValue(clip.get("clipIndex"), 0);
             List<CharacterSheetSlot> matchedCharacterSlots = selectedStoryboard == null ? List.of() : matchedCharacterSheetSlots(selectedStoryboard, clip);
             List<StageVersionEntity> keyframeVersions = versions.stream()
                 .filter(item -> WorkflowConstants.STAGE_KEYFRAME.equals(item.getStageType()) && intValue(item.getClipIndex(), 0) == clipIndex)
+                .filter(item -> selectedStoryboardVersionId.equals(trimmed(item.getParentVersionId(), "")))
                 .sorted(Comparator.comparing(StageVersionEntity::getVersionNo).reversed())
                 .toList();
+            Set<String> keyframeVersionIds = keyframeVersions.stream()
+                .map(StageVersionEntity::getStageVersionId)
+                .collect(Collectors.toCollection(LinkedHashSet::new));
             List<StageVersionEntity> videoVersions = versions.stream()
                 .filter(item -> WorkflowConstants.STAGE_VIDEO.equals(item.getStageType()) && intValue(item.getClipIndex(), 0) == clipIndex)
+                .filter(item -> keyframeVersionIds.contains(trimmed(item.getParentVersionId(), "")))
                 .sorted(Comparator.comparing(StageVersionEntity::getVersionNo).reversed())
                 .toList();
             Map<String, Object> slot = new LinkedHashMap<>();
@@ -1386,13 +1412,16 @@ public class WorkflowApplicationService {
             .toList();
     }
 
-    private Map<String, Object> buildStoryboardRunRequest(StageWorkflowEntity workflow, int versionNo) {
+    private Map<String, Object> buildStoryboardRunRequest(StageWorkflowEntity workflow, int versionNo, String extraPrompt) {
         Map<String, Object> request = new LinkedHashMap<>();
+        Map<String, Object> input = new LinkedHashMap<>();
+        input.put("text", !trimmed(workflow.getTranscriptText(), "").isBlank() ? workflow.getTranscriptText() : firstNonBlank(workflow.getGlobalPrompt(), workflow.getTitle()));
+        if (!trimmed(extraPrompt, "").isBlank()) {
+            input.put("extraPrompt", trimmed(extraPrompt, ""));
+        }
         request.put("kind", "script");
         request.put("auth", Map.of("userId", workflow.getOwnerUserId()));
-        request.put("input", Map.of(
-            "text", !trimmed(workflow.getTranscriptText(), "").isBlank() ? workflow.getTranscriptText() : firstNonBlank(workflow.getGlobalPrompt(), workflow.getTitle())
-        ));
+        request.put("input", input);
         request.put("model", Map.of(
             "textAnalysisModel", workflow.getTextAnalysisModel()
         ));
@@ -1780,7 +1809,8 @@ public class WorkflowApplicationService {
         List<String> continuityReferenceImageUrls,
         List<String> characterReferenceImageUrls,
         String frameRole,
-        String fileStem
+        String fileStem,
+        String extraPrompt
     ) {
         Map<String, Object> request = new LinkedHashMap<>();
         Map<String, Object> input = new LinkedHashMap<>();
@@ -1788,7 +1818,8 @@ public class WorkflowApplicationService {
         String continuityReferenceImageUrl = referenceImageUrls.isEmpty() ? "" : referenceImageUrls.get(0);
         input.put("prompt", composeVisualPrompt(workflow, joinPromptSections(
             characterConstraintPrompt,
-            buildKeyframeContinuityPrompt(clip, prompt, continuityReferenceImageUrl, frameRole)
+            buildKeyframeContinuityPrompt(clip, prompt, continuityReferenceImageUrl, frameRole),
+            userExtraPromptBlock(extraPrompt)
         )));
         int[] dimensions = dimensionsFromAspectRatio(workflow.getAspectRatio());
         input.put("width", dimensions[0]);
@@ -1875,11 +1906,15 @@ public class WorkflowApplicationService {
         int clipIndex,
         int versionNo,
         String firstFrameUrl,
-        String lastFrameUrl
+        String lastFrameUrl,
+        String extraPrompt
     ) {
         Map<String, Object> request = new LinkedHashMap<>();
         Map<String, Object> input = new LinkedHashMap<>();
-        input.put("prompt", composeVisualPrompt(workflow, stringValue(clip.get("videoPrompt"))));
+        input.put("prompt", composeVisualPrompt(workflow, joinPromptSections(
+            stringValue(clip.get("videoPrompt")),
+            userExtraPromptBlock(extraPrompt)
+        )));
         input.put("videoSize", workflow.getVideoSize());
         input.put("durationSeconds", intValue(clip.get("targetDurationSeconds"), workflow.getMaxDurationSeconds()));
         input.put("minDurationSeconds", intValue(clip.get("minDurationSeconds"), workflow.getMinDurationSeconds()));
@@ -2886,6 +2921,11 @@ public class WorkflowApplicationService {
             }
         }
         return String.join("\n", parts);
+    }
+
+    private String userExtraPromptBlock(String extraPrompt) {
+        String normalized = trimmed(extraPrompt, "");
+        return normalized.isBlank() ? "" : "额外追加生成要求：" + normalized;
     }
 
     private String visualStyleConstraintBlock(StageWorkflowEntity workflow) {

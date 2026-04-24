@@ -220,14 +220,18 @@ class GenerationRunFactoryImagePromptPassthroughTest {
 
         Map<String, Object> run = factory.createImageRun("run_image_1", request);
 
-        assertEquals(storyboardPrompt, submittedPrompt[0]);
+        assertTrue(submittedPrompt[0].startsWith(storyboardPrompt));
+        assertTrue(submittedPrompt[0].contains("负面约束"));
+        assertTrue(submittedPrompt[0].contains("不符合人体结构"));
+        assertTrue(submittedPrompt[0].contains("不符合物理结构"));
         assertEquals("https://example.com/reference.png", submittedReferenceImageUrl[0]);
         assertEquals(java.util.List.of("https://example.com/reference.png"), submittedReferenceImageUrls[0]);
         @SuppressWarnings("unchecked")
         Map<String, Object> result = (Map<String, Object>) run.get("result");
         assertEquals(storyboardPrompt, result.get("keyframePrompt"));
-        assertEquals(storyboardPrompt, result.get("shapedPrompt"));
-        assertEquals("", result.get("negativePrompt"));
+        assertEquals(submittedPrompt[0], result.get("shapedPrompt"));
+        assertTrue(String.valueOf(result.get("negativePrompt")).contains("不符合人体结构"));
+        assertTrue(String.valueOf(result.get("negativePrompt")).contains("不符合物理结构"));
         @SuppressWarnings("unchecked")
         Map<String, Object> metadata = (Map<String, Object>) result.get("metadata");
         assertEquals(true, metadata.get("visionAnalysisSkipped"));

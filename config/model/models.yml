@@ -55,6 +55,7 @@ model:
       kind: "image"
       label: "Doubao Seedream 4.5"
       provider_model: "doubao-seedream-4-5-251128"
+      timeout_seconds: 300
       family: "seedream"
       capabilities:
         - "image_generation"

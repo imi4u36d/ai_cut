@@ -163,13 +163,14 @@ public class GenerationRunFactory {
     public Map<String, Object> createScriptRun(String runId, Map<String, Object> request) {
         Long userId = userIdFromRequest(request);
         String sourceText = support.nestedValue(request, "input", "text", "");
+        String extraPrompt = support.nestedValue(request, "input", "extraPrompt", "");
         String visualStyle = support.nestedValue(request, "options", "visualStyle", "AI 自动决策");
         String requestedModel = support.requiredModel(support.nestedValue(request, "model", "textAnalysisModel", ""), "textAnalysisModel", "文本模型");
         ModelRuntimeProfile profile = modelResolver.resolveTextProfile(requestedModel, userId);
         if (sourceText.isBlank()) {
             throw new IllegalArgumentException("脚本输入文本不能为空");
         }
-        String prompt = buildScriptUserPrompt(sourceText, visualStyle);
+        String prompt = buildScriptUserPrompt(sourceText, visualStyle, extraPrompt);
         List<Map<String, Object>> callChain = new ArrayList<>();
         List<Map<String, Object>> providerInteractions = new ArrayList<>();
         TextModelResponse draftResponse = textModelProviderRegistry.resolve(profile).generate(
@@ -193,7 +194,7 @@ public class GenerationRunFactory {
             "responsesApi", draftResponse.responsesApi(),
             "responseId", draftResponse.responseId()
         )));
-        String reviewPrompt = buildScriptReviewUserPrompt(sourceText, visualStyle, draftScriptMarkdown);
+        String reviewPrompt = buildScriptReviewUserPrompt(sourceText, visualStyle, draftScriptMarkdown, extraPrompt);
         String scriptMarkdown = draftScriptMarkdown;
         TextModelResponse finalResponse = draftResponse;
         TextModelResponse reviewResponse = null;
@@ -257,6 +258,7 @@ public class GenerationRunFactory {
         );
         Map<String, Object> metadata = new LinkedHashMap<>();
         metadata.put("visualStyle", visualStyle);
+        metadata.put("extraPrompt", extraPrompt);
         metadata.put("draftScriptMarkdown", draftScriptMarkdown);
         metadata.put("scriptMarkdown", scriptMarkdown);
         metadata.put("reviewApplied", reviewApplied);
@@ -277,6 +279,7 @@ public class GenerationRunFactory {
         result.put("kind", GenerationRunKinds.SCRIPT);
         result.put("sourceText", sourceText);
         result.put("visualStyle", visualStyle);
+        result.put("extraPrompt", extraPrompt);
         result.put("prompt", prompt);
         result.put("outputFormat", "markdown");
         result.put("scriptMarkdown", scriptMarkdown);
@@ -319,8 +322,8 @@ public class GenerationRunFactory {
         List<Map<String, Object>> callChain = new ArrayList<>();
         GenerationRunSupport.TextGenerationAttempt keyframeAttempt = null;
         String keyframePrompt = prompt;
-        String negativePrompt = "";
-        String shapedPrompt = keyframePrompt;
+        String negativePrompt = buildNegativePrompt(GenerationModelKinds.IMAGE);
+        String shapedPrompt = support.appendNegativePrompt(keyframePrompt, negativePrompt);
         ImageModelProvider imageModelProvider = imageModelProviderRegistry.resolve(imageProfile);
         RemoteImageGenerationResult remoteImage = imageModelProvider.generate(
             imageProfile,
@@ -873,7 +876,7 @@ public class GenerationRunFactory {
      * @param visualStyle visual风格值
      * @return 处理结果
      */
-    private String buildScriptUserPrompt(String sourceText, String visualStyle) {
+    private String buildScriptUserPrompt(String sourceText, String visualStyle, String extraPrompt) {
         String styleLine = "AI 自动决策".equalsIgnoreCase(visualStyle) || visualStyle.isBlank()
             ? "请根据题材自动选择并保持统一风格。"
             : "额外视觉风格要求：" + visualStyle + "。";
@@ -884,10 +887,12 @@ public class GenerationRunFactory {
             【小说内容】：
             %s
 
+            %s
+
             ---
 
             请严格遵循 system prompt 的输出格式与规则，不要输出解释性文字。
-            """.formatted(styleLine, sourceText);
+            """.formatted(styleLine, sourceText, buildExtraPromptSection(extraPrompt));
     }
 
     private String buildScriptReviewSystemPrompt() {
@@ -896,24 +901,26 @@ public class GenerationRunFactory {
             #### 二次审校要求
             你现在不是重新发散创作，而是作为分镜总审校，对已有分镜初稿做严格修正。
             重点检查并修正：
-            1. 首帧/尾帧是否存在不合理、割裂、缺少场景锚点或首尾场景描述不一致。
+            1. 首帧/尾帧是否存在不合理、割裂、缺少场景锚点、遗漏共同背景平面/其他环境锚点，或首尾场景描述不一致。
             2. 分镜内容描述是否过度强调运镜、光影、抒情，而没有把重点放在谁在什么场景做什么。
             3. 是否出现与当前场景无关的场景布置、无依据新增元素、无依据新增人声。
             4. 同一镜头内首尾帧是否真正属于同一场景、同一空间坐标系、同一 seed 理解下的连续画面。
             5. 是否存在复杂运镜、氛围词、空泛修辞，若有必须删减为简单直接的可执行描述。
+            6. 重点检查空间定位逻辑：是否先建立全局坐标系，并明确镜头视角（正视/侧视/俯视）、背景层、前景/中景/远景深度层；多人是否共享同一背景平面，是否补充了桌子、门、过道、墙角、书架等其他环境锚点；人物位置是否使用“画面左侧/右侧 + 背景参照物”的双重锚定；人物移动路径是否避开桌子、墙壁等固定障碍；相对而坐时左右人物朝向是否相对；起身、转身等动作是否预留足够物理空间；同一镜头内背景元素不得位移或左右互换，尾帧人物位置必须是首帧动作的自然延续，严禁瞬移。
 
             你的任务是输出“修正后的完整最终版分镜脚本”，不是输出审校意见。
             只输出最终的 `【角色定义信息】` 和 `【分镜脚本】`。
             """;
     }
 
-    private String buildScriptReviewUserPrompt(String sourceText, String visualStyle, String draftScriptMarkdown) {
+    private String buildScriptReviewUserPrompt(String sourceText, String visualStyle, String draftScriptMarkdown, String extraPrompt) {
         String styleLine = "AI 自动决策".equalsIgnoreCase(visualStyle) || visualStyle.isBlank()
             ? "请保持题材匹配但不要额外发散风格。"
             : "额外视觉风格要求：" + visualStyle + "。";
         return """
             # 任务说明
             请基于原始正文与已有分镜初稿，逐镜审校并修正所有不合理的首帧描述、尾帧描述、分镜内容描述。
+            二次检查时必须特别校验空间定位：先建立全局坐标系，明确镜头视角（正视/侧视/俯视）、背景层和前景/中景/远景深度层；检查多人是否共享同一背景平面，是否写出桌子、门、过道、墙角、书架等其他环境锚点，人物位置是否使用“画面左侧/右侧 + 背景参照物”的双重锚定，移动路径是否避开桌子、墙壁等障碍，相对而坐时是否左者向右、右者向左，起身转身是否有足够动作空间，确保同一镜头内背景静止且尾帧人物位置是首帧动作的自然延续。
 
             # 原始正文
             %s
@@ -924,10 +931,20 @@ public class GenerationRunFactory {
             # 当前分镜初稿
             %s
 
+            %s
+
             ---
 
             请直接输出修正后的完整最终版分镜脚本，不要解释改了什么，不要输出审校说明。
-            """.formatted(sourceText, styleLine, draftScriptMarkdown);
+            """.formatted(sourceText, styleLine, draftScriptMarkdown, buildExtraPromptSection(extraPrompt));
+    }
+
+    private String buildExtraPromptSection(String extraPrompt) {
+        String normalized = extraPrompt == null ? "" : extraPrompt.trim();
+        if (normalized.isBlank()) {
+            return "";
+        }
+        return "【额外追加要求】：\n" + normalized;
     }
 
     private String invalidStoryboardMarkdownReason(String storyboardMarkdown) {
@@ -998,7 +1015,7 @@ public class GenerationRunFactory {
     private String buildNegativePrompt(String mediaKind) {
         String videoOnly = GenerationModelKinds.VIDEO.equals(mediaKind)
             ? "不要新增对白，不要口型和说话主体错位，不要在片段前0.5秒和后0.5秒安排人声对白或独白，不要出现违背基本物理规律的动作、重力、碰撞、液体、烟雾或光影表现。"
-            : "不要把脚本文字、镜头编号直接画进画面，不要出现违背基本物理规律的人体姿态、重力关系或空间透视。";
+            : "不要把脚本文字、镜头编号直接画进画面，不要出现不符合人体结构的肢体、关节、手指、五官或身体比例，不要出现不符合物理结构的支撑、重力关系、空间透视或物体连接。";
         return "禁止字幕、水印、比例失调、手指异常、五官崩坏、角色互换、穿模、空间透视错乱。" + videoOnly;
     }
 
