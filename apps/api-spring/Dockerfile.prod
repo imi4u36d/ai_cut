@@ -5,9 +5,13 @@ FROM ${MAVEN_IMAGE} AS builder
 WORKDIR /build
 
 COPY apps/api-spring/pom.xml /build/apps/api-spring/pom.xml
+COPY apps/api-spring/.mvn /build/apps/api-spring/.mvn
+RUN --mount=type=cache,target=/root/.m2 \
+    mvn -B -s /build/apps/api-spring/.mvn/settings.xml -f /build/apps/api-spring/pom.xml -DskipTests dependency:go-offline
 
 COPY apps/api-spring /build/apps/api-spring
-RUN mvn -B -f /build/apps/api-spring/pom.xml -DskipTests package
+RUN --mount=type=cache,target=/root/.m2 \
+    mvn -B -s /build/apps/api-spring/.mvn/settings.xml -f /build/apps/api-spring/pom.xml -DskipTests package
 
 FROM ${JAVA_IMAGE}
 
