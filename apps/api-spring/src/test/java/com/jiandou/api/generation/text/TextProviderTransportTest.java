@@ -84,6 +84,41 @@ class TextProviderTransportTest {
     }
 
     @Test
+    void extractTextIgnoresResponsesInputTextEcho() {
+        TextProviderTransport transport = new TextProviderTransport(new ObjectMapper());
+
+        Map<String, Object> payload = transport.decode("""
+            {
+              "object": "response.compaction",
+              "output": [
+                {
+                  "type": "message",
+                  "role": "system",
+                  "content": [
+                    {
+                      "type": "input_text",
+                      "text": "### AI 短剧分镜生成指令（严格执行版）"
+                    }
+                  ]
+                },
+                {
+                  "type": "message",
+                  "role": "user",
+                  "content": [
+                    {
+                      "type": "input_text",
+                      "text": "# 任务输入"
+                    }
+                  ]
+                }
+              ]
+            }
+            """);
+
+        assertEquals("", transport.extractText(payload));
+    }
+
+    @Test
     void decodeThrowsOnInvalidJson() {
         TextProviderTransport transport = new TextProviderTransport(new ObjectMapper());
 

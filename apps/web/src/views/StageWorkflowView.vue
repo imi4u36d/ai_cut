@@ -520,7 +520,7 @@
               <div class="workflow-summary__meta">
                 <span class="surface-chip">{{ valueOptionLabel(aspectRatioOptions, selectedWorkflow.aspectRatio, selectedWorkflow.aspectRatio || "未设置") }}</span>
                 <span class="surface-chip">{{ keyOptionLabel(stylePresetOptions, selectedWorkflow.stylePreset, selectedWorkflow.stylePreset || "未设置") }}</span>
-                <span class="surface-chip">{{ valueOptionLabel(videoSizeOptions, selectedWorkflow.videoSize, selectedWorkflow.videoSize || "未设置") }}</span>
+                <span class="surface-chip">{{ valueOptionLabel(catalogVideoSizeOptions, selectedWorkflow.videoSize, selectedWorkflow.videoSize || "未设置") }}</span>
               </div>
             </div>
             <button class="btn-secondary btn-sm" type="button" @click="workflowSettingsOpen = !workflowSettingsOpen">
@@ -566,7 +566,7 @@
             <label class="workflow-field workflow-settings-field-compact">
               <span>输出尺寸</span>
               <select v-model="workflowSettingsDraft.videoSize" class="field-input">
-                <option v-for="item in videoSizeOptions" :key="item.value" :value="item.value">{{ item.label }}</option>
+                <option v-for="item in workflowSettingsVideoSizeOptions" :key="item.value" :value="item.value">{{ item.label }}</option>
               </select>
             </label>
             <label class="workflow-field workflow-settings-field-short">
@@ -1149,7 +1149,7 @@
               <h2>视频生成模块</h2>
               <div class="workflow-summary__meta">
                 <span class="surface-chip">{{ valueOptionLabel(videoModelOptions, selectedWorkflow.videoModel, selectedWorkflow.videoModel || "未设置") }}</span>
-                <span class="surface-chip">{{ valueOptionLabel(videoSizeOptions, selectedWorkflow.videoSize, selectedWorkflow.videoSize || "未设置") }}</span>
+                <span class="surface-chip">{{ valueOptionLabel(catalogVideoSizeOptions, selectedWorkflow.videoSize, selectedWorkflow.videoSize || "未设置") }}</span>
                 <span class="surface-chip">视频 Seed {{ seedLabel(selectedWorkflow.videoSeed) }}</span>
               </div>
             </div>
@@ -1431,6 +1431,7 @@ import { renderMarkdownToHtml } from "@/utils/markdown";
 import type {
   CreateWorkflowRequest,
   GenerationOptionsResponse,
+  GenerationVideoSizeOption,
   MaterialAssetLibraryItem,
   StageVersion,
   UpdateWorkflowSettingsRequest,
@@ -1632,7 +1633,13 @@ const stylePresetOptions = computed(() => options.value?.stylePresets ?? []);
 const textModelOptions = computed(() => options.value?.textAnalysisModels ?? []);
 const imageModelOptions = computed(() => options.value?.imageModels ?? []);
 const videoModelOptions = computed(() => options.value?.videoModels ?? []);
-const videoSizeOptions = computed(() => options.value?.videoSizes ?? []);
+const catalogVideoSizeOptions = computed(() => options.value?.videoSizes ?? []);
+const videoSizeOptions = computed(() =>
+  filterVideoSizeOptions(catalogVideoSizeOptions.value, createForm.videoModel, createForm.aspectRatio)
+);
+const workflowSettingsVideoSizeOptions = computed(() =>
+  filterVideoSizeOptions(catalogVideoSizeOptions.value, workflowSettingsDraft.videoModel, workflowSettingsDraft.aspectRatio)
+);
 
 const canFinalize = computed(() => {
   const workflow = selectedWorkflow.value;
@@ -1919,6 +1926,69 @@ function keyOptionLabel<T extends { key: string; label: string }>(options: T[], 
     return fallback;
   }
   return options.find((item) => item.key === value)?.label || value;
+}
+
+function normalizeModelName(value?: string | null) {
+  return String(value ?? "").trim().toLowerCase();
+}
+
+function resolveVideoSizeAspectRatio(size: GenerationVideoSizeOption): "9:16" | "16:9" | null {
+  const width = Number(size.width ?? 0);
+  const height = Number(size.height ?? 0);
+  if (width > 0 && height > 0) {
+    return width > height ? "16:9" : "9:16";
+  }
+  const normalized = String(size.value ?? "").replace(/\*/g, "x").toLowerCase();
+  const [rawWidth, rawHeight] = normalized.split("x");
+  const parsedWidth = Number(rawWidth);
+  const parsedHeight = Number(rawHeight);
+  if (parsedWidth > 0 && parsedHeight > 0) {
+    return parsedWidth > parsedHeight ? "16:9" : "9:16";
+  }
+  return null;
+}
+
+function compareVideoSizeByArea(a: GenerationVideoSizeOption, b: GenerationVideoSizeOption) {
+  const areaA = Number(a.width ?? 0) * Number(a.height ?? 0);
+  const areaB = Number(b.width ?? 0) * Number(b.height ?? 0);
+  return areaA - areaB;
+}
+
+function filterVideoSizeOptions(source: GenerationVideoSizeOption[], model: string, aspectRatio: string) {
+  const selectedModel = normalizeModelName(model);
+  const filtered = source
+    .filter((item) => {
+      const itemAspectRatio = resolveVideoSizeAspectRatio(item);
+      return !itemAspectRatio || itemAspectRatio === aspectRatio;
+    })
+    .filter((item) => {
+      if (!selectedModel) {
+        return true;
+      }
+      const supportedModels = Array.isArray(item.supportedModels) ? item.supportedModels : [];
+      if (!supportedModels.length) {
+        return true;
+      }
+      return supportedModels.some((itemModel) => normalizeModelName(itemModel) === selectedModel);
+    });
+  return [...filtered].sort(compareVideoSizeByArea);
+}
+
+function syncVideoSizeSelection(target: { videoSize: string; videoModel: string; aspectRatio: string }, preferred?: string | null) {
+  if (!catalogVideoSizeOptions.value.length) {
+    return;
+  }
+  const available = filterVideoSizeOptions(catalogVideoSizeOptions.value, target.videoModel, target.aspectRatio);
+  if (!available.length) {
+    target.videoSize = "";
+    return;
+  }
+  const preferredValue = preferred || "";
+  const next =
+    available.find((item) => item.value === preferredValue)?.value
+    ?? available.find((item) => item.value === target.videoSize)?.value
+    ?? available[0].value;
+  target.videoSize = next;
 }
 
 function parseStoryboardDurationSeconds(value?: string | null) {
@@ -2382,6 +2452,7 @@ function syncWorkflowSettingsDraft(workflow: WorkflowDetail) {
   workflowSettingsDraft.durationMode = durationMode;
   workflowSettingsDraft.minDurationSeconds = String(minDurationSeconds);
   workflowSettingsDraft.maxDurationSeconds = String(maxDurationSeconds);
+  syncVideoSizeSelection(workflowSettingsDraft, workflow.videoSize);
 }
 
 function applyWorkflowDrafts(workflow: WorkflowDetail | null) {
@@ -2463,7 +2534,7 @@ async function loadOptions() {
       createForm.videoModel = result.defaultVideoModel || result.videoModels[0]?.value || "";
     }
     if (!createForm.videoSize) {
-      createForm.videoSize = result.defaultVideoSize || result.videoSizes[0]?.value || "";
+      syncVideoSizeSelection(createForm, result.defaultVideoSize);
     }
     if (!createForm.aspectRatio) {
       createForm.aspectRatio = (result.defaultAspectRatio as "9:16" | "16:9" | null) || "9:16";
@@ -2817,6 +2888,20 @@ async function handleReuseAsset(assetId: string, versionId: string) {
     busyActionKey.value = "";
   }
 }
+
+watch(
+  () => [createForm.videoModel, createForm.aspectRatio, catalogVideoSizeOptions.value] as const,
+  () => {
+    syncVideoSizeSelection(createForm, createForm.videoSize);
+  }
+);
+
+watch(
+  () => [workflowSettingsDraft.videoModel, workflowSettingsDraft.aspectRatio, catalogVideoSizeOptions.value] as const,
+  () => {
+    syncVideoSizeSelection(workflowSettingsDraft, workflowSettingsDraft.videoSize);
+  }
+);
 
 watch(
   () => route.query.stage,

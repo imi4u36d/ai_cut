@@ -264,6 +264,7 @@ export interface GenerationTextAnalysisModelInfo {
   provider?: string | null;
   family?: string | null;
   supportsSeed?: boolean;
+  supportedSizes?: string[];
 }
 
 /**
@@ -320,6 +321,7 @@ export interface GenerationImageSizeOption {
   label: string;
   width?: number;
   height?: number;
+  supportedModels?: string[];
 }
 
 /**
@@ -1097,6 +1099,8 @@ export interface MaterialAssetLibraryItem {
   fileUrl: string;
   previewUrl: string;
   remoteUrl?: string | null;
+  hasRemotePath?: boolean;
+  remotePath?: string | null;
   metadata?: Record<string, unknown> | null;
   createdAt: string;
   updatedAt: string;
@@ -1200,7 +1204,7 @@ export interface WorkflowDetail {
   finalResult?: MaterialAssetLibraryItem | null;
 }
 
-export type MaterialAssetType = "character_sheet" | "scene" | "prop" | "workflow";
+export type MaterialAssetType = "character_sheet" | "scene" | "prop" | "free" | "workflow";
 
 export interface MaterialAssetQuery {
   q?: string;
@@ -1218,6 +1222,7 @@ export interface CreateMaterialGenerationRequest {
   description?: string | null;
   styleKeywords?: string[];
   aspectRatio: string;
+  imageSize?: string | null;
   textAnalysisModel?: string | null;
   imageModel?: string | null;
   seed?: number | null;
@@ -1235,6 +1240,11 @@ export interface MaterialGenerationResponse {
   title?: string | null;
   status?: string | null;
   metadata?: Record<string, unknown> | null;
+}
+
+export interface MaterialAssetDeleteResult {
+  assetId?: string | null;
+  deleted: boolean;
 }
 
 export interface UpdateMaterialAssetRatingRequest {

@@ -9,9 +9,12 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
+import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
@@ -75,6 +78,26 @@ public class ImageProviderTransport {
             }
             throw new GenerationProviderException("remote media download failed: " + ex.getMessage());
         }
+    }
+
+    public HttpResponse<String> sendMultipart(
+        String endpoint,
+        String apiKey,
+        Map<String, String> fields,
+        List<MultipartFilePart> files,
+        int timeoutSeconds,
+        Map<String, Object> requestPayload
+    ) {
+        String boundary = "jiandou-" + UUID.randomUUID();
+        byte[] body = multipartBody(boundary, fields, files);
+        HttpRequest request = HttpRequest.newBuilder(URI.create(endpoint))
+            .header("Authorization", "Bearer " + apiKey)
+            .header("Content-Type", "multipart/form-data; boundary=" + boundary)
+            .header("Accept", "application/json")
+            .timeout(Duration.ofSeconds(Math.max(30, timeoutSeconds)))
+            .POST(HttpRequest.BodyPublishers.ofByteArray(body))
+            .build();
+        return send(request, "provider multipart request failed", requestPayload);
     }
 
     public HttpResponse<String> send(HttpRequest request, String errorPrefix) {
@@ -156,6 +179,35 @@ public class ImageProviderTransport {
         }
     }
 
+    private byte[] multipartBody(String boundary, Map<String, String> fields, List<MultipartFilePart> files) {
+        List<byte[]> parts = new ArrayList<>();
+        String lineBreak = "\r\n";
+        for (Map.Entry<String, String> entry : fields.entrySet()) {
+            parts.add(("--" + boundary + lineBreak
+                + "Content-Disposition: form-data; name=\"" + entry.getKey() + "\"" + lineBreak
+                + lineBreak
+                + entry.getValue()
+                + lineBreak).getBytes(StandardCharsets.UTF_8));
+        }
+        for (MultipartFilePart file : files) {
+            parts.add(("--" + boundary + lineBreak
+                + "Content-Disposition: form-data; name=\"" + file.fieldName() + "\"; filename=\"" + file.fileName() + "\"" + lineBreak
+                + "Content-Type: " + firstNonBlank(file.contentType(), "application/octet-stream") + lineBreak
+                + lineBreak).getBytes(StandardCharsets.UTF_8));
+            parts.add(file.data() == null ? new byte[0] : file.data());
+            parts.add(lineBreak.getBytes(StandardCharsets.UTF_8));
+        }
+        parts.add(("--" + boundary + "--" + lineBreak).getBytes(StandardCharsets.UTF_8));
+        int totalBytes = parts.stream().mapToInt(part -> part.length).sum();
+        byte[] body = new byte[totalBytes];
+        int offset = 0;
+        for (byte[] part : parts) {
+            System.arraycopy(part, 0, body, offset, part.length);
+            offset += part.length;
+        }
+        return body;
+    }
+
     private String firstNonBlank(String... values) {
         for (String value : values) {
             if (value != null && !value.isBlank()) {
@@ -178,5 +230,8 @@ public class ImageProviderTransport {
      * @param mimeType mime类型值
      */
     public record DownloadedBinary(byte[] data, String mimeType) {
+    }
+
+    public record MultipartFilePart(String fieldName, String fileName, String contentType, byte[] data) {
     }
 }

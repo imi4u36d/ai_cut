@@ -1,6 +1,7 @@
 package com.jiandou.api.workflow.application;
 
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
+import com.jiandou.api.generation.observability.ProviderPayloadSanitizer;
 import com.jiandou.api.task.infrastructure.mybatis.MaterialAssetEntity;
 import com.jiandou.api.task.infrastructure.mybatis.MaterialAssetMapper;
 import com.jiandou.api.task.infrastructure.mybatis.SystemLogEntity;
@@ -235,7 +236,7 @@ public class WorkflowRepository {
             entity.setEvent(event);
             entity.setLevel(level == null || level.isBlank() ? "INFO" : level.toUpperCase());
             entity.setMessage(message == null ? "" : message);
-            entity.setPayloadJson(WorkflowJsonSupport.write(payload == null ? Map.of() : payload));
+            entity.setPayloadJson(WorkflowJsonSupport.write(ProviderPayloadSanitizer.sanitize(payload == null ? Map.of() : payload)));
             entity.setSource("spring-api");
             entity.setServiceName("api-spring");
             entity.setHostName("");
@@ -266,8 +267,8 @@ public class WorkflowRepository {
             entity.setModelAlias(stringValue(modelCall.get("modelAlias")));
             entity.setEndpointHost(stringValue(modelCall.get("endpointHost")));
             entity.setRequestId(stringValue(modelCall.get("requestId")));
-            entity.setRequestPayloadJson(WorkflowJsonSupport.write(modelCall.get("requestPayload")));
-            entity.setResponsePayloadJson(WorkflowJsonSupport.write(modelCall.get("responsePayload")));
+            entity.setRequestPayloadJson(WorkflowJsonSupport.write(ProviderPayloadSanitizer.sanitize(modelCall.get("requestPayload"))));
+            entity.setResponsePayloadJson(WorkflowJsonSupport.write(ProviderPayloadSanitizer.sanitize(modelCall.get("responsePayload"))));
             entity.setHttpStatus(intValue(modelCall.get("httpStatus"), 0));
             entity.setResponseStatusCode(intValue(modelCall.get("responseCode"), entity.getHttpStatus()));
             entity.setSuccess(booleanValue(modelCall.get("success")) ? 1 : 0);

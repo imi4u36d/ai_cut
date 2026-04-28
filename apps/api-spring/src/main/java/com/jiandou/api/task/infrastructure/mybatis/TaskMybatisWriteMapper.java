@@ -2,6 +2,7 @@ package com.jiandou.api.task.infrastructure.mybatis;
 
 import com.jiandou.api.task.domain.ExecutionMode;
 import com.jiandou.api.task.domain.TaskResultTypes;
+import com.jiandou.api.generation.observability.ProviderPayloadSanitizer;
 import com.jiandou.api.task.persistence.TaskRecordAssembler;
 import java.util.Map;
 
@@ -231,8 +232,8 @@ final class TaskMybatisWriteMapper {
         entity.setModelAlias(TaskMybatisValueSupport.stringValue(modelCall.get("modelAlias")));
         entity.setEndpointHost(TaskMybatisValueSupport.stringValue(modelCall.get("endpointHost")));
         entity.setRequestId(TaskMybatisValueSupport.stringValue(modelCall.get("requestId")));
-        entity.setRequestPayloadJson(MybatisJsonSupport.write(modelCall.get("requestPayload")));
-        entity.setResponsePayloadJson(MybatisJsonSupport.write(modelCall.get("responsePayload")));
+        entity.setRequestPayloadJson(MybatisJsonSupport.write(ProviderPayloadSanitizer.sanitize(modelCall.get("requestPayload"))));
+        entity.setResponsePayloadJson(MybatisJsonSupport.write(ProviderPayloadSanitizer.sanitize(modelCall.get("responsePayload"))));
         entity.setHttpStatus(TaskMybatisValueSupport.intValue(modelCall.get("httpStatus"), 0));
         entity.setResponseStatusCode(TaskMybatisValueSupport.intValue(
             modelCall.get("responseCode"),

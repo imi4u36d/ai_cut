@@ -411,8 +411,9 @@ public class GenerationRunFactory {
         List<Map<String, Object>> callChain = new ArrayList<>();
         GenerationRunSupport.TextGenerationAttempt keyframeAttempt = null;
         String keyframePrompt = prompt;
-        String negativePrompt = buildNegativePrompt(GenerationModelKinds.IMAGE);
-        String shapedPrompt = support.appendNegativePrompt(keyframePrompt, negativePrompt);
+        boolean promptPassthrough = support.nestedBoolean(request, "input", "promptPassthrough", false);
+        String negativePrompt = promptPassthrough ? "" : buildNegativePrompt(GenerationModelKinds.IMAGE);
+        String shapedPrompt = promptPassthrough ? keyframePrompt : support.appendNegativePrompt(keyframePrompt, negativePrompt);
         ImageModelProvider imageModelProvider = imageModelProviderRegistry.resolve(imageProfile);
         RemoteImageGenerationResult remoteImage = imageModelProvider.generate(
             imageProfile,
@@ -433,6 +434,18 @@ public class GenerationRunFactory {
             support.extensionFromMimeOrUrl(remoteImage.mimeType(), remoteImage.remoteSourceUrl(), GenerationModelKinds.IMAGE),
             remoteImage.data()
         );
+        String providerRemoteSourceUrl = support.stringValue(remoteImage.remoteSourceUrl());
+        String artifactRemoteSourceUrl = support.buildExternallyAccessibleUrl(imageArtifact.publicUrl());
+        boolean requireRemoteSourceUrl = support.nestedBoolean(request, "storage", "requireRemoteSourceUrl", true);
+        if (requireRemoteSourceUrl && providerRemoteSourceUrl.isBlank()) {
+            if (artifactRemoteSourceUrl.isBlank()) {
+                throw new GenerationProviderException("image remoteSourceUrl requires JIANDOU_STORAGE_PUBLIC_BASE_URL when provider response has no remote image URL");
+            }
+            if (normalizeExternalMediaUrl(artifactRemoteSourceUrl).isBlank()) {
+                throw new GenerationProviderException("JIANDOU_STORAGE_PUBLIC_BASE_URL must generate an absolute http(s) URL");
+            }
+        }
+        String effectiveRemoteSourceUrl = support.firstNonBlank(providerRemoteSourceUrl, artifactRemoteSourceUrl);
         callChain.add(support.callLog("generation", "image.generated", "success", "远端图片已生成并保存到本地存储。", Map.of(
             "provider", remoteImage.provider(),
             "providerModel", remoteImage.providerModel(),
@@ -455,7 +468,9 @@ public class GenerationRunFactory {
         metadata.put("outputUrl", imageArtifact.publicUrl());
         metadata.put("fileUrl", imageArtifact.publicUrl());
         metadata.put("source", "remote:" + remoteImage.providerModel());
-        metadata.put("remoteSourceUrl", remoteImage.remoteSourceUrl());
+        metadata.put("remoteSourceUrl", effectiveRemoteSourceUrl);
+        metadata.put("artifactRemoteSourceUrl", artifactRemoteSourceUrl);
+        metadata.put("providerRemoteSourceUrl", providerRemoteSourceUrl);
         metadata.put("frameRole", frameRole);
         metadata.put("keyframePrompt", keyframePrompt);
         metadata.put("textAnalysisProvider", textProfile.provider());
@@ -533,10 +548,8 @@ public class GenerationRunFactory {
             requestedMinDurationSeconds,
             requestedMaxDurationSeconds
         );
-        String firstFrameUrl = support.nestedValue(request, "input", "firstFrameUrl", "");
-        String lastFrameUrl = support.nestedValue(request, "input", "lastFrameUrl", "");
-        validateExternalMediaUrl(firstFrameUrl, "firstFrameUrl");
-        validateExternalMediaUrl(lastFrameUrl, "lastFrameUrl");
+        String firstFrameUrl = resolveVideoFrameInputUrl(support.nestedValue(request, "input", "firstFrameUrl", ""), "firstFrameUrl");
+        String lastFrameUrl = resolveVideoFrameInputUrl(support.nestedValue(request, "input", "lastFrameUrl", ""), "lastFrameUrl");
         boolean generateAudio = support.nestedBoolean(request, "input", "generateAudio", true);
         boolean returnLastFrame = support.nestedBoolean(request, "input", "returnLastFrame", true);
         ModelRuntimeProfile textProfile = modelResolver.resolveTextProfile(textModel, userId);
@@ -879,11 +892,24 @@ public class GenerationRunFactory {
         return resolved;
     }
 
-    private void validateExternalMediaUrl(String url, String fieldName) {
-        String normalized = normalizeExternalMediaUrl(url);
-        if (!support.stringValue(url).isBlank() && normalized.isBlank()) {
-            throw new IllegalArgumentException("video " + fieldName + " must be an absolute http(s) URL");
+    private String resolveVideoFrameInputUrl(String url, String fieldName) {
+        String normalized = support.stringValue(url);
+        if (normalized.isBlank()) {
+            return "";
         }
+        if (!normalizeExternalMediaUrl(normalized).isBlank() || isImageDataUri(normalized)) {
+            return normalized;
+        }
+        String dataUri = support.imageDataUriFromPublicUrl(normalized);
+        if (!dataUri.isBlank()) {
+            return dataUri;
+        }
+        throw new IllegalArgumentException("video " + fieldName + " must be an absolute http(s) URL or local /storage image");
+    }
+
+    private boolean isImageDataUri(String url) {
+        String normalized = support.stringValue(url).toLowerCase(Locale.ROOT);
+        return normalized.startsWith("data:image/") && normalized.contains(";base64,");
     }
 
     private String normalizeExternalMediaUrl(String url) {
@@ -1027,24 +1053,84 @@ public class GenerationRunFactory {
         if (!normalized.contains("【分镜脚本】")) {
             return "review output missing storyboard section";
         }
-        boolean hasTableHeader = normalized.contains("| 镜号 |")
-            && normalized.contains("首帧描述")
-            && normalized.contains("尾帧描述")
-            && normalized.contains("分镜内容描述")
-            && normalized.contains("时长");
+        String storyboardSection = normalized.substring(normalized.indexOf("【分镜脚本】"));
+        boolean hasTableHeader = false;
+        boolean hasShotRows = false;
+        for (String rawLine : storyboardSection.split("\\R")) {
+            String line = rawLine.trim();
+            if (!line.startsWith("|")) {
+                continue;
+            }
+            List<String> cells = splitMarkdownTableRow(line);
+            if (cells.isEmpty() || isMarkdownDividerRow(cells)) {
+                continue;
+            }
+            if (isStoryboardHeaderRow(cells)) {
+                hasTableHeader = true;
+                continue;
+            }
+            if (hasTableHeader && isStoryboardShotRow(cells)) {
+                hasShotRows = true;
+                break;
+            }
+        }
         if (!hasTableHeader) {
             return "review output missing storyboard table header";
         }
-        boolean hasShotRows = normalized.lines()
-            .map(String::trim)
-            .anyMatch(line -> line.startsWith("|")
-                && !line.contains("镜号")
-                && !line.contains(":---")
-                && line.chars().filter(ch -> ch == '|').count() >= 6);
         if (!hasShotRows) {
             return "review output missing storyboard rows";
         }
         return "";
+    }
+
+    private List<String> splitMarkdownTableRow(String row) {
+        String trimmed = row.trim();
+        if (!trimmed.startsWith("|")) {
+            return List.of();
+        }
+        String[] parts = trimmed.substring(1, trimmed.endsWith("|") ? trimmed.length() - 1 : trimmed.length()).split("\\|");
+        List<String> cells = new ArrayList<>();
+        for (String part : parts) {
+            cells.add(part.trim());
+        }
+        return cells;
+    }
+
+    private boolean isMarkdownDividerRow(List<String> cells) {
+        for (String cell : cells) {
+            if (!cell.matches("[:\\-\\s]*")) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private boolean isStoryboardHeaderRow(List<String> cells) {
+        return cells.stream().anyMatch(cell -> cell.contains("镜号"))
+            && cells.stream().anyMatch(cell -> cell.contains("首帧描述"))
+            && cells.stream().anyMatch(cell -> cell.contains("尾帧描述"))
+            && cells.stream().anyMatch(cell -> cell.contains("分镜内容描述"))
+            && cells.stream().anyMatch(cell -> cell.contains("时长"));
+    }
+
+    private boolean isStoryboardShotRow(List<String> cells) {
+        if (cells.size() < 5) {
+            return false;
+        }
+        String shotLabel = cells.get(0).trim();
+        if (shotLabel.isBlank() || shotLabel.contains("镜号") || shotLabel.toLowerCase(Locale.ROOT).contains("shot")) {
+            return false;
+        }
+        return looksLikeShotLabel(shotLabel);
+    }
+
+    private boolean looksLikeShotLabel(String shotLabel) {
+        String normalized = shotLabel.replaceAll("\\s+", "");
+        return normalized.matches("\\d+[A-Za-z]?")
+            || normalized.matches("镜头\\d+[A-Za-z]?")
+            || normalized.matches("第\\d+镜")
+            || normalized.matches("镜头[一二三四五六七八九十百]+")
+            || normalized.matches("第[一二三四五六七八九十百]+镜");
     }
 
     /**

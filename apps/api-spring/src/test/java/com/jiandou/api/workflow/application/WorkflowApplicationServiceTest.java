@@ -18,6 +18,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.jiandou.api.auth.security.CurrentUserPrincipal;
+import com.jiandou.api.common.exception.ApiException;
 import com.jiandou.api.config.JiandouStorageProperties;
 import com.jiandou.api.generation.exception.GenerationProviderException;
 import com.jiandou.api.generation.application.GenerationApplicationService;
@@ -227,6 +228,56 @@ class WorkflowApplicationServiceTest {
     }
 
     @Test
+    void generateKeyframeUsesPublicUrlForBase64StartFrameReference() {
+        storageProperties.setPublicBaseUrl("https://assets.example.com/storage");
+        StageWorkflowEntity workflow = workflow("wf_base64_keyframe");
+        workflows.put(workflow.getWorkflowId(), workflow);
+        versions.put("sv_story", storyboardVersion(workflow.getWorkflowId(), storyboardClips()));
+
+        when(generationApplicationService.createRun(any())).thenReturn(
+            imageRun(
+                "run_start_base64",
+                "/storage/gen/workflows/wf_base64_keyframe/keyframes/clip1-first-v1.png",
+                "https://assets.example.com/storage/gen/workflows/wf_base64_keyframe/keyframes/clip1-first-v1.png"
+            ),
+            imageRun(
+                "run_end_base64",
+                "/storage/gen/workflows/wf_base64_keyframe/keyframes/clip1-last-v1.png",
+                "https://assets.example.com/storage/gen/workflows/wf_base64_keyframe/keyframes/clip1-last-v1.png"
+            )
+        );
+
+        service.generateKeyframe("wf_base64_keyframe", 1);
+
+        ArgumentCaptor<Map<String, Object>> requestCaptor = ArgumentCaptor.forClass(Map.class);
+        verify(generationApplicationService, times(2)).createRun(requestCaptor.capture());
+        Map<String, Object> tailInput = mapValue(requestCaptor.getAllValues().get(1).get("input"));
+        assertEquals(
+            "https://assets.example.com/storage/gen/workflows/wf_base64_keyframe/keyframes/clip1-first-v1.png",
+            tailInput.get("referenceImageUrl")
+        );
+        assertEquals(
+            List.of("https://assets.example.com/storage/gen/workflows/wf_base64_keyframe/keyframes/clip1-first-v1.png"),
+            listValue(tailInput.get("referenceImageUrls"))
+        );
+
+        StageVersionEntity keyframeVersion = listStageVersions(workflow.getWorkflowId()).stream()
+            .filter(item -> WorkflowConstants.STAGE_KEYFRAME.equals(item.getStageType()))
+            .findFirst()
+            .orElseThrow();
+        Map<String, Object> outputSummary = WorkflowJsonSupport.readMap(keyframeVersion.getOutputSummaryJson());
+        assertEquals("/storage/gen/workflows/wf_base64_keyframe/keyframes/clip1-first-v1.png", outputSummary.get("firstFrameUrl"));
+        assertEquals(
+            "https://assets.example.com/storage/gen/workflows/wf_base64_keyframe/keyframes/clip1-first-v1.png",
+            outputSummary.get("firstFrameRemoteUrl")
+        );
+        assertEquals(
+            "https://assets.example.com/storage/gen/workflows/wf_base64_keyframe/keyframes/clip1-last-v1.png",
+            outputSummary.get("lastFrameRemoteUrl")
+        );
+    }
+
+    @Test
     void generateFirstClipCreatesMissingCharacterSheetsBeforeClipKeyframe() {
         StageWorkflowEntity workflow = workflow("wf_character");
         workflow.setGlobalPrompt("新海诚动漫风，空气透视明显，光影清透。");
@@ -266,6 +317,8 @@ class WorkflowApplicationServiceTest {
         assertTrue(String.valueOf(mapValue(requests.get(0).get("input")).get("prompt")).contains("禁止手拿"));
         assertTrue(String.valueOf(mapValue(requests.get(0).get("input")).get("prompt")).contains("不得出现任何文字"));
         assertTrue(String.valueOf(mapValue(requests.get(0).get("input")).get("prompt")).contains("背景必须是纯白色背景"));
+        assertEquals(1280, mapValue(requests.get(0).get("input")).get("width"));
+        assertEquals(720, mapValue(requests.get(0).get("input")).get("height"));
         assertTrue(String.valueOf(mapValue(requests.get(1).get("input")).get("prompt")).contains("全局画风要求：新海诚动漫风"));
         assertTrue(String.valueOf(mapValue(requests.get(1).get("input")).get("prompt")).contains("三视图设定图"));
         assertNotNull(mapValue(requests.get(0).get("input")).get("seed"));
@@ -492,6 +545,88 @@ class WorkflowApplicationServiceTest {
     }
 
     @Test
+    void generateVideoConvertsHistoricalLocalKeyframeUrlsToDataUri() {
+        storageProperties.setPublicBaseUrl("https://assets.example.com/storage");
+        StageWorkflowEntity workflow = workflow("wf_local_frames");
+        workflows.put(workflow.getWorkflowId(), workflow);
+        versions.put("sv_story", storyboardVersion(workflow.getWorkflowId(), storyboardClips()));
+        StageVersionEntity keyframeVersion = keyframeVersion(
+            workflow.getWorkflowId(),
+            1,
+            "asset_key_local",
+            "/storage/gen/workflows/wf_local_frames/keyframes/clip1-last.png"
+        );
+        keyframeVersion.setOutputSummaryJson(WorkflowJsonSupport.write(Map.of(
+            "firstFrameUrl", "/storage/gen/workflows/wf_local_frames/keyframes/clip1-first.png",
+            "startFrameUrl", "/storage/gen/workflows/wf_local_frames/keyframes/clip1-first.png",
+            "lastFrameUrl", "/storage/gen/workflows/wf_local_frames/keyframes/clip1-last.png",
+            "endFrameUrl", "/storage/gen/workflows/wf_local_frames/keyframes/clip1-last.png",
+            "fileUrl", "/storage/gen/workflows/wf_local_frames/keyframes/clip1-last.png"
+        )));
+        versions.put(keyframeVersion.getStageVersionId(), keyframeVersion);
+        when(localMediaArtifactService.imageDataUriFromPublicUrl("/storage/gen/workflows/wf_local_frames/keyframes/clip1-first.png"))
+            .thenReturn("data:image/png;base64,bG9jYWwtZmlyc3Q=");
+        when(localMediaArtifactService.imageDataUriFromPublicUrl("/storage/gen/workflows/wf_local_frames/keyframes/clip1-last.png"))
+            .thenReturn("data:image/png;base64,bG9jYWwtbGFzdA==");
+
+        when(generationApplicationService.createRun(any())).thenReturn(videoRun(
+            "run_video_local_frames",
+            "https://cdn.example.com/clip1.mp4",
+            "data:image/png;base64,bG9jYWwtZmlyc3Q=",
+            "data:image/png;base64,bG9jYWwtbGFzdA==",
+            "https://cdn.example.com/clip1-generated-last.png"
+        ));
+
+        service.generateVideo("wf_local_frames", 1);
+
+        ArgumentCaptor<Map<String, Object>> requestCaptor = ArgumentCaptor.forClass(Map.class);
+        verify(generationApplicationService).createRun(requestCaptor.capture());
+        Map<String, Object> input = mapValue(requestCaptor.getValue().get("input"));
+        assertEquals("data:image/png;base64,bG9jYWwtZmlyc3Q=", input.get("firstFrameUrl"));
+        assertEquals("data:image/png;base64,bG9jYWwtbGFzdA==", input.get("lastFrameUrl"));
+    }
+
+    @Test
+    void generateVideoConvertsLocalKeyframeUrlsToDataUriWhenPublicBaseUrlIsMissing() {
+        StageWorkflowEntity workflow = workflow("wf_local_data_uri_frames");
+        workflows.put(workflow.getWorkflowId(), workflow);
+        versions.put("sv_story", storyboardVersion(workflow.getWorkflowId(), storyboardClips()));
+        StageVersionEntity keyframeVersion = keyframeVersion(
+            workflow.getWorkflowId(),
+            1,
+            "asset_key_data_uri",
+            "/storage/gen/workflows/wf_local_data_uri_frames/keyframes/clip1-last.png"
+        );
+        keyframeVersion.setOutputSummaryJson(WorkflowJsonSupport.write(Map.of(
+            "firstFrameUrl", "/storage/gen/workflows/wf_local_data_uri_frames/keyframes/clip1-first.png",
+            "startFrameUrl", "/storage/gen/workflows/wf_local_data_uri_frames/keyframes/clip1-first.png",
+            "lastFrameUrl", "/storage/gen/workflows/wf_local_data_uri_frames/keyframes/clip1-last.png",
+            "endFrameUrl", "/storage/gen/workflows/wf_local_data_uri_frames/keyframes/clip1-last.png",
+            "fileUrl", "/storage/gen/workflows/wf_local_data_uri_frames/keyframes/clip1-last.png"
+        )));
+        versions.put(keyframeVersion.getStageVersionId(), keyframeVersion);
+        when(localMediaArtifactService.imageDataUriFromPublicUrl("/storage/gen/workflows/wf_local_data_uri_frames/keyframes/clip1-first.png"))
+            .thenReturn("data:image/png;base64,Zmlyc3Q=");
+        when(localMediaArtifactService.imageDataUriFromPublicUrl("/storage/gen/workflows/wf_local_data_uri_frames/keyframes/clip1-last.png"))
+            .thenReturn("data:image/png;base64,bGFzdA==");
+        when(generationApplicationService.createRun(any())).thenReturn(videoRun(
+            "run_video_data_uri_frames",
+            "https://cdn.example.com/clip1.mp4",
+            "data:image/png;base64,Zmlyc3Q=",
+            "data:image/png;base64,bGFzdA==",
+            "https://cdn.example.com/clip1-generated-last.png"
+        ));
+
+        service.generateVideo("wf_local_data_uri_frames", 1);
+
+        ArgumentCaptor<Map<String, Object>> requestCaptor = ArgumentCaptor.forClass(Map.class);
+        verify(generationApplicationService).createRun(requestCaptor.capture());
+        Map<String, Object> input = mapValue(requestCaptor.getValue().get("input"));
+        assertEquals("data:image/png;base64,Zmlyc3Q=", input.get("firstFrameUrl"));
+        assertEquals("data:image/png;base64,bGFzdA==", input.get("lastFrameUrl"));
+    }
+
+    @Test
     void workflowDetailResolvesSecondClipStartFrameFromCurrentPreviousSelection() {
         StageWorkflowEntity workflow = workflow("wf_detail_sync");
         workflow.setSelectedStoryboardVersionId("sv_story");
@@ -544,8 +679,13 @@ class WorkflowApplicationServiceTest {
         verify(workflowRepository).saveModelCall(org.mockito.ArgumentMatchers.eq("wf_story_fail"), captor.capture());
         Map<String, Object> modelCall = captor.getValue();
         Map<String, Object> responsePayload = mapValue(modelCall.get("responsePayload"));
+        Map<String, Object> requestPayload = mapValue(modelCall.get("requestPayload"));
         assertEquals(200, modelCall.get("httpStatus"));
         assertEquals(200, responsePayload.get("httpStatus"));
+        assertEquals("POST", requestPayload.get("method"));
+        assertEquals("https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions", requestPayload.get("endpoint"));
+        assertEquals("qwen3.6-flash", mapValue(requestPayload.get("body")).get("model"));
+        assertFalse(mapValue(requestPayload.get("businessRequest")).isEmpty());
         assertFalse(mapValue(responsePayload.get("providerRequest")).isEmpty());
         assertFalse(mapValue(responsePayload.get("providerResponse")).isEmpty());
     }
@@ -574,7 +714,9 @@ class WorkflowApplicationServiceTest {
         assertEquals("qwen3.6-plus", modelCall.get("requestedModel"));
         assertEquals("qwen3.6-plus", modelCall.get("providerModel"));
         assertEquals("run_story_1", modelCall.get("requestId"));
-        assertFalse(mapValue(modelCall.get("requestPayload")).isEmpty());
+        Map<String, Object> requestPayload = mapValue(modelCall.get("requestPayload"));
+        assertEquals("https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions", requestPayload.get("endpoint"));
+        assertFalse(mapValue(requestPayload.get("businessRequest")).isEmpty());
         assertFalse(mapValue(modelCall.get("responsePayload")).isEmpty());
         Map<String, Object> run = mapValue(mapValue(modelCall.get("responsePayload")).get("run"));
         Map<String, Object> metadata = mapValue(mapValue(run.get("result")).get("metadata"));
@@ -736,6 +878,7 @@ class WorkflowApplicationServiceTest {
             List.of("https://cdn.example.com/ref.png"),
             List.of(),
             "16:9",
+            "1280x720",
             "text-model",
             "image-model",
             1234
@@ -752,9 +895,60 @@ class WorkflowApplicationServiceTest {
         assertEquals("", row.get("workflowId"));
         assertEquals("material_center", row.get("stageType"));
         assertEquals("scene", row.get("assetType"));
+        assertEquals(false, row.get("hasRemotePath"));
+        assertEquals("", row.get("remotePath"));
+        assertEquals("", row.get("remoteUrl"));
         Map<String, Object> metadata = mapValue(row.get("metadata"));
         assertEquals("湿润柏油路、霓虹招牌、窄巷纵深", metadata.get("description"));
-        assertEquals("https://remote.example.com/material-scene.png", metadata.get("remoteSourceUrl"));
+        assertEquals("", metadata.get("remoteSourceUrl"));
+        assertEquals(false, mapValue(requestCaptor.getValue().get("storage")).get("requireRemoteSourceUrl"));
+    }
+
+    @Test
+    void uploadMaterialAssetMapsLocalStoragePathToRemotePath() {
+        storageProperties.setPublicBaseUrl("https://assets.example.com/storage");
+        MaterialAssetEntity asset = asset(
+            "",
+            "asset_material_scene",
+            "material_center",
+            0,
+            "/storage/gen/material-center/scene/scene-1.png",
+            "image/png"
+        );
+        asset.setRemoteUrl("");
+        asset.setThirdPartyUrl("");
+        asset.setMetadataJson(WorkflowJsonSupport.write(Map.of("assetType", "scene")));
+        assets.put(asset.getMaterialAssetId(), asset);
+
+        Map<String, Object> row = service.uploadMaterialAssetRemote("asset_material_scene");
+
+        assertEquals("https://assets.example.com/storage/gen/material-center/scene/scene-1.png", row.get("remoteUrl"));
+        assertEquals(true, row.get("hasRemotePath"));
+        assertEquals("https://assets.example.com/storage/gen/material-center/scene/scene-1.png", row.get("remotePath"));
+        assertEquals("https://assets.example.com/storage/gen/material-center/scene/scene-1.png", asset.getThirdPartyUrl());
+        Map<String, Object> metadata = WorkflowJsonSupport.readMap(asset.getMetadataJson());
+        assertEquals("https://assets.example.com/storage/gen/material-center/scene/scene-1.png", metadata.get("remoteSourceUrl"));
+        assertNotNull(metadata.get("remoteUploadedAt"));
+    }
+
+    @Test
+    void deleteMaterialAssetClearsSelectedFlag() {
+        MaterialAssetEntity asset = asset(
+            "",
+            "asset_delete_scene",
+            "material_center",
+            0,
+            "/storage/gen/material-center/scene/delete-me.png",
+            "image/png"
+        );
+        assets.put(asset.getMaterialAssetId(), asset);
+
+        Map<String, Object> result = service.deleteMaterialAsset("asset_delete_scene");
+
+        assertEquals("asset_delete_scene", result.get("assetId"));
+        assertEquals(true, result.get("deleted"));
+        assertEquals(1, intValue(asset.getIsDeleted(), 0));
+        assertEquals(0, intValue(asset.getSelectedForNext(), 0));
     }
 
     @Test
@@ -798,6 +992,7 @@ class WorkflowApplicationServiceTest {
             List.of("/storage/uploads/ref-key.png"),
             List.of(),
             "1:1",
+            "1024x1024",
             "text-model",
             "image-model",
             null
@@ -808,6 +1003,155 @@ class WorkflowApplicationServiceTest {
         Map<String, Object> input = mapValue(requestCaptor.getValue().get("input"));
         assertEquals("https://assets.example.com/storage/uploads/ref-key.png", input.get("referenceImageUrl"));
         assertEquals(List.of("https://assets.example.com/storage/uploads/ref-key.png"), listValue(input.get("referenceImageUrls")));
+    }
+
+    @Test
+    void createMaterialGenerationFailsWhenLocalReferenceHasNoPublicBaseUrl() {
+        ApiException ex = assertThrows(
+            ApiException.class,
+            () -> service.createMaterialGeneration(new CreateMaterialGenerationRequest(
+                "prop",
+                "黄铜钥匙",
+                "旧黄铜钥匙，边缘有磨损",
+                List.of(),
+                List.of("/storage/uploads/ref-key.png"),
+                List.of(),
+                "1:1",
+                "1024x1024",
+                "text-model",
+                "image-model",
+                null
+            ))
+        );
+
+        assertEquals("storage_public_base_url_missing", ex.code());
+        assertTrue(ex.getMessage().contains("JIANDOU_STORAGE_PUBLIC_BASE_URL"));
+    }
+
+    @Test
+    void createMaterialGenerationFreeModeUsesPagePromptOnly() {
+        when(generationApplicationService.createRun(any())).thenReturn(
+            imageRun("run_material_free", "https://cdn.example.com/material-free.png", "")
+        );
+
+        service.createMaterialGeneration(new CreateMaterialGenerationRequest(
+            "free",
+            "自由生成",
+            "一张白底产品照，透明玻璃香水瓶放在中央，柔和阴影，高级商业摄影。",
+            List.of("cinematic"),
+            List.of("https://cdn.example.com/ref.png"),
+            List.of(),
+            "9:16",
+            "1024x1536",
+            "text-model",
+            "image-model",
+            null
+        ));
+
+        ArgumentCaptor<Map<String, Object>> requestCaptor = ArgumentCaptor.forClass(Map.class);
+        verify(generationApplicationService).createRun(requestCaptor.capture());
+        Map<String, Object> input = mapValue(requestCaptor.getValue().get("input"));
+        String prompt = String.valueOf(input.get("prompt"));
+        assertEquals("一张白底产品照，透明玻璃香水瓶放在中央，柔和阴影，高级商业摄影。", prompt);
+        assertFalse(prompt.contains("素材标题"));
+        assertFalse(prompt.contains("画风关键词"));
+        assertFalse(prompt.contains("参考图要求"));
+        assertFalse(prompt.contains("生成类型"));
+        assertEquals(1024, input.get("width"));
+        assertEquals(1536, input.get("height"));
+        assertEquals("free", input.get("frameRole"));
+        assertEquals(true, input.get("promptPassthrough"));
+        assertEquals("https://cdn.example.com/ref.png", input.get("referenceImageUrl"));
+    }
+
+    @Test
+    void createMaterialGenerationPersistsFailedModelCall() {
+        when(generationApplicationService.createRun(any())).thenThrow(new GenerationProviderException(
+            "provider request failed: http 502",
+            Map.of("body", Map.of("model", "gpt-image-2", "size", "1024x1536")),
+            "{\"error\":{\"message\":\"Upstream returned an invalid image payload\"}}",
+            502
+        ));
+
+        GenerationProviderException ex = assertThrows(
+            GenerationProviderException.class,
+            () -> service.createMaterialGeneration(new CreateMaterialGenerationRequest(
+                "character_sheet",
+                "林舒",
+                "17岁女生，短发，校服，身高165cm",
+                List.of(),
+                List.of(),
+                List.of(),
+                "9:16",
+                "1280x720",
+                "gpt-5.4",
+                "gpt-image-2",
+                null
+            ))
+        );
+
+        assertTrue(ex.getMessage().contains("http 502"));
+        ArgumentCaptor<Map<String, Object>> requestCaptor = ArgumentCaptor.forClass(Map.class);
+        verify(generationApplicationService).createRun(requestCaptor.capture());
+        Map<String, Object> input = mapValue(requestCaptor.getValue().get("input"));
+        assertEquals(1280, input.get("width"));
+        assertEquals(720, input.get("height"));
+        ArgumentCaptor<Map<String, Object>> modelCallCaptor = ArgumentCaptor.forClass(Map.class);
+        verify(workflowRepository).saveModelCall(anyString(), modelCallCaptor.capture());
+        Map<String, Object> modelCall = modelCallCaptor.getValue();
+        assertEquals("material_center", modelCall.get("stage"));
+        assertEquals("material_center.generate", modelCall.get("operation"));
+        assertEquals(false, modelCall.get("success"));
+        assertEquals(502, modelCall.get("httpStatus"));
+        assertTrue(String.valueOf(modelCall.get("errorMessage")).contains("http 502"));
+        assertEquals("gpt-image-2", modelCall.get("providerModel"));
+        Map<String, Object> requestPayload = mapValue(modelCall.get("requestPayload"));
+        assertEquals("gpt-image-2", mapValue(requestPayload.get("body")).get("model"));
+        assertEquals("1024x1536", mapValue(requestPayload.get("body")).get("size"));
+        assertFalse(mapValue(requestPayload.get("businessRequest")).isEmpty());
+    }
+
+    @Test
+    void uploadMaterialAssetRemoteWritesConfiguredRemotePath() {
+        storageProperties.setPublicBaseUrl("https://assets.example.com/storage");
+        MaterialAssetEntity asset = asset("", "asset_local_scene", "material_center", 0, "/storage/gen/material-center/scene.png", "image/png");
+        asset.setRemoteUrl("");
+        asset.setThirdPartyUrl("");
+        asset.setMetadataJson(WorkflowJsonSupport.write(Map.of("assetType", "scene")));
+        assets.put(asset.getMaterialAssetId(), asset);
+
+        Map<String, Object> row = service.uploadMaterialAssetRemote(asset.getMaterialAssetId());
+
+        assertEquals(true, row.get("hasRemotePath"));
+        assertEquals("https://assets.example.com/storage/gen/material-center/scene.png", row.get("remotePath"));
+        assertEquals("https://assets.example.com/storage/gen/material-center/scene.png", asset.getRemoteUrl());
+        assertEquals("https://assets.example.com/storage/gen/material-center/scene.png", asset.getThirdPartyUrl());
+        assertEquals("https://assets.example.com/storage/gen/material-center/scene.png", mapValue(row.get("metadata")).get("remoteSourceUrl"));
+    }
+
+    @Test
+    void uploadMaterialAssetRemoteRequiresPublicBaseUrl() {
+        MaterialAssetEntity asset = asset("", "asset_local_no_base", "material_center", 0, "/storage/gen/material-center/prop.png", "image/png");
+        asset.setRemoteUrl("");
+        asset.setThirdPartyUrl("");
+        assets.put(asset.getMaterialAssetId(), asset);
+
+        ApiException ex = assertThrows(ApiException.class, () -> service.uploadMaterialAssetRemote(asset.getMaterialAssetId()));
+
+        assertEquals("storage_public_base_url_missing", ex.code());
+    }
+
+    @Test
+    void deleteMaterialAssetSoftDeletesAsset() {
+        MaterialAssetEntity asset = asset("", "asset_delete_library", "material_center", 0, "/storage/gen/material-center/delete.png", "image/png");
+        assets.put(asset.getMaterialAssetId(), asset);
+
+        Map<String, Object> result = service.deleteMaterialAsset(asset.getMaterialAssetId());
+
+        assertEquals("asset_delete_library", result.get("assetId"));
+        assertEquals(true, result.get("deleted"));
+        assertEquals(1, asset.getIsDeleted());
+        assertEquals(0, asset.getSelectedForNext());
     }
 
     @Test

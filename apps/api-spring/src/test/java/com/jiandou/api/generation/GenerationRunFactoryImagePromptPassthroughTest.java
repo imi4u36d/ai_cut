@@ -58,9 +58,9 @@ class GenerationRunFactoryImagePromptPassthroughTest {
         MediaProviderProfile imageProfile = new MediaProviderProfile(
             new MediaProviderConfig(
                 "image",
-                "seedream-4.5",
-                "seedream",
-                "seedream-4.5",
+                "gpt-image-2",
+                "deeps_api",
+                "gpt-image-2",
                 "k",
                 "https://api.example.com/v1/images",
                 "",
@@ -164,8 +164,8 @@ class GenerationRunFactoryImagePromptPassthroughTest {
                     new byte[] {1, 2, 3},
                     "image/png",
                     "",
-                    "seedream",
-                    request.requestedModel(),
+                    profile.provider(),
+                    profile.modelName(),
                     "api.example.com",
                     request.width(),
                     request.height(),
@@ -204,7 +204,7 @@ class GenerationRunFactoryImagePromptPassthroughTest {
         ));
         request.put("model", Map.of(
             "textAnalysisModel", "gpt-text",
-            "providerModel", "seedream-4.5"
+            "providerModel", "gpt-image-2"
         ));
         request.put("options", Map.of("stylePreset", "cinematic"));
 
@@ -225,12 +225,128 @@ class GenerationRunFactoryImagePromptPassthroughTest {
         @SuppressWarnings("unchecked")
         Map<String, Object> metadata = (Map<String, Object>) result.get("metadata");
         assertEquals(java.util.List.of("https://example.com/reference.png"), metadata.get("referenceImageUrls"));
+        assertEquals("deeps_api", metadata.get("provider"));
+        assertEquals("gpt-image-2", metadata.get("providerModel"));
+        assertEquals("https://assets.example.com/storage/gen/_runs/run_image_1/image.png", metadata.get("remoteSourceUrl"));
+        @SuppressWarnings("unchecked")
+        Map<String, Object> modelInfo = (Map<String, Object>) result.get("modelInfo");
+        assertEquals("gpt-image-2", modelInfo.get("requestedModel"));
+        assertEquals("gpt-image-2", modelInfo.get("providerModel"));
+        assertEquals("deeps_api", modelInfo.get("provider"));
         assertTrue(String.valueOf(result.get("outputUrl")).startsWith("/storage/"));
+    }
+
+    @Test
+    void createImageRunCanSkipNegativePromptForExplicitPassthrough() {
+        ModelRuntimeProfile textProfile = new ModelRuntimeProfile(
+            "openai",
+            "gpt-text",
+            "k",
+            "https://api.example.com/v1",
+            60,
+            0.2,
+            2048,
+            "test"
+        );
+        MediaProviderProfile imageProfile = new MediaProviderProfile(
+            new MediaProviderConfig(
+                "image",
+                "gpt-image-2",
+                "deeps_api",
+                "gpt-image-2",
+                "k",
+                "https://api.example.com/v1/images",
+                "",
+                60,
+                "test"
+            ),
+            new MediaProviderCapabilities(false, false, false, false, 5, 120, "", java.util.List.of(), java.util.List.of())
+        );
+        ModelRuntimePropertiesResolver modelResolver = new ModelRuntimePropertiesResolver(new MockEnvironment()) {
+            @Override
+            public ModelRuntimeProfile resolveTextProfile(String requestedModel) {
+                return textProfile;
+            }
+
+            @Override
+            public MediaProviderProfile resolveMediaProfile(String requestedModel, String expectedKind) {
+                return imageProfile;
+            }
+
+            @Override
+            public String value(String section, String key, String fallback) {
+                return fallback;
+            }
+        };
+        PromptTemplateResolver promptTemplateResolver = new PromptTemplateResolver(
+            new MockEnvironment(),
+            modelResolver,
+            new GenerationConfigPathLocator(new MockEnvironment())
+        );
+        TextModelProviderRegistry textModelProviderRegistry = new TextModelProviderRegistry(java.util.List.of());
+        LocalMediaArtifactService localMediaArtifactService = new LocalMediaArtifactService(storageProperties(tempDir), "ffmpeg");
+        final String[] submittedPrompt = new String[1];
+        ImageModelProvider fakeImageModelProvider = new ImageModelProvider() {
+            @Override
+            public boolean supports(MediaProviderProfile profile) {
+                return true;
+            }
+
+            @Override
+            public RemoteImageGenerationResult generate(MediaProviderProfile profile, ImageGenerationRequest request) {
+                submittedPrompt[0] = request.prompt();
+                return new RemoteImageGenerationResult(
+                    new byte[] {1, 2, 3},
+                    "image/png",
+                    "",
+                    profile.provider(),
+                    profile.modelName(),
+                    "api.example.com",
+                    request.width(),
+                    request.height(),
+                    request.width() + "x" + request.height(),
+                    0
+                );
+            }
+        };
+        GenerationRunSupport support = new GenerationRunSupport(localMediaArtifactService, textModelProviderRegistry);
+        GenerationRunFactory factory = new GenerationRunFactory(
+            modelResolver,
+            promptTemplateResolver,
+            textModelProviderRegistry,
+            new ImageModelProviderRegistry(java.util.List.of(fakeImageModelProvider)),
+            new VideoModelProviderRegistry(java.util.List.of()),
+            support
+        );
+
+        String prompt = "只生成一个白底香水瓶";
+        Map<String, Object> request = new LinkedHashMap<>();
+        request.put("kind", "image");
+        request.put("input", Map.of(
+            "prompt", prompt,
+            "width", 1024,
+            "height", 1536,
+            "frameRole", "free",
+            "promptPassthrough", true
+        ));
+        request.put("model", Map.of(
+            "textAnalysisModel", "gpt-text",
+            "providerModel", "gpt-image-2"
+        ));
+
+        Map<String, Object> run = factory.createImageRun("run_image_free", request);
+
+        assertEquals(prompt, submittedPrompt[0]);
+        @SuppressWarnings("unchecked")
+        Map<String, Object> result = (Map<String, Object>) run.get("result");
+        assertEquals(prompt, result.get("shapedPrompt"));
+        assertEquals("", result.get("negativePrompt"));
     }
 
     private JiandouStorageProperties storageProperties(Path rootDir) {
         JiandouStorageProperties properties = new JiandouStorageProperties();
         properties.setRootDir(rootDir.toString());
+        properties.setPublicBaseUrl("https://assets.example.com/storage");
         return properties;
     }
 }

@@ -37,6 +37,7 @@ class GenerationCatalogServiceTest {
         assertEquals(2, list(payload, "aspectRatios").size());
         assertEquals(2, list(payload, "stylePresets").size());
         assertEquals(2, list(payload, "imageSizes").size());
+        assertEquals(List.of(), list(payload, "imageSizes").get(0).get("supportedModels"));
         assertEquals(6, list(payload, "videoSizes").size());
         assertEquals(List.of(4, 6, 8, 10, 12), list(payload, "videoDurations").stream().map(item -> item.get("value")).toList());
     }
@@ -66,7 +67,10 @@ class GenerationCatalogServiceTest {
             new ConfigSection("8", Map.of("label", "8 秒"))
         ));
         when(modelResolver.listModelsByKind(GenerationModelKinds.TEXT)).thenReturn(List.of(Map.of("value", "gpt-4.1")));
-        when(modelResolver.listModelsByKind(GenerationModelKinds.IMAGE)).thenReturn(List.of(Map.of("value", "seedream-3.0")));
+        when(modelResolver.listModelsByKind(GenerationModelKinds.IMAGE)).thenReturn(List.of(
+            Map.of("value", "seedream-3.0", "supportedSizes", List.of("1536x1024")),
+            Map.of("value", "gpt-image-2", "supportedSizes", List.of("1280x720"))
+        ));
         when(modelResolver.listModelsByKind(GenerationModelKinds.VIDEO)).thenReturn(List.of(
             Map.of("value", "seedance", "supportedSizes", List.of("720*1280"), "supportedDurations", List.of(8)),
             Map.of("value", "wanx", "supportedSizes", List.of("1280*720"), "supportedDurations", List.of(10))
@@ -81,6 +85,7 @@ class GenerationCatalogServiceTest {
         assertEquals("720*1280", payload.get("defaultVideoSize"));
         assertEquals(8, payload.get("defaultVideoDurationSeconds"));
         assertEquals("dir:/workspace/config", payload.get("configSource"));
+        assertEquals(List.of("seedream-3.0"), list(payload, "imageSizes").get(0).get("supportedModels"));
         assertEquals(List.of("seedance"), list(payload, "videoSizes").get(0).get("supportedModels"));
         assertEquals(List.of("seedance"), list(payload, "videoDurations").get(0).get("supportedModels"));
         assertEquals("海报 3:4", list(payload, "aspectRatios").get(0).get("label"));

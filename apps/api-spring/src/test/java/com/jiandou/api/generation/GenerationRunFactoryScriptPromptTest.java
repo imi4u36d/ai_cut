@@ -323,6 +323,95 @@ class GenerationRunFactoryScriptPromptTest {
     }
 
     @Test
+    void createScriptRunFallsBackWhenReviewEchoesPromptTables() {
+        int[] invocationCount = new int[1];
+        TextModelProviderRegistry textModelProviderRegistry = registry(new TextModelProvider() {
+            @Override
+            public boolean supports(ModelRuntimeProfile profile) {
+                return true;
+            }
+
+            @Override
+            public TextModelResponse generate(
+                ModelRuntimeProfile profile,
+                TextModelInvocation invocation
+            ) {
+                invocationCount[0]++;
+                if (invocationCount[0] == 1) {
+                    return new TextModelResponse(
+                        """
+                            【角色定义信息】
+                            - 林舒：外观锚点未明确。
+
+                            【分镜脚本】
+                            | 镜号 | 首帧描述 (Start Frame) | 尾帧描述 (End Frame) | 分镜内容描述 | 时长 |
+                            | :--- | :--- | :--- | :--- | :--- |
+                            | 001 | 林舒站在桌子左侧，桌上放着文件和杯子，左侧是窗户，右侧是书架，她正低头看向文件。 | 林舒仍站在同一张桌子左侧，桌上仍放着文件和杯子，左侧是窗户，右侧是书架，她抬头转向门口。 | 林舒先低头翻看桌上的文件，听到门外动静后停手，抬头转向门口。 | 8s |
+                            """,
+                        "https://api.example.com/v1/responses",
+                        "api.example.com",
+                        10,
+                        true,
+                        "resp_script_draft",
+                        Map.of("endpoint", "https://api.example.com/v1/responses", "body", Map.of("model", "gpt-text")),
+                        Map.of("id", "resp_script_draft"),
+                        200
+                    );
+                }
+                return new TextModelResponse(
+                    """
+                        ### AI 短剧分镜生成指令（严格执行版）
+                        表格必须严格使用以下表头：
+                        | 角色 | 性别年龄 | 人物定位 | 脸部五官 | 发型 | 体型身高 | 服装 | 稳定穿戴配饰 | 不可变视觉锚点 | 行为气质 | 说话风格 |
+                        | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+
+                        #### 二次审校要求
+
+                        【角色定义信息】
+                        - 按原文提炼核心角色。
+
+                        【分镜脚本】
+                        | 镜号 | 首帧描述 (Start Frame) | 尾帧描述 (End Frame) | 分镜内容描述 | 时长 |
+                        | :--- | :--- | :--- | :--- | :--- |
+
+                        # 任务输入
+                        女主在雨夜街头看见失踪多年的哥哥。
+                        """,
+                    "https://api.example.com/v1/responses",
+                    "api.example.com",
+                    12,
+                    true,
+                    "resp_script_review_echo",
+                    Map.of("endpoint", "https://api.example.com/v1/responses", "body", Map.of("model", "gpt-text")),
+                    Map.of("id", "resp_script_review_echo"),
+                    200
+                );
+            }
+        });
+        GenerationRunFactory factory = createFactory(textModelProviderRegistry);
+
+        Map<String, Object> request = new LinkedHashMap<>();
+        request.put("kind", "script");
+        request.put("input", Map.of("text", "女主在雨夜街头看见失踪多年的哥哥。"));
+        request.put("model", Map.of("textAnalysisModel", "gpt-text"));
+        request.put("options", Map.of("visualStyle", "电影写实"));
+
+        Map<String, Object> run = factory.createScriptRun("run_script_prompt_echo", request);
+
+        assertEquals(2, invocationCount[0]);
+        @SuppressWarnings("unchecked")
+        Map<String, Object> result = (Map<String, Object>) run.get("result");
+        assertTrue(String.valueOf(result.get("scriptMarkdown")).contains("同一张桌子左侧"));
+        assertFalse(String.valueOf(result.get("scriptMarkdown")).contains("# 任务输入"));
+        @SuppressWarnings("unchecked")
+        Map<String, Object> metadata = (Map<String, Object>) result.get("metadata");
+        assertEquals(false, metadata.get("reviewApplied"));
+        assertEquals("resp_script_draft", metadata.get("finalResponseId"));
+        assertEquals("resp_script_review_echo", metadata.get("reviewResponseId"));
+        assertEquals("review output missing storyboard rows", metadata.get("reviewFallbackReason"));
+    }
+
+    @Test
     void createScriptAdjustRunUsesOriginalStoryboardAndOptionalRequirement() {
         String[] capturedSystemPrompt = new String[1];
         String[] capturedUserPrompt = new String[1];

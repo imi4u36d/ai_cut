@@ -6,6 +6,7 @@ import com.jiandou.api.workflow.web.dto.ReuseMaterialRequest;
 import com.jiandou.api.workflow.web.dto.UpdateMaterialAssetRatingRequest;
 import java.util.List;
 import java.util.Map;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -48,9 +49,19 @@ public class MaterialAssetController {
         return workflowService.rateMaterialAsset(assetId, request);
     }
 
+    @PostMapping("/{assetId}/upload")
+    public Map<String, Object> uploadMaterialAsset(@PathVariable String assetId) {
+        return workflowService.uploadMaterialAssetRemote(assetId);
+    }
+
     @PostMapping("/{assetId}/reuse")
     public Map<String, Object> reuseMaterialAsset(@PathVariable String assetId, @RequestBody(required = false) ReuseMaterialRequest request) {
         return workflowService.reuseMaterialAsset(assetId, request == null ? new ReuseMaterialRequest("clone") : request);
+    }
+
+    @DeleteMapping("/{assetId}")
+    public Map<String, Object> deleteMaterialAsset(@PathVariable String assetId) {
+        return workflowService.deleteMaterialAsset(assetId);
     }
 
 }

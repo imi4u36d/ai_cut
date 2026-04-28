@@ -40,17 +40,22 @@
         </label>
 
         <label class="center-field">
+          <span>图像尺寸</span>
+          <AppSelect v-model="form.imageSize" :options="imageSizeSelectOptions" placeholder="选择尺寸" />
+        </label>
+
+        <label class="center-field">
           <span>Seed</span>
           <input v-model="form.seed" class="field-input" inputmode="numeric" placeholder="可为空" />
         </label>
 
         <label class="center-field center-field-full">
-          <span>描述</span>
+          <span>{{ descriptionLabel }}</span>
           <textarea
             v-model="form.description"
             class="field-textarea"
             rows="5"
-            placeholder="描述角色外观、场景布局或道具细节"
+            :placeholder="descriptionPlaceholder"
           ></textarea>
         </label>
 
@@ -121,14 +126,29 @@
             class="result-card__preview"
             type="button"
             :aria-label="`查看${asset.title}原图`"
-            @click="openImagePreview(asset.previewUrl || asset.fileUrl, asset.title)"
+            @click="openImagePreview(resultAssetUrl(asset), asset.title)"
           >
-            <img :src="asset.previewUrl || asset.fileUrl" :alt="asset.title" />
+            <img :src="resultAssetUrl(asset)" :alt="asset.title" />
           </button>
           <div v-else class="result-card__placeholder">{{ asset.mediaType }}</div>
-          <div>
+          <div class="result-card__body">
             <h3>{{ asset.title }}</h3>
             <p>{{ asset.originModel || form.imageModel || "-" }}</p>
+            <div class="result-card__status">
+              <button
+                v-if="asset.remoteUrl"
+                class="result-remote-chip"
+                type="button"
+                :title="asset.remoteUrl"
+                @click="copyRemoteUrl(asset.remoteUrl)"
+              >
+                远程 {{ compactUrl(asset.remoteUrl) }}
+              </button>
+              <span v-else class="result-remote-empty">暂未上传</span>
+            </div>
+            <button class="btn-secondary btn-sm" type="button" :disabled="busyActionKey === `upload-${asset.id}` || Boolean(asset.remoteUrl)" @click="handleUploadResultAsset(asset.id)">
+              {{ busyActionKey === `upload-${asset.id}` ? "上传中..." : (asset.remoteUrl ? "已上传" : "上传") }}
+            </button>
           </div>
         </article>
 
@@ -141,9 +161,10 @@
           >
             <img :src="resultOutputUrl" alt="生成素材" />
           </button>
-          <div>
+          <div class="result-card__body">
             <h3>{{ resultTitle }}</h3>
             <p>{{ form.imageModel || "-" }}</p>
+            <span class="result-remote-empty">暂未上传</span>
           </div>
         </article>
       </div>
@@ -162,13 +183,16 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from "vue";
-import { createMaterialGeneration, uploadImage } from "@/api/material-assets";
+import { computed, onMounted, reactive, ref, watch } from "vue";
+import { createMaterialGeneration, uploadImage, uploadMaterialAsset } from "@/api/material-assets";
 import { fetchGenerationOptions } from "@/api/generation";
 import AppSelect from "@/components/common/AppSelect.vue";
 import type { AppSelectOption } from "@/components/common/app-select";
 import type {
   CreateMaterialGenerationRequest,
+  GenerationImageSizeOption,
+  GenerationTextAnalysisModelInfo,
+  MaterialAssetLibraryItem,
   MaterialAssetType,
   MaterialGenerationResponse,
 } from "@/types";
@@ -202,6 +226,11 @@ const assetTypeOptions: AssetTypeOption[] = [
     value: "prop",
     description: "用于关键物件、手持物和视觉线索",
   },
+  {
+    label: "自由模式",
+    value: "free",
+    description: "只按页面提示词生成，不附加类型规则",
+  },
 ];
 
 const form = reactive({
@@ -210,6 +239,7 @@ const form = reactive({
   description: "",
   styleKeywords: "",
   aspectRatio: "9:16",
+  imageSize: "",
   textAnalysisModel: "",
   imageModel: "",
   seed: "",
@@ -218,13 +248,15 @@ const form = reactive({
 const loadingOptions = ref(false);
 const submitting = ref(false);
 const uploadingImage = ref(false);
+const busyActionKey = ref("");
 const errorMessage = ref("");
 const referenceError = ref("");
 const referenceImageUrlsText = ref("");
 const uploadedReferenceItems = ref<UploadedReferenceItem[]>([]);
 const result = ref<MaterialGenerationResponse | null>(null);
 const aspectRatios = ref<AppSelectOption[]>([]);
-const imageModels = ref<AppSelectOption[]>([]);
+const imageModels = ref<GenerationTextAnalysisModelInfo[]>([]);
+const imageSizes = ref<GenerationImageSizeOption[]>([]);
 const imagePreviewState = reactive({
   open: false,
   url: "",
@@ -241,7 +273,54 @@ const aspectRatioOptions = computed<AppSelectOption[]>(() =>
       ],
 );
 const imageModelOptions = computed<AppSelectOption[]>(() =>
-  imageModels.value.length ? imageModels.value : [{ label: "默认模型", value: "" }],
+  imageModels.value.length
+    ? imageModels.value.map((item) => ({
+        label: item.label || item.value,
+        value: item.value,
+        description: item.description || item.provider || undefined,
+      }))
+    : [{ label: "默认模型", value: "" }],
+);
+const selectedImageModel = computed(() => normalizeModelName(form.imageModel));
+const selectedImageModelOption = computed<GenerationTextAnalysisModelInfo | null>(() => {
+  if (!selectedImageModel.value) {
+    return null;
+  }
+  return imageModels.value.find((item) => normalizeModelName(item.value) === selectedImageModel.value) ?? null;
+});
+const imageSizeOptions = computed<GenerationImageSizeOption[]>(() => {
+  const source = imageSizes.value;
+  if (!source.length) {
+    return [];
+  }
+  const selectedModelSizes = selectedImageModelOption.value?.supportedSizes ?? [];
+  const normalizedModelSizes = selectedModelSizes.map(normalizeImageSize).filter(Boolean);
+  const filtered = source.filter((item) => {
+    const normalizedValue = normalizeImageSize(item.value);
+    if (normalizedModelSizes.length && !normalizedModelSizes.includes(normalizedValue)) {
+      return false;
+    }
+    const supportedModels = Array.isArray(item.supportedModels) ? item.supportedModels : [];
+    if (!selectedImageModel.value || !supportedModels.length) {
+      return true;
+    }
+    return supportedModels.some((model) => normalizeModelName(model) === selectedImageModel.value);
+  });
+  const modelFiltered = filtered.length ? filtered : source;
+  const ratioFiltered = modelFiltered.filter((item) => imageSizeMatchesAspectRatio(item, form.aspectRatio));
+  return ratioFiltered.length ? ratioFiltered : modelFiltered;
+});
+const imageSizeSelectOptions = computed<AppSelectOption[]>(() =>
+  imageSizeOptions.value.map((item) => ({
+    label: item.label || (item.width && item.height ? `${item.width} × ${item.height}` : item.value),
+    value: item.value,
+  })),
+);
+const descriptionLabel = computed(() => (form.assetType === "free" ? "提示词" : "描述"));
+const descriptionPlaceholder = computed(() =>
+  form.assetType === "free"
+    ? "直接输入图片生成提示词，自由模式不会附加三视图、场景或道具规则"
+    : "描述角色外观、场景布局或道具细节",
 );
 const typedReferenceUrls = computed(() => parseReferenceUrls(referenceImageUrlsText.value));
 const uploadedReferencePublicUrls = computed(() => uploadedReferenceItems.value.map((item) => item.publicUrl));
@@ -279,6 +358,74 @@ function compactUrl(url: string) {
   return `${url.slice(0, 24)}...${url.slice(-14)}`;
 }
 
+function replaceResultAsset(updated?: MaterialAssetLibraryItem | null) {
+  if (!result.value || !updated) {
+    return;
+  }
+  if (result.value.asset?.id === updated.id) {
+    result.value.asset = updated;
+  }
+  result.value.assets = (result.value.assets ?? []).map((asset) => (asset.id === updated.id ? updated : asset));
+}
+
+function resultAssetUrl(asset: MaterialAssetLibraryItem) {
+  return asset.previewUrl || asset.fileUrl || "";
+}
+
+function normalizeModelName(value: unknown) {
+  return String(value ?? "").trim().toLowerCase();
+}
+
+function normalizeImageSize(value: unknown) {
+  return String(value ?? "").trim().toLowerCase().replace(/\*/g, "x");
+}
+
+function resolveDefaultImageModel(models: GenerationTextAnalysisModelInfo[], current?: string | null) {
+  const currentValue = String(current ?? "").trim();
+  if (currentValue && models.some((item) => item.value === currentValue)) {
+    return currentValue;
+  }
+  const gptModel = models.find((item) => {
+    const searchable = [item.family, item.provider, item.value, item.label].map(normalizeModelName);
+    return searchable.some((value) => value.includes("gpt"));
+  });
+  return gptModel?.value || models[0]?.value || currentValue;
+}
+
+function syncImageSizeSelection(preferred?: string | null) {
+  const available = imageSizeOptions.value;
+  if (!available.length) {
+    form.imageSize = "";
+    return;
+  }
+  const preferredValue = normalizeImageSize(preferred);
+  const currentValue = normalizeImageSize(form.imageSize);
+  const next =
+    available.find((item) => preferredValue && normalizeImageSize(item.value) === preferredValue)?.value
+    ?? available.find((item) => currentValue && normalizeImageSize(item.value) === currentValue)?.value
+    ?? available[0].value;
+  form.imageSize = String(next);
+}
+
+function imageSizeMatchesAspectRatio(item: GenerationImageSizeOption, aspectRatio: string) {
+  const width = Number(item.width);
+  const height = Number(item.height);
+  if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) {
+    return true;
+  }
+  const expected = aspectRatio.trim();
+  if (expected === "16:9") {
+    return width > height;
+  }
+  if (expected === "9:16") {
+    return height > width;
+  }
+  if (expected === "1:1") {
+    return width === height;
+  }
+  return true;
+}
+
 function removeUploadedReference(fileUrl: string) {
   uploadedReferenceItems.value = uploadedReferenceItems.value.filter((item) => item.fileUrl !== fileUrl);
 }
@@ -298,6 +445,31 @@ function closeImagePreview() {
   imagePreviewState.alt = "";
 }
 
+async function copyRemoteUrl(remoteUrl?: string | null) {
+  const value = remoteUrl?.trim();
+  if (!value) {
+    return;
+  }
+  try {
+    await navigator.clipboard.writeText(value);
+  } catch {
+    errorMessage.value = "远程路径复制失败，请手动复制";
+  }
+}
+
+async function handleUploadResultAsset(assetId: string) {
+  busyActionKey.value = `upload-${assetId}`;
+  errorMessage.value = "";
+  try {
+    const updated = await uploadMaterialAsset(assetId);
+    replaceResultAsset(updated);
+  } catch (error) {
+    errorMessage.value = error instanceof Error ? error.message : "素材上传失败";
+  } finally {
+    busyActionKey.value = "";
+  }
+}
+
 function buildPayload(): CreateMaterialGenerationRequest {
   const seed = form.seed.trim() ? Number(form.seed.trim()) : null;
   return {
@@ -306,6 +478,7 @@ function buildPayload(): CreateMaterialGenerationRequest {
     description: form.description.trim() || null,
     styleKeywords: parseReferenceUrls(form.styleKeywords),
     aspectRatio: form.aspectRatio,
+    imageSize: form.imageSize || null,
     textAnalysisModel: form.textAnalysisModel || null,
     imageModel: form.imageModel || null,
     seed: Number.isFinite(seed) ? seed : null,
@@ -322,14 +495,12 @@ async function loadOptions() {
       label: item.label || item.value,
       value: item.value,
     }));
-    imageModels.value = (options.imageModels ?? []).map((item) => ({
-      label: item.label || item.value,
-      value: item.value,
-      description: item.description || undefined,
-    }));
+    imageModels.value = options.imageModels ?? [];
+    imageSizes.value = options.imageSizes ?? [];
     form.aspectRatio = options.defaultAspectRatio || String(aspectRatioOptions.value[0]?.value || form.aspectRatio);
     form.textAnalysisModel = options.defaultTextAnalysisModel || options.textAnalysisModels?.[0]?.value || form.textAnalysisModel;
-    form.imageModel = options.imageModels?.[0]?.value || form.imageModel;
+    form.imageModel = resolveDefaultImageModel(options.imageModels ?? [], form.imageModel);
+    syncImageSizeSelection(options.defaultImageSize);
   } finally {
     loadingOptions.value = false;
   }
@@ -373,6 +544,7 @@ async function handleSubmit() {
   submitting.value = true;
   errorMessage.value = "";
   result.value = null;
+  busyActionKey.value = "";
   try {
     result.value = await createMaterialGeneration(buildPayload());
   } catch (error) {
@@ -396,6 +568,13 @@ function resetForm() {
 onMounted(async () => {
   await loadOptions();
 });
+
+watch(
+  () => [form.imageModel, form.aspectRatio, imageSizes.value] as const,
+  () => {
+    syncImageSizeSelection(form.imageSize);
+  }
+);
 </script>
 
 <style scoped>
@@ -597,6 +776,12 @@ onMounted(async () => {
   text-align: left;
 }
 
+.result-card__body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
 .result-card__preview img,
 .result-card__placeholder {
   width: 100%;
@@ -642,6 +827,41 @@ onMounted(async () => {
   margin: 0;
   color: rgba(255, 255, 255, 0.58);
   font-size: 0.84rem;
+}
+
+.result-card__status {
+  display: flex;
+  min-height: 30px;
+  align-items: center;
+}
+
+.result-remote-chip,
+.result-remote-empty {
+  display: inline-flex;
+  max-width: 100%;
+  min-height: 30px;
+  align-items: center;
+  padding: 0 10px;
+  border-radius: 999px;
+  font-size: 0.8rem;
+}
+
+.result-remote-chip {
+  border: 1px solid rgba(145, 180, 255, 0.26);
+  background: rgba(145, 180, 255, 0.1);
+  color: rgba(210, 224, 255, 0.88);
+  cursor: copy;
+}
+
+.result-remote-chip:hover {
+  border-color: rgba(145, 180, 255, 0.46);
+  background: rgba(145, 180, 255, 0.16);
+}
+
+.result-remote-empty {
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(255, 255, 255, 0.5);
 }
 
 .result-card__placeholder {

@@ -271,7 +271,7 @@ class GenerationRunFactoryVideoAsyncTest {
     }
 
     @Test
-    void createVideoRunRejectsLocalStorageFrameUrlsBeforeRemoteCalls() {
+    void createVideoRunConvertsLocalStorageFrameUrlsToDataUriBeforeRemoteCalls() throws Exception {
         ModelRuntimeProfile textProfile = new ModelRuntimeProfile(
             "openai",
             "gpt-text",
@@ -330,7 +330,7 @@ class GenerationRunFactoryVideoAsyncTest {
 
             @Override
             public TextModelResponse generate(ModelRuntimeProfile profile, TextModelInvocation invocation) {
-                throw new AssertionError("vision/text model should not be called for invalid frame URLs");
+                throw new AssertionError("vision/text model should not be called for video frame URL conversion");
             }
         }));
         VideoModelProvider fakeVideoModelProvider = new VideoModelProvider() {
@@ -341,14 +341,31 @@ class GenerationRunFactoryVideoAsyncTest {
 
             @Override
             public RemoteVideoTaskSubmission submit(MediaProviderProfile profile, VideoGenerationRequest request) {
-                throw new AssertionError("video provider should not be called for invalid frame URLs");
+                assertTrue(request.firstFrameUrl().startsWith("data:image/png;base64,"));
+                assertEquals("https://cdn.example.com/clip1-last.png", request.lastFrameUrl());
+                return new RemoteVideoTaskSubmission(
+                    "wan",
+                    request.requestedModel(),
+                    request.requestedModel(),
+                    "dashscope.aliyuncs.com",
+                    "dashscope.aliyuncs.com",
+                    "task_local_frame",
+                    request.firstFrameUrl(),
+                    request.lastFrameUrl(),
+                    request.returnLastFrame(),
+                    request.generateAudio(),
+                    request.prompt(),
+                    0
+                );
             }
 
             @Override
             public RemoteTaskQueryResult query(MediaProviderProfile profile, String taskId) {
-                throw new AssertionError("video provider query should not be called for invalid frame URLs");
+                throw new AssertionError("video provider query should not be called during submit");
             }
         };
+        Files.createDirectories(tempDir.resolve("workflows/wf_1/keyframes"));
+        Files.write(tempDir.resolve("workflows/wf_1/keyframes/clip1-first.png"), new byte[] {1, 2, 3});
         LocalMediaArtifactService localMediaArtifactService = new LocalMediaArtifactService(storageProperties(tempDir), "ffmpeg");
         GenerationRunSupport support = new GenerationRunSupport(localMediaArtifactService, textModelProviderRegistry);
         GenerationRunFactory factory = new GenerationRunFactory(
@@ -375,8 +392,15 @@ class GenerationRunFactoryVideoAsyncTest {
         ));
         request.put("options", Map.of("stylePreset", "cinematic"));
 
-        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> factory.createVideoRun("run_invalid_url", request));
-        assertEquals("video firstFrameUrl must be an absolute http(s) URL", exception.getMessage());
+        Map<String, Object> run = factory.createVideoRun("run_local_frame", request);
+
+        assertEquals("running", run.get("status"));
+        @SuppressWarnings("unchecked")
+        Map<String, Object> result = (Map<String, Object>) run.get("result");
+        @SuppressWarnings("unchecked")
+        Map<String, Object> metadata = (Map<String, Object>) result.get("metadata");
+        assertEquals("task_local_frame", metadata.get("taskId"));
+        assertTrue(String.valueOf(metadata.get("firstFrameUrl")).startsWith("data:image/png;base64,"));
     }
 
     @Test

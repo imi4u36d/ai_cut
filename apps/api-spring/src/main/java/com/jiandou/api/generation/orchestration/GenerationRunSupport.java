@@ -343,6 +343,24 @@ public class GenerationRunSupport {
     }
 
     /**
+     * 构建外部可访问URL。
+     * @param publicUrl publicURL值
+     * @return 处理结果
+     */
+    public String buildExternallyAccessibleUrl(String publicUrl) {
+        return localMediaArtifactService == null ? "" : localMediaArtifactService.buildExternallyAccessibleUrl(publicUrl);
+    }
+
+    /**
+     * 将本地图片URL转换为模型兼容的 data URI。
+     * @param publicUrl 本地 /storage 地址
+     * @return data URI，非本地地址时返回空
+     */
+    public String imageDataUriFromPublicUrl(String publicUrl) {
+        return localMediaArtifactService == null ? "" : localMediaArtifactService.imageDataUriFromPublicUrl(publicUrl);
+    }
+
+    /**
      * 处理materializeBinary产物。
      * @param runId 运行标识值
      * @param relativeDir relativeDir值

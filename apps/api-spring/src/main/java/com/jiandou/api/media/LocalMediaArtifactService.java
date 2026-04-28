@@ -17,7 +17,9 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.List;
+import java.util.Locale;
 import javax.imageio.ImageIO;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -231,6 +233,15 @@ public class LocalMediaArtifactService {
     }
 
     /**
+     * 构建ExternallyAccessibleUrl。
+     * @param publicUrl publicURL值
+     * @return 处理结果
+     */
+    public String buildExternallyAccessibleUrl(String publicUrl) {
+        return storageProperties.buildExternallyAccessibleUrl(publicUrl);
+    }
+
+    /**
      * 处理解析Absolute路径。
      * @param publicUrl publicURL值
      * @return 处理结果
@@ -238,6 +249,36 @@ public class LocalMediaArtifactService {
     public String resolveAbsolutePath(String publicUrl) {
         Path resolved = storageProperties.resolvePublicUrl(publicUrl);
         return resolved == null ? "" : resolved.toAbsolutePath().toString();
+    }
+
+    /**
+     * 将本地存储图片转换为视频模型兼容的 data URI。
+     * @param publicUrl 本地 /storage 地址
+     * @return data URI，非本地地址时返回空
+     */
+    public String imageDataUriFromPublicUrl(String publicUrl) {
+        String absoluteSourcePath = resolveAbsolutePath(publicUrl);
+        if (absoluteSourcePath.isBlank()) {
+            return "";
+        }
+        try {
+            Path source = Path.of(absoluteSourcePath).toAbsolutePath().normalize();
+            if (!Files.isRegularFile(source)) {
+                throw new IOException("source image does not exist");
+            }
+            long sizeBytes = Files.size(source);
+            if (sizeBytes > 30L * 1024L * 1024L) {
+                throw new IOException("source image exceeds 30 MB");
+            }
+            String mimeType = imageMimeType(source);
+            if (!mimeType.startsWith("image/")) {
+                throw new IOException("source file is not an image");
+            }
+            String encoded = Base64.getEncoder().encodeToString(Files.readAllBytes(source));
+            return "data:" + mimeType + ";base64," + encoded;
+        } catch (IOException ex) {
+            throw new IllegalStateException("image data uri build failed: " + ex.getMessage(), ex);
+        }
     }
 
     /**
@@ -271,6 +312,36 @@ public class LocalMediaArtifactService {
         } catch (IOException ex) {
             throw new IllegalStateException("artifact copy failed: " + ex.getMessage(), ex);
         }
+    }
+
+    private String imageMimeType(Path source) throws IOException {
+        String probed = Files.probeContentType(source);
+        if (probed != null && !probed.isBlank()) {
+            return probed.toLowerCase(Locale.ROOT);
+        }
+        String fileName = source.getFileName() == null ? "" : source.getFileName().toString().toLowerCase(Locale.ROOT);
+        if (fileName.endsWith(".jpg") || fileName.endsWith(".jpeg")) {
+            return "image/jpeg";
+        }
+        if (fileName.endsWith(".webp")) {
+            return "image/webp";
+        }
+        if (fileName.endsWith(".bmp")) {
+            return "image/bmp";
+        }
+        if (fileName.endsWith(".tiff") || fileName.endsWith(".tif")) {
+            return "image/tiff";
+        }
+        if (fileName.endsWith(".gif")) {
+            return "image/gif";
+        }
+        if (fileName.endsWith(".heic")) {
+            return "image/heic";
+        }
+        if (fileName.endsWith(".heif")) {
+            return "image/heif";
+        }
+        return "image/png";
     }
 
     /**

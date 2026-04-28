@@ -105,6 +105,16 @@
             <span class="surface-chip">版本 {{ asset.versionNo }}</span>
             <span class="surface-chip">模型 {{ asset.originModel || "-" }}</span>
             <span class="surface-chip">评分 {{ ratingLabel(asset.userRating) }}</span>
+            <button
+              v-if="asset.remoteUrl"
+              class="material-remote-chip"
+              type="button"
+              :title="asset.remoteUrl"
+              @click="copyRemoteUrl(asset.remoteUrl)"
+            >
+              远程 {{ compactUrl(asset.remoteUrl) }}
+            </button>
+            <span v-else class="surface-chip material-remote-empty">暂未上传</span>
           </div>
 
           <div class="material-rating">
@@ -132,6 +142,9 @@
           </div>
 
           <div class="material-actions">
+            <button class="btn-secondary btn-sm" type="button" :disabled="busyActionKey === `upload-${asset.id}` || Boolean(asset.remoteUrl)" @click="handleUploadAsset(asset.id)">
+              {{ busyActionKey === `upload-${asset.id}` ? "上传中..." : (asset.remoteUrl ? "已上传" : "上传") }}
+            </button>
             <button class="btn-primary btn-sm" type="button" :disabled="busyActionKey === `reuse-${asset.id}`" @click="handleReuseAsset(asset.id)">
               {{ busyActionKey === `reuse-${asset.id}` ? "复制中..." : "复制为新工作流" }}
             </button>
@@ -147,6 +160,9 @@
             >
               下载
             </a>
+            <button class="btn-danger btn-sm" type="button" :disabled="busyActionKey === `delete-${asset.id}`" @click="handleDeleteAsset(asset)">
+              {{ busyActionKey === `delete-${asset.id}` ? "删除中..." : "删除" }}
+            </button>
           </div>
         </div>
       </article>
@@ -176,7 +192,7 @@
 <script setup lang="ts">
 import { onMounted, reactive, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
-import { fetchMaterialAssets, rateMaterialAsset, reuseMaterialAsset } from "@/api/material-assets";
+import { deleteMaterialAsset, fetchMaterialAssets, rateMaterialAsset, reuseMaterialAsset, uploadMaterialAsset } from "@/api/material-assets";
 import AppSelect from "@/components/common/AppSelect.vue";
 import type { AppSelectOption } from "@/components/common/app-select";
 import type { MaterialAssetLibraryItem, MaterialAssetQuery, MaterialAssetType } from "@/types";
@@ -195,6 +211,7 @@ const typeFilterOptions: AppSelectOption[] = [
   { label: "角色三视图", value: "character_sheet" },
   { label: "场景", value: "scene" },
   { label: "道具", value: "prop" },
+  { label: "自由模式", value: "free" },
   { label: "工作流产物", value: "workflow" },
 ];
 const ratingFilterOptions: AppSelectOption[] = [
@@ -247,6 +264,9 @@ function assetTypeLabel(value?: MaterialAssetType | string | null) {
   if (value === "prop") {
     return "道具";
   }
+  if (value === "free") {
+    return "自由模式";
+  }
   if (value === "workflow") {
     return "工作流产物";
   }
@@ -255,6 +275,13 @@ function assetTypeLabel(value?: MaterialAssetType | string | null) {
 
 function ratingLabel(value?: number | null) {
   return typeof value === "number" && value > 0 ? `${value}/5` : "未评分";
+}
+
+function compactUrl(url: string) {
+  if (url.length <= 42) {
+    return url;
+  }
+  return `${url.slice(0, 24)}...${url.slice(-14)}`;
 }
 
 function storyboardText(asset: MaterialAssetLibraryItem) {
@@ -344,6 +371,29 @@ async function handleRateAsset(assetId: string) {
       }),
     `rate-${assetId}`
   );
+}
+
+async function copyRemoteUrl(remoteUrl?: string | null) {
+  const value = remoteUrl?.trim();
+  if (!value) {
+    return;
+  }
+  try {
+    await navigator.clipboard.writeText(value);
+  } catch {
+    errorMessage.value = "远程路径复制失败，请手动复制";
+  }
+}
+
+async function handleUploadAsset(assetId: string) {
+  await refreshAfterMutation(() => uploadMaterialAsset(assetId), `upload-${assetId}`);
+}
+
+async function handleDeleteAsset(asset: MaterialAssetLibraryItem) {
+  if (!window.confirm(`确认删除素材「${asset.title}」吗？`)) {
+    return;
+  }
+  await refreshAfterMutation(() => deleteMaterialAsset(asset.id), `delete-${asset.id}`);
 }
 
 async function handleReuseAsset(assetId: string) {
@@ -643,6 +693,30 @@ onMounted(async () => {
 .material-meta {
   min-height: 64px;
   align-content: flex-start;
+}
+
+.material-remote-chip {
+  display: inline-flex;
+  max-width: 100%;
+  min-height: 32px;
+  align-items: center;
+  padding: 0 12px;
+  border: 1px solid rgba(145, 180, 255, 0.26);
+  border-radius: 999px;
+  background: rgba(145, 180, 255, 0.1);
+  color: rgba(210, 224, 255, 0.88);
+  font-size: 0.82rem;
+  line-height: 1;
+  cursor: copy;
+}
+
+.material-remote-chip:hover {
+  border-color: rgba(145, 180, 255, 0.46);
+  background: rgba(145, 180, 255, 0.16);
+}
+
+.material-remote-empty {
+  color: rgba(255, 255, 255, 0.5);
 }
 
 .material-rating .field-textarea {

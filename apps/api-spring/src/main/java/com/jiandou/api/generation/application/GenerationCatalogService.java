@@ -53,6 +53,10 @@ public class GenerationCatalogService {
         List<Map<String, Object>> textModels = modelResolver.listModelsByKind(GenerationModelKinds.TEXT);
         List<Map<String, Object>> imageModels = modelResolver.listModelsByKind(GenerationModelKinds.IMAGE);
         List<Map<String, Object>> videoModels = modelResolver.listModelsByKind(GenerationModelKinds.VIDEO);
+        List<String> imageModelNames = imageModels.stream()
+            .map(item -> String.valueOf(item.getOrDefault("value", "")).trim())
+            .filter(item -> !item.isBlank())
+            .toList();
         List<String> videoModelNames = videoModels.stream()
             .map(item -> String.valueOf(item.getOrDefault("value", "")).trim())
             .filter(item -> !item.isBlank())
@@ -61,7 +65,7 @@ public class GenerationCatalogService {
         payload.put("defaultAspectRatio", defaultAspectRatio);
         payload.put("aspectRatios", aspectRatioOptions());
         payload.put("stylePresets", stylePresetOptions());
-        payload.put("imageSizes", imageSizeOptions());
+        payload.put("imageSizes", imageSizeOptions(imageModels, imageModelNames));
         payload.put("textAnalysisModels", textModels);
         payload.put("defaultTextAnalysisModel", null);
         payload.put("imageModels", imageModels);
@@ -120,7 +124,7 @@ public class GenerationCatalogService {
      * 处理图像Size选项。
      * @return 处理结果
      */
-    private List<Map<String, Object>> imageSizeOptions() {
+    private List<Map<String, Object>> imageSizeOptions(List<Map<String, Object>> imageModels, List<String> imageModelNames) {
         List<Map<String, Object>> items = new ArrayList<>();
         for (ModelRuntimePropertiesResolver.ConfigSection section : modelResolver.listSections("catalog.image_sizes")) {
             Map<String, Object> row = new LinkedHashMap<>();
@@ -128,11 +132,12 @@ public class GenerationCatalogService {
             row.put("label", support.firstNonBlank(section.values().get("label"), section.name()));
             row.put("width", support.positiveInt(section.values().get("width"), 0));
             row.put("height", support.positiveInt(section.values().get("height"), 0));
+            row.put("supportedModels", modelsSupportingSize(imageModels, section.name(), imageModelNames));
             items.add(row);
         }
         if (items.isEmpty()) {
-            items.add(Map.of("value", "1024x1024", "label", "1:1 · 1024x1024", "width", 1024, "height", 1024));
-            items.add(Map.of("value", "720x1280", "label", "9:16 · 720x1280", "width", 720, "height", 1280));
+            items.add(Map.of("value", "1024x1024", "label", "1:1 · 1024x1024", "width", 1024, "height", 1024, "supportedModels", imageModelNames));
+            items.add(Map.of("value", "720x1280", "label", "9:16 · 720x1280", "width", 720, "height", 1280, "supportedModels", imageModelNames));
         }
         return items;
     }

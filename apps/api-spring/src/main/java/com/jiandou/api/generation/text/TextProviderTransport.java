@@ -212,7 +212,7 @@ public class TextProviderTransport {
             return;
         }
         Object type = map.get("type");
-        if ("output_text".equals(type) || "text".equals(type) || "input_text".equals(type)) {
+        if ("output_text".equals(type) || "text".equals(type)) {
             appendContent(builder, map.get("text"));
             return;
         }

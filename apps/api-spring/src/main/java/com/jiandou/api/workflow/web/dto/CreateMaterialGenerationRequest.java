@@ -10,6 +10,7 @@ public record CreateMaterialGenerationRequest(
     List<String> referenceImageUrls,
     List<String> referenceAssetIds,
     String aspectRatio,
+    String imageSize,
     String textAnalysisModel,
     String imageModel,
     Integer seed

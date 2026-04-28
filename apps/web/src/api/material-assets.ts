@@ -1,10 +1,11 @@
 /**
  * 素材库 API 请求封装。
  */
-import { getJson, patchJson, postForm, postJson } from "./client";
+import { deleteJson, getJson, patchJson, postForm, postJson } from "./client";
 import type {
   CreateMaterialGenerationRequest,
   ImageUploadResponse,
+  MaterialAssetDeleteResult,
   MaterialAssetLibraryItem,
   MaterialGenerationResponse,
   MaterialAssetQuery,
@@ -54,6 +55,14 @@ export function rateMaterialAsset(assetId: string, payload: UpdateMaterialAssetR
 
 export function reuseMaterialAsset(assetId: string, payload: ReuseMaterialRequest = { mode: "clone" }) {
   return postJson<WorkflowDetail>(`/material-assets/${encodeURIComponent(assetId)}/reuse`, payload);
+}
+
+export function uploadMaterialAsset(assetId: string) {
+  return postJson<MaterialAssetLibraryItem>(`/material-assets/${encodeURIComponent(assetId)}/upload`, {});
+}
+
+export function deleteMaterialAsset(assetId: string) {
+  return deleteJson<MaterialAssetDeleteResult>(`/material-assets/${encodeURIComponent(assetId)}`);
 }
 
 export function createMaterialGeneration(payload: CreateMaterialGenerationRequest) {

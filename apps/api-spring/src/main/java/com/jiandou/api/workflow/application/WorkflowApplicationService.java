@@ -24,6 +24,7 @@ import com.jiandou.api.workflow.web.dto.ReuseMaterialRequest;
 import com.jiandou.api.workflow.web.dto.SelectCharacterSheetAssetRequest;
 import com.jiandou.api.workflow.web.dto.UpdateMaterialAssetRatingRequest;
 import com.jiandou.api.workflow.web.dto.UpdateWorkflowSettingsRequest;
+import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -1147,12 +1148,14 @@ public class WorkflowApplicationService {
         }
         referenceImageUrls = externallyAccessibleReferenceImageUrls(referenceImageUrls);
         String aspectRatio = trimmed(request == null ? "" : request.aspectRatio(), "9:16");
+        String imageSize = trimmed(request == null ? "" : request.imageSize(), "");
         String textAnalysisModel = trimmed(request == null ? "" : request.textAnalysisModel(), "");
         String imageModel = trimmed(request == null ? "" : request.imageModel(), "");
         requireNonBlank(textAnalysisModel, "textAnalysisModel", "文本模型");
         requireNonBlank(imageModel, "imageModel", "图片模型");
         requireNonBlank(description, "description", "素材描述");
-        int[] dimensions = dimensionsFromAspectRatio(aspectRatio);
+        int[] dimensions = materialGenerationDimensions(assetType, aspectRatio, imageSize);
+        StageWorkflowEntity materialContext = materialCenterContext(ownerUserId, aspectRatio, styleKeywords, textAnalysisModel, imageModel);
         Map<String, Object> runRequest = buildMaterialGenerationRunRequest(
             ownerUserId,
             assetType,
@@ -1166,14 +1169,24 @@ public class WorkflowApplicationService {
             request == null ? null : request.seed(),
             dimensions
         );
-        Map<String, Object> run = generationApplicationService.createRun(runRequest);
+        Map<String, Object> run = createLoggedGenerationRun(
+            materialContext,
+            "material_center",
+            "material_center.generate",
+            runRequest,
+            Map.of(
+                "assetType", assetType,
+                "title", title,
+                "aspectRatio", aspectRatio,
+                "imageSize", imageSize
+            )
+        );
         Map<String, Object> result = mapValue(run.get("result"));
         String fileUrl = extractGenerationFileUrl(result);
         if (fileUrl.isBlank()) {
             throw badRequest("material_generation_empty", "素材生成结果为空");
         }
-        String remoteUrl = resolveGeneratedMediaRemoteUrl(result);
-        StageWorkflowEntity materialContext = materialCenterContext(ownerUserId, aspectRatio, styleKeywords, textAnalysisModel, imageModel);
+        String remoteUrl = "";
         MaterialAssetEntity asset = createMaterialAsset(
             materialContext,
             "material_center",
@@ -1190,7 +1203,7 @@ public class WorkflowApplicationService {
             false,
             stringValue(mapValue(result.get("metadata")).get("taskId")),
             remoteUrl,
-            materialGenerationMetadata(assetType, title, description, styleKeywords, referenceAssetIds, referenceImageUrls, aspectRatio, run, remoteUrl)
+            materialGenerationMetadata(assetType, title, description, styleKeywords, referenceAssetIds, referenceImageUrls, aspectRatio, imageSize, run, remoteUrl)
         );
         asset.setWorkflowId("");
         asset.setAssetRole(materialAssetRole(assetType));
@@ -1218,6 +1231,51 @@ public class WorkflowApplicationService {
             workflowRepository.saveStageVersion(version);
         }
         return getMaterialAsset(assetId);
+    }
+
+    public Map<String, Object> uploadMaterialAssetRemote(String assetId) {
+        MaterialAssetEntity asset = requireMaterialAsset(assetId);
+        String remotePath = trimmed(asset.getRemoteUrl(), "");
+        if (remotePath.isBlank()) {
+            String localUrl = trimmed(asset.getPublicUrl(), "");
+            if (localUrl.isBlank()) {
+                throw badRequest("material_asset_local_path_missing", "素材缺少本地文件路径，无法上传远端");
+            }
+            if (!localUrl.startsWith(ApiPathConstants.STORAGE)) {
+                throw badRequest("material_asset_local_path_invalid", "只有本地 /storage 素材支持按需上传远端");
+            }
+            remotePath = storageProperties.buildExternallyAccessibleUrl(localUrl);
+            if (remotePath.isBlank()) {
+                throw badRequest(
+                    "storage_public_base_url_missing",
+                    "请先配置 JIANDOU_STORAGE_PUBLIC_BASE_URL 后再上传远端素材"
+                );
+            }
+            if (!isAbsoluteHttpUrl(remotePath)) {
+                throw badRequest(
+                    "storage_public_base_url_invalid",
+                    "JIANDOU_STORAGE_PUBLIC_BASE_URL 必须生成公网可访问的 http(s) URL"
+                );
+            }
+            asset.setRemoteUrl(remotePath);
+            asset.setThirdPartyUrl(remotePath);
+            asset.setMetadataJson(WorkflowJsonSupport.write(withRemoteUploadMetadata(asset.getMetadataJson(), remotePath)));
+            asset.setUpdateTime(OffsetDateTime.now(ZoneOffset.UTC));
+            workflowRepository.saveMaterialAsset(asset);
+        }
+        return toMaterialAssetRow(asset);
+    }
+
+    public Map<String, Object> deleteMaterialAsset(String assetId) {
+        MaterialAssetEntity asset = requireMaterialAsset(assetId);
+        asset.setSelectedForNext(0);
+        asset.setIsDeleted(1);
+        asset.setUpdateTime(OffsetDateTime.now(ZoneOffset.UTC));
+        workflowRepository.saveMaterialAsset(asset);
+        return Map.of(
+            "assetId", assetId,
+            "deleted", true
+        );
     }
 
     public Map<String, Object> reuseMaterialAsset(String assetId, ReuseMaterialRequest request) {
@@ -1619,6 +1677,8 @@ public class WorkflowApplicationService {
         row.put("fileUrl", asset.getPublicUrl());
         row.put("previewUrl", asset.getPublicUrl());
         row.put("remoteUrl", asset.getRemoteUrl());
+        row.put("hasRemotePath", !trimmed(asset.getRemoteUrl(), "").isBlank());
+        row.put("remotePath", trimmed(asset.getRemoteUrl(), ""));
         row.put("metadata", WorkflowJsonSupport.readMap(asset.getMetadataJson()));
         row.put("createdAt", format(asset.getCreateTime()));
         row.put("updatedAt", format(asset.getUpdateTime()));
@@ -1983,13 +2043,13 @@ public class WorkflowApplicationService {
         Map<String, Object> modelSection = nestedMapValue(request, "model");
         Map<String, Object> result = mapValue(run.get("result"));
         Map<String, Object> modelInfo = mapValue(result.get("modelInfo"));
-        Map<String, Object> requestPayload = new LinkedHashMap<>();
-        requestPayload.put("workflowId", workflow.getWorkflowId());
-        requestPayload.put("workflowTitle", workflow.getTitle());
-        requestPayload.put("stage", stage);
-        requestPayload.put("operation", operation);
-        requestPayload.put("context", context == null ? Map.of() : context);
-        requestPayload.put("request", request == null ? Map.of() : request);
+        Map<String, Object> businessRequestPayload = buildBusinessModelCallRequestPayload(workflow, stage, operation, request, context);
+        Map<String, Object> actualProviderRequest = error instanceof GenerationProviderException providerException
+            ? providerException.providerRequest()
+            : providerRequestFromRun(run);
+        Map<String, Object> requestPayload = actualProviderRequest.isEmpty()
+            ? businessRequestPayload
+            : buildActualProviderRequestPayload(workflow, stage, operation, context, actualProviderRequest, businessRequestPayload);
         Map<String, Object> responsePayload = new LinkedHashMap<>();
         responsePayload.put("workflowId", workflow.getWorkflowId());
         responsePayload.put("stage", stage);
@@ -2062,6 +2122,53 @@ public class WorkflowApplicationService {
         row.put("startedAt", startedAt);
         row.put("finishedAt", finishedAt);
         return row;
+    }
+
+    private Map<String, Object> buildBusinessModelCallRequestPayload(
+        StageWorkflowEntity workflow,
+        String stage,
+        String operation,
+        Map<String, Object> request,
+        Map<String, Object> context
+    ) {
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("workflowId", workflow.getWorkflowId());
+        payload.put("workflowTitle", workflow.getTitle());
+        payload.put("stage", stage);
+        payload.put("operation", operation);
+        payload.put("context", context == null ? Map.of() : context);
+        payload.put("request", request == null ? Map.of() : request);
+        return payload;
+    }
+
+    private Map<String, Object> buildActualProviderRequestPayload(
+        StageWorkflowEntity workflow,
+        String stage,
+        String operation,
+        Map<String, Object> context,
+        Map<String, Object> providerRequest,
+        Map<String, Object> businessRequestPayload
+    ) {
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.putAll(providerRequest);
+        payload.put("workflowId", workflow.getWorkflowId());
+        payload.put("workflowTitle", workflow.getTitle());
+        payload.put("stage", stage);
+        payload.put("operation", operation);
+        payload.put("context", context == null ? Map.of() : context);
+        payload.put("businessRequest", businessRequestPayload);
+        return payload;
+    }
+
+    private Map<String, Object> providerRequestFromRun(Map<String, Object> run) {
+        Map<String, Object> result = mapValue(run.get("result"));
+        Map<String, Object> metadata = mapValue(result.get("metadata"));
+        Map<String, Object> providerRequest = mapValue(metadata.get("providerRequest"));
+        if (!providerRequest.isEmpty()) {
+            return providerRequest;
+        }
+        Map<String, Object> providerInteraction = mapValue(metadata.get("providerInteraction"));
+        return mapValue(providerInteraction.get("providerRequest"));
     }
 
     private Map<String, Object> nestedMapValue(Map<String, Object> source, String key) {
@@ -2237,7 +2344,7 @@ public class WorkflowApplicationService {
     ) {
         Map<String, Object> request = new LinkedHashMap<>();
         Map<String, Object> input = new LinkedHashMap<>();
-        int[] dimensions = dimensionsFromAspectRatio(workflow.getAspectRatio());
+        int[] dimensions = new int[] {1280, 720};
         input.put("prompt", prompt);
         input.put("width", dimensions[0]);
         input.put("height", dimensions[1]);
@@ -2275,7 +2382,9 @@ public class WorkflowApplicationService {
     ) {
         Map<String, Object> request = new LinkedHashMap<>();
         Map<String, Object> input = new LinkedHashMap<>();
-        List<String> referenceImageUrls = mergeReferenceImageUrls(continuityReferenceImageUrls, characterReferenceImageUrls);
+        List<String> referenceImageUrls = externallyAccessibleReferenceImageUrls(
+            mergeReferenceImageUrls(continuityReferenceImageUrls, characterReferenceImageUrls)
+        );
         String continuityReferenceImageUrl = referenceImageUrls.isEmpty() ? "" : referenceImageUrls.get(0);
         input.put("prompt", composeVisualPrompt(workflow, joinPromptSections(
             characterConstraintPrompt,
@@ -2370,6 +2479,8 @@ public class WorkflowApplicationService {
     ) {
         Map<String, Object> request = new LinkedHashMap<>();
         Map<String, Object> input = new LinkedHashMap<>();
+        String externallyAccessibleFirstFrameUrl = compatibleVideoFrameUrl(firstFrameUrl, "video firstFrameUrl");
+        String externallyAccessibleLastFrameUrl = compatibleVideoFrameUrl(lastFrameUrl, "video lastFrameUrl");
         input.put("prompt", composeVisualPrompt(workflow, joinPromptSections(
             stringValue(clip.get("videoPrompt"))
         )));
@@ -2377,9 +2488,9 @@ public class WorkflowApplicationService {
         input.put("durationSeconds", intValue(clip.get("targetDurationSeconds"), workflow.getMaxDurationSeconds()));
         input.put("minDurationSeconds", intValue(clip.get("minDurationSeconds"), workflow.getMinDurationSeconds()));
         input.put("maxDurationSeconds", intValue(clip.get("maxDurationSeconds"), workflow.getMaxDurationSeconds()));
-        input.put("firstFrameUrl", firstFrameUrl);
-        if (!isBlank(lastFrameUrl)) {
-            input.put("lastFrameUrl", lastFrameUrl);
+        input.put("firstFrameUrl", externallyAccessibleFirstFrameUrl);
+        if (!isBlank(externallyAccessibleLastFrameUrl)) {
+            input.put("lastFrameUrl", externallyAccessibleLastFrameUrl);
         }
         input.put("generateAudio", true);
         input.put("returnLastFrame", true);
@@ -3423,6 +3534,7 @@ public class WorkflowApplicationService {
             case "character_sheet", "character_three_view" -> VARIANT_KIND_CHARACTER_SHEET;
             case "scene" -> "scene";
             case "prop" -> "prop";
+            case "free" -> "free";
             default -> throw badRequest("material_asset_type_invalid", "素材类型不支持");
         };
     }
@@ -3450,6 +3562,7 @@ public class WorkflowApplicationService {
             case "character_sheet", "character_three_view" -> VARIANT_KIND_CHARACTER_SHEET;
             case "scene" -> "scene";
             case "prop" -> "prop";
+            case "free" -> "free";
             default -> "workflow";
         };
     }
@@ -3463,6 +3576,7 @@ public class WorkflowApplicationService {
             case VARIANT_KIND_CHARACTER_SHEET -> "角色三视图素材";
             case "scene" -> "场景素材";
             case "prop" -> "道具素材";
+            case "free" -> "自由模式素材";
             default -> "素材";
         };
     }
@@ -3493,19 +3607,83 @@ public class WorkflowApplicationService {
         }
         List<String> urls = new ArrayList<>();
         for (String referenceImageUrl : referenceImageUrls) {
-            String url = trimmed(referenceImageUrl, "");
-            if (url.isBlank()) {
+            String normalizedUrl = externallyAccessibleMediaUrl(referenceImageUrl, "referenceImageUrl");
+            if (normalizedUrl.isBlank()) {
                 continue;
             }
-            String mappedUrl = url.startsWith(ApiPathConstants.STORAGE)
-                ? storageProperties.buildExternallyAccessibleUrl(url)
-                : "";
-            String normalizedUrl = firstNonBlank(mappedUrl, url);
             if (!urls.contains(normalizedUrl)) {
                 urls.add(normalizedUrl);
             }
         }
         return urls;
+    }
+
+    private String externallyAccessibleMediaUrl(String url, String fieldName) {
+        String normalized = trimmed(url, "");
+        if (normalized.isBlank()) {
+            return "";
+        }
+        if (isAbsoluteHttpUrl(normalized)) {
+            return normalized;
+        }
+        if (normalized.startsWith(ApiPathConstants.STORAGE)) {
+            String mappedUrl = storageProperties.buildExternallyAccessibleUrl(normalized);
+            if (!mappedUrl.isBlank() && isAbsoluteHttpUrl(mappedUrl)) {
+                return mappedUrl;
+            }
+            if (!mappedUrl.isBlank()) {
+                throw badRequest(
+                    "storage_public_base_url_invalid",
+                    "JIANDOU_STORAGE_PUBLIC_BASE_URL 必须生成公网可访问的 http(s) URL"
+                );
+            }
+            throw badRequest(
+                "storage_public_base_url_missing",
+                fieldName + " 是本地存储地址，请先配置 JIANDOU_STORAGE_PUBLIC_BASE_URL 后再调用远端模型"
+            );
+        }
+        throw badRequest("media_url_not_public", fieldName + " 必须是公网可访问的 http(s) URL");
+    }
+
+    private String compatibleVideoFrameUrl(String url, String fieldName) {
+        String normalized = trimmed(url, "");
+        if (normalized.isBlank()) {
+            return "";
+        }
+        if (isAbsoluteHttpUrl(normalized) || isImageDataUri(normalized)) {
+            return normalized;
+        }
+        if (normalized.startsWith(ApiPathConstants.STORAGE)) {
+            try {
+                String dataUri = localMediaArtifactService.imageDataUriFromPublicUrl(normalized);
+                if (dataUri != null && !dataUri.isBlank()) {
+                    return dataUri;
+                }
+            } catch (RuntimeException ex) {
+                throw badRequest("local_video_frame_unavailable", fieldName + " 本地资源无法转换为视频首尾帧输入：" + ex.getMessage());
+            }
+            throw badRequest("local_video_frame_unavailable", fieldName + " 本地资源无法转换为视频首尾帧输入");
+        }
+        throw badRequest("media_url_not_public", fieldName + " 必须是公网可访问的 http(s) URL 或本地 /storage 图片");
+    }
+
+    private boolean isImageDataUri(String url) {
+        String normalized = trimmed(url, "").toLowerCase(Locale.ROOT);
+        return normalized.startsWith("data:image/") && normalized.contains(";base64,");
+    }
+
+    private boolean isAbsoluteHttpUrl(String url) {
+        try {
+            URI uri = URI.create(trimmed(url, ""));
+            String scheme = uri.getScheme();
+            if (scheme == null || uri.getHost() == null) {
+                return false;
+            }
+            String lowerScheme = scheme.toLowerCase(Locale.ROOT);
+            return "http".equals(lowerScheme) || "https".equals(lowerScheme);
+        } catch (IllegalArgumentException ex) {
+            return false;
+        }
     }
 
     private Map<String, Object> buildMaterialGenerationRunRequest(
@@ -3526,6 +3704,9 @@ public class WorkflowApplicationService {
         input.put("width", dimensions[0]);
         input.put("height", dimensions[1]);
         input.put("frameRole", assetType);
+        if ("free".equals(normalizeMaterialAssetType(assetType))) {
+            input.put("promptPassthrough", true);
+        }
         if (!referenceImageUrls.isEmpty()) {
             input.put("referenceImageUrl", referenceImageUrls.get(0));
             input.put("referenceImageUrls", referenceImageUrls);
@@ -3544,12 +3725,14 @@ public class WorkflowApplicationService {
         request.put("options", Map.of("stylePreset", styleKeywords == null || styleKeywords.isEmpty() ? "material-center" : String.join(", ", styleKeywords)));
         request.put("storage", Map.of(
             "relativeDir", "gen/material-center/" + assetType,
-            "fileStem", assetType + "-" + randomId()
+            "fileStem", assetType + "-" + randomId(),
+            "requireRemoteSourceUrl", false
         ));
         request.put("metadata", Map.of(
             "assetType", assetType,
             "title", title,
-            "aspectRatio", aspectRatio
+            "aspectRatio", aspectRatio,
+            "imageSize", dimensions[0] + "x" + dimensions[1]
         ));
         return request;
     }
@@ -3561,6 +3744,9 @@ public class WorkflowApplicationService {
         List<String> styleKeywords,
         boolean hasReferences
     ) {
+        if ("free".equals(normalizeMaterialAssetType(assetType))) {
+            return trimmed(description, "");
+        }
         List<String> parts = new ArrayList<>();
         parts.add("素材标题：" + title);
         parts.add("素材描述：" + description);
@@ -3604,6 +3790,7 @@ public class WorkflowApplicationService {
         List<String> referenceAssetIds,
         List<String> referenceImageUrls,
         String aspectRatio,
+        String imageSize,
         Map<String, Object> run,
         String remoteUrl
     ) {
@@ -3616,6 +3803,7 @@ public class WorkflowApplicationService {
         metadata.put("referenceAssetIds", referenceAssetIds);
         metadata.put("referenceImageUrls", referenceImageUrls);
         metadata.put("aspectRatio", aspectRatio);
+        metadata.put("imageSize", firstNonBlank(imageSize, stringValue(mapValue(result.get("metadata")).get("requestedSize"))));
         metadata.put("runId", stringValue(run.get("id")));
         metadata.put("remoteSourceUrl", remoteUrl);
         metadata.put("prompt", stringValue(result.get("prompt")));
@@ -3634,14 +3822,48 @@ public class WorkflowApplicationService {
         return metadata;
     }
 
+    private Map<String, Object> withRemoteUploadMetadata(String metadataJson, String remotePath) {
+        Map<String, Object> metadata = new LinkedHashMap<>(WorkflowJsonSupport.readMap(metadataJson));
+        metadata.put("remoteSourceUrl", remotePath);
+        metadata.put("remotePath", remotePath);
+        metadata.put("remoteUploadedAt", OffsetDateTime.now(ZoneOffset.UTC).toString());
+        return metadata;
+    }
+
     private int[] dimensionsFromAspectRatio(String aspectRatio) {
         if ("16:9".equals(trimmed(aspectRatio, ""))) {
-            return new int[] {1280, 720};
+            return new int[] {1824, 1024};
         }
         if ("1:1".equals(trimmed(aspectRatio, ""))) {
             return new int[] {1024, 1024};
         }
-        return new int[] {720, 1280};
+        return new int[] {1024, 1824};
+    }
+
+    private int[] materialGenerationDimensions(String assetType, String aspectRatio, String imageSize) {
+        int[] parsedImageSize = dimensionsFromImageSize(imageSize);
+        if (parsedImageSize[0] > 0 && parsedImageSize[1] > 0) {
+            return parsedImageSize;
+        }
+        if (VARIANT_KIND_CHARACTER_SHEET.equals(normalizeMaterialAssetType(assetType))) {
+            return new int[] {1824, 1024};
+        }
+        return dimensionsFromAspectRatio(aspectRatio);
+    }
+
+    private int[] dimensionsFromImageSize(String imageSize) {
+        String normalized = trimmed(imageSize, "").toLowerCase(Locale.ROOT).replace('*', 'x');
+        String[] parts = normalized.split("x");
+        if (parts.length != 2) {
+            return new int[] {0, 0};
+        }
+        try {
+            int width = Integer.parseInt(parts[0].trim());
+            int height = Integer.parseInt(parts[1].trim());
+            return width > 0 && height > 0 ? new int[] {width, height} : new int[] {0, 0};
+        } catch (NumberFormatException ex) {
+            return new int[] {0, 0};
+        }
     }
 
     private List<?> listObjectValue(Object value) {
@@ -3723,10 +3945,19 @@ public class WorkflowApplicationService {
 
     private String resolveGeneratedMediaRemoteUrl(Map<String, Object> result) {
         Map<String, Object> metadata = mapValue(result.get("metadata"));
-        return firstNonBlank(
+        String remoteUrl = firstNonBlank(
             stringValue(metadata.get("remoteSourceUrl")),
             stringValue(metadata.get("sourceUrl"))
         );
+        if (!remoteUrl.isBlank()) {
+            return externallyAccessibleMediaUrl(remoteUrl, "generated remoteSourceUrl");
+        }
+        String fileUrl = firstNonBlank(
+            stringValue(result.get("outputUrl")),
+            stringValue(metadata.get("fileUrl")),
+            stringValue(metadata.get("outputUrl"))
+        );
+        return externallyAccessibleMediaUrl(fileUrl, "generated fileUrl");
     }
 
     private String normalizeFrameRole(String value) {
