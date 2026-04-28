@@ -286,6 +286,7 @@ class TaskWorkerRenderStageServiceTest {
         assertEquals(true, String.valueOf(secondLastImageInput.get("prompt")).contains("场景锚点：scene-1"));
         assertEquals(true, String.valueOf(secondLastImageInput.get("prompt")).contains("尾帧目标：clip-2-last"));
         assertEquals("https://example.com/clip1-last-result.png", secondLastImageInput.get("referenceImageUrl"));
+        assertEquals("last", secondLastImageInput.get("frameRole"));
         assertEquals("https://example.com/clip1-last-result.png", secondVideoInput.get("firstFrameUrl"));
         assertEquals("https://example.com/clip2-last-keyframe.png", secondVideoInput.get("lastFrameUrl"));
         verify(artifactAssembler, times(3)).createImageMaterial(any(), anyMap(), anyMap(), anyInt(), anyString());

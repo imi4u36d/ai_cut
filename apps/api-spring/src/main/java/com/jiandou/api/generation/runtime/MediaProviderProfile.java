@@ -44,7 +44,7 @@ public record MediaProviderProfile(
     ) {
         this(
             new MediaProviderConfig("", modelName, provider, modelName, apiKey, baseUrl, taskBaseUrl, timeoutSeconds, source),
-            new MediaProviderCapabilities(false, promptExtend, cameraFixed, watermark, pollIntervalSeconds, pollTimeoutSeconds, "", List.of(), List.of())
+            new MediaProviderCapabilities(false, promptExtend, cameraFixed, watermark, pollIntervalSeconds, pollTimeoutSeconds, "", List.of(), List.of(), false)
         );
     }
 
@@ -126,6 +126,10 @@ public record MediaProviderProfile(
 
     public List<Integer> supportedDurations() {
         return capabilities == null ? List.of() : capabilities.supportedDurations();
+    }
+
+    public boolean supportsImageDataUriReferences() {
+        return capabilities != null && capabilities.supportsImageDataUriReferences();
     }
 
     /**

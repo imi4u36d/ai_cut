@@ -20,8 +20,13 @@ import static org.mockito.Mockito.when;
 import com.jiandou.api.auth.security.CurrentUserPrincipal;
 import com.jiandou.api.common.exception.ApiException;
 import com.jiandou.api.config.JiandouStorageProperties;
-import com.jiandou.api.generation.exception.GenerationProviderException;
+import com.jiandou.api.generation.GenerationModelKinds;
 import com.jiandou.api.generation.application.GenerationApplicationService;
+import com.jiandou.api.generation.exception.GenerationProviderException;
+import com.jiandou.api.generation.runtime.MediaProviderCapabilities;
+import com.jiandou.api.generation.runtime.MediaProviderConfig;
+import com.jiandou.api.generation.runtime.MediaProviderProfile;
+import com.jiandou.api.generation.runtime.ModelRuntimePropertiesResolver;
 import com.jiandou.api.media.LocalMediaArtifactService;
 import com.jiandou.api.task.application.TaskStoryboardPlanner;
 import com.jiandou.api.task.infrastructure.mybatis.MaterialAssetEntity;
@@ -54,6 +59,7 @@ class WorkflowApplicationServiceTest {
     private TaskStoryboardPlanner storyboardPlanner;
     private LocalMediaArtifactService localMediaArtifactService;
     private JiandouStorageProperties storageProperties;
+    private ModelRuntimePropertiesResolver modelResolver;
     private WorkflowApplicationService service;
 
     private Map<String, StageWorkflowEntity> workflows;
@@ -67,7 +73,15 @@ class WorkflowApplicationServiceTest {
         storyboardPlanner = mock(TaskStoryboardPlanner.class);
         localMediaArtifactService = mock(LocalMediaArtifactService.class);
         storageProperties = new JiandouStorageProperties();
-        service = new WorkflowApplicationService(workflowRepository, generationApplicationService, storyboardPlanner, localMediaArtifactService, storageProperties);
+        modelResolver = mock(ModelRuntimePropertiesResolver.class);
+        service = new WorkflowApplicationService(
+            workflowRepository,
+            generationApplicationService,
+            storyboardPlanner,
+            localMediaArtifactService,
+            storageProperties,
+            modelResolver
+        );
 
         workflows = new LinkedHashMap<>();
         versions = new LinkedHashMap<>();
@@ -86,6 +100,7 @@ class WorkflowApplicationServiceTest {
         when(workflowRepository.findStageVersion(anyString(), anyString())).thenAnswer(invocation -> findStageVersion(invocation.getArgument(0), invocation.getArgument(1)));
         when(workflowRepository.listStageVersions(anyString())).thenAnswer(invocation -> listStageVersions(invocation.getArgument(0)));
         when(storyboardPlanner.extractCharacterDefinitions(anyString())).thenReturn(List.of());
+        when(modelResolver.supportsSeed(anyString())).thenReturn(true);
         when(workflowRepository.nextStageVersionNo(anyString(), anyString(), anyInt())).thenAnswer(invocation -> nextVersionNo(
             invocation.getArgument(0),
             invocation.getArgument(1),
@@ -228,6 +243,34 @@ class WorkflowApplicationServiceTest {
     }
 
     @Test
+    void generateKeyframeOmitsSeedWhenImageModelDoesNotSupportSeed() {
+        StageWorkflowEntity workflow = workflow("wf_gpt_image_no_seed");
+        workflow.setImageModel("gpt-image-2");
+        workflow.setKeyframeSeed(12345);
+        workflows.put(workflow.getWorkflowId(), workflow);
+        versions.put("sv_story", storyboardVersion(workflow.getWorkflowId(), storyboardClips()));
+        when(modelResolver.supportsSeed("gpt-image-2")).thenReturn(false);
+        when(generationApplicationService.createRun(any())).thenReturn(
+            imageRun("run_start_no_seed", "https://cdn.example.com/clip1-first-no-seed.png"),
+            imageRun("run_end_no_seed", "https://cdn.example.com/clip1-last-no-seed.png")
+        );
+
+        service.generateKeyframe("wf_gpt_image_no_seed", 1);
+
+        ArgumentCaptor<Map<String, Object>> requestCaptor = ArgumentCaptor.forClass(Map.class);
+        verify(generationApplicationService, times(2)).createRun(requestCaptor.capture());
+        for (Map<String, Object> request : requestCaptor.getAllValues()) {
+            assertFalse(mapValue(request.get("input")).containsKey("seed"));
+        }
+        StageVersionEntity keyframeVersion = listStageVersions(workflow.getWorkflowId()).stream()
+            .filter(item -> WorkflowConstants.STAGE_KEYFRAME.equals(item.getStageType()))
+            .findFirst()
+            .orElseThrow();
+        Map<String, Object> inputSummary = WorkflowJsonSupport.readMap(keyframeVersion.getInputSummaryJson());
+        assertFalse(inputSummary.containsKey("seed"));
+    }
+
+    @Test
     void generateKeyframeUsesPublicUrlForBase64StartFrameReference() {
         storageProperties.setPublicBaseUrl("https://assets.example.com/storage");
         StageWorkflowEntity workflow = workflow("wf_base64_keyframe");
@@ -278,11 +321,62 @@ class WorkflowApplicationServiceTest {
     }
 
     @Test
+    void generateKeyframeAllowsLocalGeneratedFramesWhenPublicBaseUrlMissing() {
+        StageWorkflowEntity workflow = workflow("wf_local_keyframe");
+        workflow.setImageModel("gpt-image-2");
+        workflows.put(workflow.getWorkflowId(), workflow);
+        versions.put("sv_story", storyboardVersion(workflow.getWorkflowId(), storyboardClips()));
+        when(localMediaArtifactService.imageDataUriFromPublicUrl("/storage/gen/workflows/wf_local_keyframe/keyframes/clip1-first-v1.png"))
+            .thenReturn("data:image/png;base64,Zmlyc3Q=");
+
+        when(generationApplicationService.createRun(any())).thenReturn(
+            imageRun(
+                "run_start_local",
+                "/storage/gen/workflows/wf_local_keyframe/keyframes/clip1-first-v1.png",
+                ""
+            ),
+            imageRun(
+                "run_end_local",
+                "/storage/gen/workflows/wf_local_keyframe/keyframes/clip1-last-v1.png",
+                ""
+            )
+        );
+
+        service.generateKeyframe("wf_local_keyframe", 1);
+
+        ArgumentCaptor<Map<String, Object>> requestCaptor = ArgumentCaptor.forClass(Map.class);
+        verify(generationApplicationService, times(2)).createRun(requestCaptor.capture());
+        Map<String, Object> firstRequest = requestCaptor.getAllValues().get(0);
+        Map<String, Object> tailInput = mapValue(requestCaptor.getAllValues().get(1).get("input"));
+        assertFalse(Boolean.TRUE.equals(mapValue(firstRequest.get("storage")).get("requireRemoteSourceUrl")));
+        assertEquals("data:image/png;base64,Zmlyc3Q=", tailInput.get("referenceImageUrl"));
+        assertEquals(List.of("data:image/png;base64,Zmlyc3Q="), listValue(tailInput.get("referenceImageUrls")));
+
+        StageVersionEntity keyframeVersion = listStageVersions(workflow.getWorkflowId()).stream()
+            .filter(item -> WorkflowConstants.STAGE_KEYFRAME.equals(item.getStageType()))
+            .findFirst()
+            .orElseThrow();
+        Map<String, Object> outputSummary = WorkflowJsonSupport.readMap(keyframeVersion.getOutputSummaryJson());
+        assertEquals("/storage/gen/workflows/wf_local_keyframe/keyframes/clip1-first-v1.png", outputSummary.get("firstFrameRemoteUrl"));
+        assertEquals("/storage/gen/workflows/wf_local_keyframe/keyframes/clip1-last-v1.png", outputSummary.get("lastFrameRemoteUrl"));
+    }
+
+    @Test
     void generateFirstClipCreatesMissingCharacterSheetsBeforeClipKeyframe() {
         StageWorkflowEntity workflow = workflow("wf_character");
         workflow.setGlobalPrompt("新海诚动漫风，空气透视明显，光影清透。");
+        workflow.setImageModel("workflow-image-model");
         workflows.put(workflow.getWorkflowId(), workflow);
         versions.put("sv_story", storyboardVersion(workflow.getWorkflowId(), storyboardClips(), storyboardMarkdownWithCharacters()));
+        when(modelResolver.resolveMediaProfile("workflow-image-model", GenerationModelKinds.IMAGE, USER_ID)).thenReturn(mediaProfile(
+            GenerationModelKinds.IMAGE,
+            "workflow-image-model",
+            "image-provider",
+            "image-provider-upstream-model",
+            true,
+            true,
+            ""
+        ));
         when(storyboardPlanner.extractCharacterDefinitions(anyString())).thenReturn(List.of(
             new TaskStoryboardPlanner.CharacterDefinition(
                 "林舒",
@@ -317,14 +411,39 @@ class WorkflowApplicationServiceTest {
         assertTrue(String.valueOf(mapValue(requests.get(0).get("input")).get("prompt")).contains("禁止手拿"));
         assertTrue(String.valueOf(mapValue(requests.get(0).get("input")).get("prompt")).contains("不得出现任何文字"));
         assertTrue(String.valueOf(mapValue(requests.get(0).get("input")).get("prompt")).contains("背景必须是纯白色背景"));
-        assertEquals(1280, mapValue(requests.get(0).get("input")).get("width"));
-        assertEquals(720, mapValue(requests.get(0).get("input")).get("height"));
+        assertEquals(1824, mapValue(requests.get(0).get("input")).get("width"));
+        assertEquals(1024, mapValue(requests.get(0).get("input")).get("height"));
+        assertEquals(false, mapValue(requests.get(0).get("storage")).get("requireRemoteSourceUrl"));
+        for (int requestIndex : List.of(0, 1)) {
+            assertEquals("workflow-image-model", mapValue(requests.get(requestIndex).get("model")).get("providerModel"));
+            assertStageStrategy(
+                requests.get(requestIndex),
+                WorkflowConstants.STAGE_KEYFRAME,
+                "character_sheet.image-provider",
+                "image-provider",
+                "image-provider-upstream-model",
+                true,
+                true
+            );
+        }
         assertTrue(String.valueOf(mapValue(requests.get(1).get("input")).get("prompt")).contains("全局画风要求：新海诚动漫风"));
         assertTrue(String.valueOf(mapValue(requests.get(1).get("input")).get("prompt")).contains("三视图设定图"));
         assertNotNull(mapValue(requests.get(0).get("input")).get("seed"));
         assertNotNull(mapValue(requests.get(1).get("input")).get("seed"));
         assertTrue(String.valueOf(mapValue(requests.get(2).get("input")).get("prompt")).contains("全局画风要求：新海诚动漫风"));
         assertEquals("first", mapValue(requests.get(2).get("input")).get("frameRole"));
+        for (int requestIndex : List.of(2, 3)) {
+            assertEquals("workflow-image-model", mapValue(requests.get(requestIndex).get("model")).get("providerModel"));
+            assertStageStrategy(
+                requests.get(requestIndex),
+                WorkflowConstants.STAGE_KEYFRAME,
+                "keyframe.image-provider",
+                "image-provider",
+                "image-provider-upstream-model",
+                true,
+                true
+            );
+        }
         assertTrue(String.valueOf(mapValue(requests.get(3).get("input")).get("prompt")).contains("全局画风要求：新海诚动漫风"));
         assertEquals("last", mapValue(requests.get(3).get("input")).get("frameRole"));
 
@@ -343,6 +462,50 @@ class WorkflowApplicationServiceTest {
         assertEquals(
             mapValue(requests.get(0).get("input")).get("seed"),
             mapValue(firstCharacterSheetVersions.get(0).get("inputSummary")).get("seed")
+        );
+    }
+
+    @Test
+    void generateCharacterSheetSurfacesInvalidImagePayloadWithoutRetry() {
+        StageWorkflowEntity workflow = workflow("wf_character_retry");
+        workflow.setGlobalPrompt("少女漫画画风");
+        workflows.put(workflow.getWorkflowId(), workflow);
+        versions.put("sv_story", storyboardVersion(workflow.getWorkflowId(), storyboardClips(), storyboardMarkdownWithCharacters()));
+        when(storyboardPlanner.extractCharacterDefinitions(anyString())).thenReturn(List.of(
+            new TaskStoryboardPlanner.CharacterDefinition(
+                "苏浅",
+                "黑色高马尾，白色翻领校服衬衫，同色系针织背心，格纹百褶短裙",
+                "性别年龄：女性，约17岁；人物定位：被告白的女高中生；脸部五官：鹅蛋脸，眉眼弯弯，瞳仁明亮，鼻尖小巧，耳垂微红；发型：黑色高马尾，鬓角留有两缕碎发修饰脸型；体型身高：身高约160cm，身形娇小匀称，站姿轻盈；服装：白色翻领校服衬衫，外搭同色系针织背心，下身格纹百褶短裙；不可变视觉锚点：黑色高马尾、娇小匀称体型、白蓝配色校服套装"
+            )
+        ));
+        when(generationApplicationService.createRun(any())).thenThrow(invalidImagePayloadException());
+
+        GenerationProviderException exception = assertThrows(
+            GenerationProviderException.class,
+            () -> service.generateKeyframe("wf_character_retry", 1001)
+        );
+        assertTrue(exception.getMessage().contains("invalid image payload"));
+
+        ArgumentCaptor<Map<String, Object>> requestCaptor = ArgumentCaptor.forClass(Map.class);
+        verify(generationApplicationService, times(1)).createRun(requestCaptor.capture());
+        String firstPrompt = String.valueOf(mapValue(requestCaptor.getAllValues().get(0).get("input")).get("prompt"));
+        assertTrue(firstPrompt.contains("角色完整定义：性别年龄：女性"));
+
+        ArgumentCaptor<Map<String, Object>> modelCallCaptor = ArgumentCaptor.forClass(Map.class);
+        verify(workflowRepository, times(1)).saveModelCall(anyString(), modelCallCaptor.capture());
+        assertEquals("workflow.character_sheet.generate", modelCallCaptor.getAllValues().get(0).get("operation"));
+        assertEquals(false, modelCallCaptor.getAllValues().get(0).get("success"));
+        assertEquals(502, modelCallCaptor.getAllValues().get(0).get("httpStatus"));
+        assertTrue(listStageVersions(workflow.getWorkflowId()).stream()
+            .noneMatch(item -> intValue(item.getClipIndex(), 0) == 1001));
+    }
+
+    private GenerationProviderException invalidImagePayloadException() {
+        return new GenerationProviderException(
+            "provider request failed: http 502 {\"error\":{\"message\":\"Upstream returned an invalid image payload\",\"type\":\"upstream_error\"}}",
+            Map.of("body", Map.of("model", "gpt-5.4")),
+            "{\"error\":{\"message\":\"Upstream returned an invalid image payload\",\"type\":\"upstream_error\"}}",
+            502
         );
     }
 
@@ -463,12 +626,22 @@ class WorkflowApplicationServiceTest {
     void generateVideoPrefersPreviousSelectedVideoLastFrameUrl() {
         StageWorkflowEntity workflow = workflow("wf_2");
         workflow.setGlobalPrompt("新海诚动漫风，空气透视明显，光影清透。");
+        workflow.setVideoModel("workflow-video-model");
         workflows.put(workflow.getWorkflowId(), workflow);
         versions.put("sv_story_2", storyboardVersion(workflow.getWorkflowId(), storyboardClips()));
         versions.put("sv_video_1", videoVersion(workflow.getWorkflowId(), 1, "asset_video_1", "https://cdn.example.com/clip1.mp4", "https://cdn.example.com/video-last.png"));
         versions.put("sv_key_2", keyframeVersion(workflow.getWorkflowId(), 2, "asset_key_2", "https://cdn.example.com/clip2-last.png"));
         assets.put("asset_video_1", asset(workflow.getWorkflowId(), "asset_video_1", WorkflowConstants.STAGE_VIDEO, 1, "https://cdn.example.com/clip1.mp4", "video/mp4"));
         assets.put("asset_key_2", asset(workflow.getWorkflowId(), "asset_key_2", WorkflowConstants.STAGE_KEYFRAME, 2, "https://cdn.example.com/clip2-last.png", "image/png"));
+        when(modelResolver.resolveMediaProfile("workflow-video-model", GenerationModelKinds.VIDEO, USER_ID)).thenReturn(mediaProfile(
+            GenerationModelKinds.VIDEO,
+            "workflow-video-model",
+            "video-provider",
+            "video-provider-upstream-model",
+            false,
+            false,
+            "i2v"
+        ));
 
         when(generationApplicationService.createRun(any())).thenReturn(videoRun(
             "run_video_2",
@@ -486,6 +659,16 @@ class WorkflowApplicationServiceTest {
         assertEquals("https://cdn.example.com/video-last.png", input.get("firstFrameUrl"));
         assertEquals("https://cdn.example.com/clip2-last.png", input.get("lastFrameUrl"));
         assertTrue(String.valueOf(input.get("prompt")).contains("全局画风要求：新海诚动漫风"));
+        assertEquals("workflow-video-model", mapValue(requestCaptor.getValue().get("model")).get("providerModel"));
+        assertStageStrategy(
+            requestCaptor.getValue(),
+            WorkflowConstants.STAGE_VIDEO,
+            "video.video-provider",
+            "video-provider",
+            "video-provider-upstream-model",
+            false,
+            false
+        );
 
         StageVersionEntity videoVersion = listStageVersions(workflow.getWorkflowId()).stream()
             .filter(item -> WorkflowConstants.STAGE_VIDEO.equals(item.getStageType()) && item.getClipIndex() == 2)
@@ -702,6 +885,10 @@ class WorkflowApplicationServiceTest {
         ));
 
         service.generateStoryboard("wf_story_ok");
+
+        ArgumentCaptor<Map<String, Object>> requestCaptor = ArgumentCaptor.forClass(Map.class);
+        verify(generationApplicationService).createRun(requestCaptor.capture());
+        assertOnlyTextAnalysisModel(requestCaptor.getValue(), "text-model");
 
         ArgumentCaptor<Map<String, Object>> captor = ArgumentCaptor.forClass(Map.class);
         verify(workflowRepository).saveModelCall(org.mockito.ArgumentMatchers.eq("wf_story_ok"), captor.capture());
@@ -994,7 +1181,7 @@ class WorkflowApplicationServiceTest {
             "1:1",
             "1024x1024",
             "text-model",
-            "image-model",
+            "gpt-image-2",
             null
         ));
 
@@ -1006,7 +1193,35 @@ class WorkflowApplicationServiceTest {
     }
 
     @Test
-    void createMaterialGenerationFailsWhenLocalReferenceHasNoPublicBaseUrl() {
+    void createMaterialGenerationPassesDataUriReferencesThrough() {
+        String dataUri = "data:image/png;base64,cmVm";
+        when(generationApplicationService.createRun(any())).thenReturn(
+            imageRun("run_material_data_uri", "https://cdn.example.com/material-data-uri.png", "")
+        );
+
+        service.createMaterialGeneration(new CreateMaterialGenerationRequest(
+            "prop",
+            "黄铜钥匙",
+            "旧黄铜钥匙，边缘有磨损",
+            List.of(),
+            List.of(dataUri),
+            List.of(),
+            "1:1",
+            "1024x1024",
+            "text-model",
+            "gpt-image-2",
+            null
+        ));
+
+        ArgumentCaptor<Map<String, Object>> requestCaptor = ArgumentCaptor.forClass(Map.class);
+        verify(generationApplicationService).createRun(requestCaptor.capture());
+        Map<String, Object> input = mapValue(requestCaptor.getValue().get("input"));
+        assertEquals(dataUri, input.get("referenceImageUrl"));
+        assertEquals(List.of(dataUri), listValue(input.get("referenceImageUrls")));
+    }
+
+    @Test
+    void createMaterialGenerationFailsWhenLocalReferenceHasNoPublicBaseUrlForNonDataUriModel() {
         ApiException ex = assertThrows(
             ApiException.class,
             () -> service.createMaterialGeneration(new CreateMaterialGenerationRequest(
@@ -1026,6 +1241,98 @@ class WorkflowApplicationServiceTest {
 
         assertEquals("storage_public_base_url_missing", ex.code());
         assertTrue(ex.getMessage().contains("JIANDOU_STORAGE_PUBLIC_BASE_URL"));
+    }
+
+    @Test
+    void createMaterialGenerationConvertsLocalLibraryReferenceToDataUriForGptImageModel() {
+        MaterialAssetEntity referenceAsset = asset(
+            "",
+            "asset_ref_local",
+            "material_center",
+            0,
+            "/storage/gen/material-center/ref.png",
+            "image/png"
+        );
+        assets.put(referenceAsset.getMaterialAssetId(), referenceAsset);
+        when(localMediaArtifactService.imageDataUriFromPublicUrl("/storage/gen/material-center/ref.png"))
+            .thenReturn("data:image/png;base64,cmVm");
+        when(generationApplicationService.createRun(any())).thenReturn(
+            imageRun("run_material_gpt_ref", "https://cdn.example.com/material-gpt-ref.png", "")
+        );
+
+        service.createMaterialGeneration(new CreateMaterialGenerationRequest(
+            "free",
+            "参考图生成",
+            "沿用参考图构图生成",
+            List.of(),
+            List.of(),
+            List.of("asset_ref_local"),
+            "1:1",
+            "1024x1024",
+            "gpt-5.4",
+            "gpt-image-2",
+            null
+        ));
+
+        ArgumentCaptor<Map<String, Object>> requestCaptor = ArgumentCaptor.forClass(Map.class);
+        verify(generationApplicationService).createRun(requestCaptor.capture());
+        Map<String, Object> input = mapValue(requestCaptor.getValue().get("input"));
+        assertEquals("data:image/png;base64,cmVm", input.get("referenceImageUrl"));
+        assertEquals(List.of("data:image/png;base64,cmVm"), listValue(input.get("referenceImageUrls")));
+    }
+
+    @Test
+    void createMaterialGenerationOmitsSeedWhenImageModelDoesNotSupportSeed() {
+        when(modelResolver.supportsSeed("gpt-image-2")).thenReturn(false);
+        when(generationApplicationService.createRun(any())).thenReturn(
+            imageRun("run_material_gpt_no_seed", "https://cdn.example.com/material-gpt-no-seed.png", "")
+        );
+
+        service.createMaterialGeneration(new CreateMaterialGenerationRequest(
+            "free",
+            "无 seed 生成",
+            "一张白底产品照",
+            List.of(),
+            List.of(),
+            List.of(),
+            "1:1",
+            "1024x1024",
+            "gpt-5.4",
+            "gpt-image-2",
+            12345
+        ));
+
+        ArgumentCaptor<Map<String, Object>> requestCaptor = ArgumentCaptor.forClass(Map.class);
+        verify(generationApplicationService).createRun(requestCaptor.capture());
+        Map<String, Object> input = mapValue(requestCaptor.getValue().get("input"));
+        assertFalse(input.containsKey("seed"));
+    }
+
+    @Test
+    void createMaterialGenerationKeepsSeedWhenImageModelSupportsSeed() {
+        when(modelResolver.supportsSeed("Doubao-Seedream-4.5")).thenReturn(true);
+        when(generationApplicationService.createRun(any())).thenReturn(
+            imageRun("run_material_seedream_seed", "https://cdn.example.com/material-seedream-seed.png", "")
+        );
+
+        service.createMaterialGeneration(new CreateMaterialGenerationRequest(
+            "free",
+            "带 seed 生成",
+            "一张白底产品照",
+            List.of(),
+            List.of(),
+            List.of(),
+            "1:1",
+            "1024x1024",
+            "gpt-5.4",
+            "Doubao-Seedream-4.5",
+            12345
+        ));
+
+        ArgumentCaptor<Map<String, Object>> requestCaptor = ArgumentCaptor.forClass(Map.class);
+        verify(generationApplicationService).createRun(requestCaptor.capture());
+        Map<String, Object> input = mapValue(requestCaptor.getValue().get("input"));
+        assertEquals(12345, input.get("seed"));
     }
 
     @Test
@@ -1677,6 +1984,69 @@ class WorkflowApplicationServiceTest {
                 )
             )
         );
+    }
+
+    private MediaProviderProfile mediaProfile(
+        String kind,
+        String requestedModel,
+        String provider,
+        String providerModel,
+        boolean supportsSeed,
+        boolean supportsImageDataUriReferences,
+        String generationMode
+    ) {
+        return new MediaProviderProfile(
+            new MediaProviderConfig(
+                kind,
+                requestedModel,
+                provider,
+                providerModel,
+                "api-key",
+                "https://api.example.com",
+                "https://task.example.com",
+                30,
+                "test"
+            ),
+            new MediaProviderCapabilities(
+                supportsSeed,
+                false,
+                false,
+                false,
+                5,
+                120,
+                generationMode,
+                List.of(),
+                List.of(),
+                supportsImageDataUriReferences
+            )
+        );
+    }
+
+    private void assertOnlyTextAnalysisModel(Map<String, Object> request, String expectedTextAnalysisModel) {
+        Map<String, Object> model = mapValue(request.get("model"));
+        assertEquals(expectedTextAnalysisModel, model.get("textAnalysisModel"));
+        assertEquals(1, model.size());
+        assertFalse(model.containsKey("providerModel"));
+        assertFalse(model.containsKey("imageModel"));
+        assertFalse(model.containsKey("videoModel"));
+    }
+
+    private void assertStageStrategy(
+        Map<String, Object> request,
+        String expectedStage,
+        String expectedKey,
+        String expectedProvider,
+        String expectedProviderModel,
+        boolean expectedSupportsSeed,
+        boolean expectedSupportsImageDataUriReferences
+    ) {
+        Map<String, Object> stageStrategy = mapValue(mapValue(request.get("metadata")).get("stageStrategy"));
+        assertEquals(expectedStage, stageStrategy.get("stage"));
+        assertEquals(expectedKey, stageStrategy.get("key"));
+        assertEquals(expectedProvider, stageStrategy.get("provider"));
+        assertEquals(expectedProviderModel, stageStrategy.get("providerModel"));
+        assertEquals(expectedSupportsSeed, stageStrategy.get("supportsSeed"));
+        assertEquals(expectedSupportsImageDataUriReferences, stageStrategy.get("supportsImageDataUriReferences"));
     }
 
     private StageVersionEntity findStageVersion(String workflowId, String versionId) {

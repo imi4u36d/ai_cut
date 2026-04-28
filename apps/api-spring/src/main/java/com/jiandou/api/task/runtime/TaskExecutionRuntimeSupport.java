@@ -2,6 +2,7 @@ package com.jiandou.api.task.runtime;
 
 import com.jiandou.api.generation.GenerationRunKinds;
 import com.jiandou.api.generation.runtime.ModelRuntimePropertiesResolver;
+import com.jiandou.api.media.LocalMediaArtifactService;
 import com.jiandou.api.task.TaskRecord;
 import com.jiandou.api.task.domain.TaskArtifactNaming;
 import com.jiandou.api.task.domain.TaskStatus;
@@ -9,6 +10,7 @@ import com.jiandou.api.task.exception.TaskExecutionAbortedException;
 import com.jiandou.api.task.persistence.TaskRepository;
 import java.nio.charset.StandardCharsets;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import org.springframework.stereotype.Component;
@@ -21,10 +23,16 @@ class TaskExecutionRuntimeSupport {
 
     private final TaskRepository taskRepository;
     private final ModelRuntimePropertiesResolver modelResolver;
+    private final LocalMediaArtifactService localMediaArtifactService;
 
-    TaskExecutionRuntimeSupport(TaskRepository taskRepository, ModelRuntimePropertiesResolver modelResolver) {
+    TaskExecutionRuntimeSupport(
+        TaskRepository taskRepository,
+        ModelRuntimePropertiesResolver modelResolver,
+        LocalMediaArtifactService localMediaArtifactService
+    ) {
         this.taskRepository = taskRepository;
         this.modelResolver = modelResolver;
+        this.localMediaArtifactService = localMediaArtifactService;
     }
 
     /**
@@ -181,11 +189,15 @@ class TaskExecutionRuntimeSupport {
             input.put("durationSeconds", durationSeconds);
         }
         Integer imageSeed = imageSeed(task, clipIndex);
-        if (imageSeed != null) {
+        if (imageSeed != null && imageModelSupportsSeed(task)) {
             input.put("seed", imageSeed);
         }
         if (referenceImageUrl != null && !referenceImageUrl.isBlank()) {
-            input.put("referenceImageUrl", referenceImageUrl);
+            List<String> referenceImageUrls = compatibleImageReferenceUrls(referenceImageUrl, imageModel(task));
+            if (!referenceImageUrls.isEmpty()) {
+                input.put("referenceImageUrl", referenceImageUrls.get(0));
+                input.put("referenceImageUrls", referenceImageUrls);
+            }
         }
         Map<String, Object> request = new LinkedHashMap<>();
         request.put("kind", GenerationRunKinds.IMAGE);
@@ -321,6 +333,39 @@ class TaskExecutionRuntimeSupport {
      */
     private String imageModel(TaskRecord task) {
         return requiredSnapshotModel(task, "imageModel", "关键帧模型");
+    }
+
+    private boolean imageModelSupportsSeed(TaskRecord task) {
+        return modelResolver.supportsSeed(imageModel(task));
+    }
+
+    private List<String> compatibleImageReferenceUrls(String referenceImageUrl, String imageModel) {
+        String normalized = stringValue(referenceImageUrl);
+        if (normalized.isBlank()) {
+            return List.of();
+        }
+        if (normalized.startsWith("/storage/")) {
+            String publicUrl = localMediaArtifactService == null ? "" : localMediaArtifactService.buildExternallyAccessibleUrl(normalized);
+            if (!publicUrl.isBlank()) {
+                return List.of(publicUrl);
+            }
+            if (supportsImageDataUriReferences(imageModel)) {
+                try {
+                    String dataUri = localMediaArtifactService == null ? "" : localMediaArtifactService.imageDataUriFromPublicUrl(normalized);
+                    if (!dataUri.isBlank()) {
+                        return List.of(dataUri);
+                    }
+                } catch (RuntimeException ex) {
+                    throw new IllegalStateException("referenceImageUrl local image cannot be converted to data URI: " + ex.getMessage(), ex);
+                }
+            }
+            throw new IllegalStateException("referenceImageUrl is local storage address; configure JIANDOU_STORAGE_PUBLIC_BASE_URL or use an image model that supports data URI references");
+        }
+        return List.of(normalized);
+    }
+
+    private boolean supportsImageDataUriReferences(String imageModel) {
+        return stringValue(imageModel).toLowerCase().contains("gpt-image");
     }
 
     /**

@@ -58,7 +58,7 @@ class AdminModelConfigServiceTest {
         ));
         when(resolver.resolveMediaProfile("seedance", GenerationModelKinds.VIDEO)).thenReturn(new MediaProviderProfile(
             new MediaProviderConfig("video", "seedance", "volcengine", "seedance", "key", "https://video.example.com", "https://task.example.com", 30, "cfg"),
-            new MediaProviderCapabilities(true, true, false, false, 5, 120, "standard", List.of("720*1280", "1080*1920"), List.of(4, 8))
+            new MediaProviderCapabilities(true, true, false, false, 5, 120, "standard", List.of("720*1280", "1080*1920"), List.of(4, 8), false)
         ));
         when(resolver.listSections("model.providers")).thenReturn(List.of(
             new ModelRuntimePropertiesResolver.ConfigSection("openai", Map.of("provider", "openai", "vendor", "openai", "base_url", "https://api.openai.com/v1")),

@@ -1,8 +1,11 @@
 package com.jiandou.api.common.web;
 
 import com.jiandou.api.common.exception.ApiException;
+import com.jiandou.api.generation.exception.GenerationProviderException;
 import jakarta.servlet.http.HttpServletRequest;
 import java.time.OffsetDateTime;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import org.springframework.context.support.DefaultMessageSourceResolvable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -30,6 +33,34 @@ public class GlobalApiExceptionHandler {
             OffsetDateTime.now()
         );
         return ResponseEntity.status(ex.status()).body(body);
+    }
+
+    /**
+     * 生成 Provider 失败需要明确返回给调用方，不能被泛化成 500。
+     */
+    @ExceptionHandler(GenerationProviderException.class)
+    public ResponseEntity<ApiErrorResponse> handleGenerationProviderException(
+        GenerationProviderException ex,
+        HttpServletRequest request
+    ) {
+        HttpStatus status = HttpStatus.BAD_GATEWAY;
+        Map<String, Object> details = new LinkedHashMap<>();
+        if (ex.httpStatus() > 0) {
+            details.put("providerHttpStatus", ex.httpStatus());
+        }
+        if (ex.providerResponse() != null) {
+            details.put("providerResponse", ex.providerResponse());
+        }
+        ApiErrorResponse body = new ApiErrorResponse(
+            "provider_request_failed",
+            status.value(),
+            status.getReasonPhrase(),
+            firstNonBlank(ex.getMessage(), "Provider request failed"),
+            details,
+            request.getRequestURI(),
+            OffsetDateTime.now()
+        );
+        return ResponseEntity.status(status).body(body);
     }
 
     /**
@@ -70,5 +101,14 @@ public class GlobalApiExceptionHandler {
             OffsetDateTime.now()
         );
         return ResponseEntity.badRequest().body(body);
+    }
+
+    private String firstNonBlank(String... values) {
+        for (String value : values) {
+            if (value != null && !value.isBlank()) {
+                return value.trim();
+            }
+        }
+        return "";
     }
 }

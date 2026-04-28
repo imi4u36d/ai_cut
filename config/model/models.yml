@@ -85,6 +85,7 @@ model:
       provider_model: "gpt-image-2"
       timeout_seconds: 300
       family: "gpt-image"
+      supports_image_data_uri_references: true
       supported_sizes: "1024x1024,2048x2048,2880x2880,1536x1024,2048x1360,3520x2336,1024x1536,1360x2048,2336x3520,1824x1024,2048x1152,3840x2160,1024x1824,1152x2048,2160x3840"
       capabilities:
         - "image_generation"

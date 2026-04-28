@@ -271,6 +271,7 @@ public class GenerationRunFactory {
         }
         metadata.put("fileUrl", markdownArtifact.publicUrl());
         metadata.put("configSource", profile.source());
+        metadata.putAll(requestMetadata(request));
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("runId", runId);
         result.put("kind", GenerationRunKinds.SCRIPT);
@@ -362,6 +363,7 @@ public class GenerationRunFactory {
         metadata.put("providerHttpStatus", adjustResponse.httpStatus());
         metadata.put("fileUrl", markdownArtifact.publicUrl());
         metadata.put("configSource", profile.source());
+        metadata.putAll(requestMetadata(request));
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("runId", runId);
         result.put("kind", GenerationRunKinds.SCRIPT_ADJUST);
@@ -492,6 +494,7 @@ public class GenerationRunFactory {
         metadata.put("providerRequest", remoteImage.providerRequest());
         metadata.put("providerResponse", remoteImage.providerResponse());
         metadata.put("providerHttpStatus", remoteImage.httpStatus());
+        metadata.putAll(requestMetadata(request));
         metadata.put("providerInteraction", providerInteraction(
             "image.generate",
             remoteImage.providerRequest(),
@@ -639,6 +642,7 @@ public class GenerationRunFactory {
         metadata.put("videoSubmitRequest", submission.providerRequest());
         metadata.put("videoSubmitResponse", submission.providerResponse());
         metadata.put("videoSubmitHttpStatus", submission.httpStatus());
+        metadata.putAll(requestMetadata(request));
         metadata.put("videoSubmitInteraction", providerInteraction(
             "video.submit",
             submission.providerRequest(),
@@ -1348,6 +1352,13 @@ public class GenerationRunFactory {
 
     private Long userIdFromRun(Map<String, Object> run) {
         return parseNullableLong(support.mapValue(run.get("auth")).get("userId"));
+    }
+
+    private Map<String, Object> requestMetadata(Map<String, Object> request) {
+        if (request == null) {
+            return Map.of();
+        }
+        return support.mapValue(request.get("metadata"));
     }
 
     private Long parseNullableLong(Object value) {

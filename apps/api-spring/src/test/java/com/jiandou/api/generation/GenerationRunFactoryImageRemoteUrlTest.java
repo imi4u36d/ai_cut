@@ -109,7 +109,7 @@ class GenerationRunFactoryImageRemoteUrlTest {
                 60,
                 "test"
             ),
-            new MediaProviderCapabilities(false, false, false, false, 5, 120, "", List.of(), List.of())
+            new MediaProviderCapabilities(false, false, false, false, 5, 120, "", List.of(), List.of(), false)
         );
         ModelRuntimePropertiesResolver modelResolver = new ModelRuntimePropertiesResolver(new MockEnvironment()) {
             @Override

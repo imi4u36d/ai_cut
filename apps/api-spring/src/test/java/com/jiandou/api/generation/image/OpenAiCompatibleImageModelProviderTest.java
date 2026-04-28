@@ -19,9 +19,9 @@ import org.junit.jupiter.api.Test;
 class OpenAiCompatibleImageModelProviderTest {
 
     @Test
-    void generateUsesResponsesImageGenerationWithoutReferenceImages() {
+    void generateUsesImagesApiGenerationWithoutReferenceImages() {
         CapturingTransport transport = new CapturingTransport();
-        transport.jsonResponse = "{\"output\":[{\"type\":\"image_generation_call\",\"result\":\"AQID\"}]}";
+        transport.jsonResponse = "{\"data\":[{\"b64_json\":\"AQID\"}]}";
         OpenAiCompatibleImageModelProvider provider = new OpenAiCompatibleImageModelProvider(transport);
 
         RemoteImageGenerationResult result = provider.generate(
@@ -29,16 +29,12 @@ class OpenAiCompatibleImageModelProviderTest {
             new ImageGenerationRequest("gpt-image-2", "a prompt", 1824, 1024, "", List.of(), null)
         );
 
-        assertEquals("https://api.deeps.example/v1/responses", transport.jsonEndpoint);
-        assertEquals("gpt-5.4", transport.jsonBody.get("model"));
-        assertEquals("a prompt", transport.jsonBody.get("input"));
-        assertEquals("required", transport.jsonBody.get("tool_choice"));
-        Map<String, Object> tool = firstTool(transport.jsonBody);
-        assertEquals("image_generation", tool.get("type"));
-        assertEquals("generate", tool.get("action"));
-        assertEquals("1824x1024", tool.get("size"));
-        assertEquals("png", tool.get("output_format"));
-        assertEquals("high", tool.get("quality"));
+        assertEquals("https://api.deeps.example/v1/images/generations", transport.jsonEndpoint);
+        assertEquals("gpt-image-2", transport.jsonBody.get("model"));
+        assertEquals("a prompt", transport.jsonBody.get("prompt"));
+        assertEquals("1824x1024", transport.jsonBody.get("size"));
+        assertEquals("png", transport.jsonBody.get("output_format"));
+        assertEquals("auto", transport.jsonBody.get("moderation"));
         assertArrayEquals(new byte[] {1, 2, 3}, result.data());
         assertEquals("", result.remoteSourceUrl());
         assertEquals("deeps_api", result.provider());
@@ -46,9 +42,10 @@ class OpenAiCompatibleImageModelProviderTest {
     }
 
     @Test
-    void generateUsesResponsesImageEditWithReferenceImages() {
+    void generateUsesImagesApiEditWithReferenceImages() {
         CapturingTransport transport = new CapturingTransport();
-        transport.jsonResponse = "{\"output\":[{\"type\":\"image_generation_call\",\"result\":\"AQID\"}]}";
+        transport.multipartResponse = "{\"data\":[{\"b64_json\":\"AQID\"}]}";
+        transport.downloads.put("https://cdn.example.com/ref.png", new ImageProviderTransport.DownloadedBinary(new byte[] {4, 5, 6}, "image/png"));
         OpenAiCompatibleImageModelProvider provider = new OpenAiCompatibleImageModelProvider(transport);
 
         RemoteImageGenerationResult result = provider.generate(
@@ -56,23 +53,42 @@ class OpenAiCompatibleImageModelProviderTest {
             new ImageGenerationRequest("gpt-image-2", "edit prompt", 1024, 1824, "", List.of("https://cdn.example.com/ref.png"), null)
         );
 
-        assertEquals("https://api.deeps.example/v1/responses", transport.jsonEndpoint);
-        Map<String, Object> tool = firstTool(transport.jsonBody);
-        assertEquals("edit", tool.get("action"));
-        assertEquals("1024x1824", tool.get("size"));
-        List<?> input = (List<?>) transport.jsonBody.get("input");
-        Map<?, ?> message = (Map<?, ?>) input.get(0);
-        List<?> content = (List<?>) message.get("content");
-        assertEquals("input_text", ((Map<?, ?>) content.get(0)).get("type"));
-        assertEquals("input_image", ((Map<?, ?>) content.get(1)).get("type"));
-        assertEquals("https://cdn.example.com/ref.png", ((Map<?, ?>) content.get(1)).get("image_url"));
+        assertEquals("https://api.deeps.example/v1/images/edits", transport.multipartEndpoint);
+        assertEquals("gpt-image-2", transport.multipartFields.get("model"));
+        assertEquals("edit prompt", transport.multipartFields.get("prompt"));
+        assertEquals("1024x1824", transport.multipartFields.get("size"));
+        assertEquals("png", transport.multipartFields.get("output_format"));
+        assertEquals("auto", transport.multipartFields.get("moderation"));
+        assertEquals(1, transport.multipartFiles.size());
+        assertEquals("image[]", transport.multipartFiles.get(0).fieldName());
+        assertEquals("input-1.png", transport.multipartFiles.get(0).fileName());
+        assertArrayEquals(new byte[] {4, 5, 6}, transport.multipartFiles.get(0).data());
         assertArrayEquals(new byte[] {1, 2, 3}, result.data());
+    }
+
+    @Test
+    void generateUsesImagesApiEditWithDataUriReferenceImages() {
+        CapturingTransport transport = new CapturingTransport();
+        transport.multipartResponse = "{\"data\":[{\"b64_json\":\"AQID\"}]}";
+        OpenAiCompatibleImageModelProvider provider = new OpenAiCompatibleImageModelProvider(transport);
+        String dataUri = "data:image/png;base64,cmVm";
+
+        provider.generate(
+            profile(),
+            new ImageGenerationRequest("gpt-image-2", "edit prompt", 1024, 1824, "", List.of(dataUri), null)
+        );
+
+        assertEquals("https://api.deeps.example/v1/images/edits", transport.multipartEndpoint);
+        assertEquals(1, transport.multipartFiles.size());
+        assertEquals("input-1.png", transport.multipartFiles.get(0).fileName());
+        assertEquals("image/png", transport.multipartFiles.get(0).contentType());
+        assertArrayEquals(new byte[] {'r', 'e', 'f'}, transport.multipartFiles.get(0).data());
     }
 
     @Test
     void generateMapsRequestedDimensionsToConfiguredSupportedSize() {
         CapturingTransport transport = new CapturingTransport();
-        transport.jsonResponse = "{\"output\":[{\"type\":\"image_generation_call\",\"result\":\"AQID\"}]}";
+        transport.jsonResponse = "{\"data\":[{\"b64_json\":\"AQID\"}]}";
         OpenAiCompatibleImageModelProvider provider = new OpenAiCompatibleImageModelProvider(transport);
 
         RemoteImageGenerationResult result = provider.generate(
@@ -80,14 +96,29 @@ class OpenAiCompatibleImageModelProviderTest {
             new ImageGenerationRequest("gpt-image-2", "portrait prompt", 720, 1280, "", List.of(), null)
         );
 
-        assertEquals("1024x1536", firstTool(transport.jsonBody).get("size"));
+        assertEquals("1024x1536", transport.jsonBody.get("size"));
         assertEquals("1024x1536", result.requestedSize());
+    }
+
+    @Test
+    void generateKeepsExactSupportedSizeBeforeChoosingLargestSameAspectRatio() {
+        CapturingTransport transport = new CapturingTransport();
+        transport.jsonResponse = "{\"data\":[{\"b64_json\":\"AQID\"}]}";
+        OpenAiCompatibleImageModelProvider provider = new OpenAiCompatibleImageModelProvider(transport);
+
+        RemoteImageGenerationResult result = provider.generate(
+            profileWithSupportedSizes(),
+            new ImageGenerationRequest("gpt-image-2", "square prompt", 1024, 1024, "", List.of(), null)
+        );
+
+        assertEquals("1024x1024", transport.jsonBody.get("size"));
+        assertEquals("1024x1024", result.requestedSize());
     }
 
     @Test
     void generateDecodesBase64ImageData() {
         CapturingTransport transport = new CapturingTransport();
-        transport.jsonResponse = "{\"output\":[{\"type\":\"image_generation_call\",\"result\":\"AQID\"}]}";
+        transport.jsonResponse = "{\"data\":[{\"b64_json\":\"AQID\"}]}";
         OpenAiCompatibleImageModelProvider provider = new OpenAiCompatibleImageModelProvider(transport);
 
         RemoteImageGenerationResult result = provider.generate(
@@ -114,7 +145,7 @@ class OpenAiCompatibleImageModelProviderTest {
     }
 
     @Test
-    void generateFailsWhenReferenceImageUrlIsNotAbsoluteHttpUrl() {
+    void generateFailsWhenReferenceImageUrlIsNotAbsoluteHttpUrlOrImageDataUri() {
         OpenAiCompatibleImageModelProvider provider = new OpenAiCompatibleImageModelProvider(new CapturingTransport());
 
         GenerationProviderException exception = assertThrows(
@@ -122,7 +153,7 @@ class OpenAiCompatibleImageModelProviderTest {
             () -> provider.generate(profile(), new ImageGenerationRequest("gpt-image-2", "a prompt", 1248, 1248, "/storage/ref.png", List.of(), null))
         );
 
-        assertTrue(exception.getMessage().contains("absolute http(s) URL"));
+        assertTrue(exception.getMessage().contains("absolute http(s) URL or image data URI"));
     }
 
     private MediaProviderProfile profile() {
@@ -138,7 +169,7 @@ class OpenAiCompatibleImageModelProviderTest {
                 60,
                 "test"
             ),
-            new MediaProviderCapabilities(false, false, false, false, 5, 120, "", List.of(), List.of())
+            new MediaProviderCapabilities(false, false, false, false, 5, 120, "", List.of(), List.of(), false)
         );
     }
 
@@ -162,17 +193,13 @@ class OpenAiCompatibleImageModelProviderTest {
                 false,
                 5,
                 120,
-                "",
-                List.of("1024x1024", "1024x1536", "1536x1024"),
-                List.of()
-            )
-        );
-    }
-
-    @SuppressWarnings("unchecked")
-    private Map<String, Object> firstTool(Map<String, Object> body) {
-        return (Map<String, Object>) ((List<?>) body.get("tools")).get(0);
-    }
+	                "",
+	                List.of("1024x1024", "1024x1536", "1536x1024"),
+	                List.of(),
+	                false
+	            )
+	        );
+	    }
 
     private static final class CapturingTransport extends ImageProviderTransport {
         private String jsonEndpoint;

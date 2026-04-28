@@ -126,8 +126,11 @@ final class TaskWorkerRenderStageService {
             int clipMinDuration = clipDuration[1];
             int clipMaxDuration = clipDuration[2];
             FrameResolution startFrame;
-            boolean reusePreviousLastFrame = clipIndex > 1 && !previousClipLastFrameUrl.isBlank();
+            boolean reusePreviousLastFrame = clipIndex > 1;
             if (reusePreviousLastFrame) {
+                if (previousClipLastFrameUrl.isBlank()) {
+                    throw new IllegalStateException("clip " + clipIndex + " requires previous clip last frame before generating its end frame");
+                }
                 startFrame = reuseFrame(
                     task,
                     clipIndex,

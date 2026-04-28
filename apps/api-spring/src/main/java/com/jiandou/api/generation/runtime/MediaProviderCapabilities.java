@@ -13,6 +13,7 @@ import java.util.List;
  * @param generationMode 生成模式值
  * @param supportedSizes 支持的尺寸列表
  * @param supportedDurations 支持的时长列表
+ * @param supportsImageDataUriReferences 是否支持图片 data URI 参考图
  */
 public record MediaProviderCapabilities(
     boolean supportsSeed,
@@ -23,7 +24,8 @@ public record MediaProviderCapabilities(
     int pollTimeoutSeconds,
     String generationMode,
     List<String> supportedSizes,
-    List<Integer> supportedDurations
+    List<Integer> supportedDurations,
+    boolean supportsImageDataUriReferences
 ) {
 
     public MediaProviderCapabilities {

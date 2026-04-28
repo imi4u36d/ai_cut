@@ -47,6 +47,7 @@
         <label class="center-field">
           <span>Seed</span>
           <input v-model="form.seed" class="field-input" inputmode="numeric" placeholder="可为空" />
+          <small>{{ materialSeedHint }}</small>
         </label>
 
         <label class="center-field center-field-full">
@@ -80,23 +81,50 @@
               <p class="center-eyebrow">References</p>
               <h3>参考图</h3>
             </div>
+            <button class="btn-secondary btn-sm" type="button" :disabled="loadingReferenceAssets" @click="loadReferenceAssets">
+              {{ loadingReferenceAssets ? "刷新中..." : "刷新素材库" }}
+            </button>
           </div>
 
           <div class="reference-upload">
             <label class="upload-tile" :class="{ 'upload-tile-disabled': uploadingImage }">
               <input type="file" accept="image/*" multiple :disabled="uploadingImage" @change="handleImageUpload" />
-              <span>{{ uploadingImage ? "上传中..." : "上传参考图" }}</span>
+              <span>{{ uploadingImage ? "读取中..." : "选择参考图" }}</span>
             </label>
 
             <div class="reference-list" :class="{ 'reference-list-empty': !uploadedReferenceItems.length }">
               <span v-for="item in uploadedReferenceItems" :key="item.fileUrl" class="reference-chip">
-                <span>{{ compactUrl(item.publicUrl) }}</span>
+                <span>{{ compactUrl(referenceItemDisplayUrl(item)) }}</span>
                 <button type="button" aria-label="移除参考图" @click="removeUploadedReference(item.fileUrl)">×</button>
               </span>
             </div>
           </div>
 
           <div v-if="referenceError" class="center-error">{{ referenceError }}</div>
+
+          <div class="reference-library">
+            <div class="reference-library__head">
+              <strong>从素材库选择</strong>
+              <span>{{ selectedReferenceAssetIds.length }} / {{ referenceLibraryAssets.length }}</span>
+            </div>
+            <div
+              class="reference-library-grid"
+              :class="{ 'reference-library-grid-empty': !referenceLibraryAssets.length && !loadingReferenceAssets }"
+            >
+              <button
+                v-for="asset in referenceLibraryAssets"
+                :key="asset.id"
+                class="reference-asset"
+                :class="{ 'reference-asset-selected': selectedReferenceAssetIds.includes(asset.id) }"
+                type="button"
+                @click="toggleReferenceAsset(asset.id)"
+              >
+                <img :src="materialAssetPreviewUrl(asset)" :alt="asset.title" />
+                <span>{{ asset.title }}</span>
+              </button>
+            </div>
+            <div v-if="referenceLibraryError" class="center-error">{{ referenceLibraryError }}</div>
+          </div>
         </section>
 
         <div class="center-actions center-field-full">
@@ -184,7 +212,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from "vue";
-import { createMaterialGeneration, uploadImage, uploadMaterialAsset } from "@/api/material-assets";
+import { createMaterialGeneration, fetchMaterialAssets, uploadMaterialAsset } from "@/api/material-assets";
 import { fetchGenerationOptions } from "@/api/generation";
 import AppSelect from "@/components/common/AppSelect.vue";
 import type { AppSelectOption } from "@/components/common/app-select";
@@ -207,7 +235,7 @@ interface AssetTypeOption {
 
 interface UploadedReferenceItem {
   fileUrl: string;
-  publicUrl: string;
+  fileName: string;
 }
 
 const assetTypeOptions: AssetTypeOption[] = [
@@ -248,11 +276,15 @@ const form = reactive({
 const loadingOptions = ref(false);
 const submitting = ref(false);
 const uploadingImage = ref(false);
+const loadingReferenceAssets = ref(false);
 const busyActionKey = ref("");
 const errorMessage = ref("");
 const referenceError = ref("");
+const referenceLibraryError = ref("");
 const referenceImageUrlsText = ref("");
 const uploadedReferenceItems = ref<UploadedReferenceItem[]>([]);
+const referenceLibraryAssets = ref<MaterialAssetLibraryItem[]>([]);
+const selectedReferenceAssetIds = ref<string[]>([]);
 const result = ref<MaterialGenerationResponse | null>(null);
 const aspectRatios = ref<AppSelectOption[]>([]);
 const imageModels = ref<GenerationTextAnalysisModelInfo[]>([]);
@@ -288,6 +320,10 @@ const selectedImageModelOption = computed<GenerationTextAnalysisModelInfo | null
   }
   return imageModels.value.find((item) => normalizeModelName(item.value) === selectedImageModel.value) ?? null;
 });
+const selectedImageModelSupportsSeed = computed(() => Boolean(selectedImageModelOption.value?.supportsSeed));
+const materialSeedHint = computed(() =>
+  selectedImageModelSupportsSeed.value ? "当前图像模型会使用该种子。" : "当前图像模型未声明支持种子，保存后仅做素材记录。"
+);
 const imageSizeOptions = computed<GenerationImageSizeOption[]>(() => {
   const source = imageSizes.value;
   if (!source.length) {
@@ -323,8 +359,12 @@ const descriptionPlaceholder = computed(() =>
     : "描述角色外观、场景布局或道具细节",
 );
 const typedReferenceUrls = computed(() => parseReferenceUrls(referenceImageUrlsText.value));
-const uploadedReferencePublicUrls = computed(() => uploadedReferenceItems.value.map((item) => item.publicUrl));
-const selectedReferenceUrls = computed(() => uniqueUrls([...typedReferenceUrls.value, ...uploadedReferencePublicUrls.value]));
+const uploadedReferenceUrls = computed(() =>
+  uploadedReferenceItems.value
+    .map((item) => item.fileUrl)
+    .filter(Boolean),
+);
+const selectedReferenceUrls = computed(() => uniqueUrls([...typedReferenceUrls.value, ...uploadedReferenceUrls.value]));
 const resultAssets = computed(() => {
   if (!result.value) {
     return [];
@@ -370,6 +410,18 @@ function replaceResultAsset(updated?: MaterialAssetLibraryItem | null) {
 
 function resultAssetUrl(asset: MaterialAssetLibraryItem) {
   return asset.previewUrl || asset.fileUrl || "";
+}
+
+function materialAssetPreviewUrl(asset: MaterialAssetLibraryItem) {
+  return asset.previewUrl || asset.fileUrl || asset.remoteUrl || "";
+}
+
+function isImageMaterialAsset(asset: MaterialAssetLibraryItem) {
+  return asset.mediaType === "image" && Boolean(materialAssetPreviewUrl(asset));
+}
+
+function referenceItemDisplayUrl(item: UploadedReferenceItem) {
+  return item.fileName || item.fileUrl;
 }
 
 function normalizeModelName(value: unknown) {
@@ -430,6 +482,36 @@ function removeUploadedReference(fileUrl: string) {
   uploadedReferenceItems.value = uploadedReferenceItems.value.filter((item) => item.fileUrl !== fileUrl);
 }
 
+function readImageAsDataUri(file: File): Promise<UploadedReferenceItem> {
+  if (!file.type.startsWith("image/")) {
+    return Promise.reject(new Error(`${file.name || "参考图"} 不是图片文件`));
+  }
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = typeof reader.result === "string" ? reader.result : "";
+      if (!result.startsWith("data:image/") || !result.includes(";base64,")) {
+        reject(new Error(`${file.name || "参考图"} 无法转换为 base64 图片`));
+        return;
+      }
+      resolve({
+        fileUrl: result,
+        fileName: file.name || "本地参考图",
+      });
+    };
+    reader.onerror = () => reject(reader.error ?? new Error("参考图读取失败"));
+    reader.readAsDataURL(file);
+  });
+}
+
+function toggleReferenceAsset(assetId: string) {
+  if (selectedReferenceAssetIds.value.includes(assetId)) {
+    selectedReferenceAssetIds.value = selectedReferenceAssetIds.value.filter((item) => item !== assetId);
+    return;
+  }
+  selectedReferenceAssetIds.value = [...selectedReferenceAssetIds.value, assetId];
+}
+
 function openImagePreview(url: string, alt: string) {
   if (!url) {
     return;
@@ -481,9 +563,9 @@ function buildPayload(): CreateMaterialGenerationRequest {
     imageSize: form.imageSize || null,
     textAnalysisModel: form.textAnalysisModel || null,
     imageModel: form.imageModel || null,
-    seed: Number.isFinite(seed) ? seed : null,
+    seed: selectedImageModelSupportsSeed.value && Number.isFinite(seed) ? seed : null,
     referenceImageUrls: selectedReferenceUrls.value,
-    referenceAssetIds: [],
+    referenceAssetIds: selectedReferenceAssetIds.value,
   };
 }
 
@@ -506,6 +588,21 @@ async function loadOptions() {
   }
 }
 
+async function loadReferenceAssets() {
+  loadingReferenceAssets.value = true;
+  referenceLibraryError.value = "";
+  try {
+    const assets = await fetchMaterialAssets();
+    referenceLibraryAssets.value = assets.filter(isImageMaterialAsset);
+    const availableIds = new Set(referenceLibraryAssets.value.map((asset) => asset.id));
+    selectedReferenceAssetIds.value = selectedReferenceAssetIds.value.filter((assetId) => availableIds.has(assetId));
+  } catch (error) {
+    referenceLibraryError.value = error instanceof Error ? error.message : "素材库参考图加载失败";
+  } finally {
+    loadingReferenceAssets.value = false;
+  }
+}
+
 async function handleImageUpload(event: Event) {
   const input = event.target as HTMLInputElement;
   const files = Array.from(input.files ?? []);
@@ -515,22 +612,12 @@ async function handleImageUpload(event: Event) {
   uploadingImage.value = true;
   referenceError.value = "";
   try {
-    const uploaded = await Promise.all(files.map((file) => uploadImage(file)));
-    const items = uploaded.map((item) => ({
-      fileUrl: item.previewUrl || item.fileUrl,
-      publicUrl: item.publicUrl || "",
-    })).filter((item) => item.fileUrl);
-    const missingPublicUrl = items.find((item) => !item.publicUrl);
-    if (missingPublicUrl) {
-      referenceError.value = "上传成功，但后端未返回公网映射地址，请配置 JIANDOU_STORAGE_PUBLIC_BASE_URL 后再使用参考图生成。";
-      input.value = "";
-      return;
-    }
+    const items = await Promise.all(files.map(readImageAsDataUri));
     const merged = [...uploadedReferenceItems.value, ...items];
     uploadedReferenceItems.value = merged.filter((item, index, array) => array.findIndex((candidate) => candidate.fileUrl === item.fileUrl) === index);
     input.value = "";
   } catch (error) {
-    referenceError.value = error instanceof Error ? error.message : "参考图上传失败";
+    referenceError.value = error instanceof Error ? error.message : "参考图读取失败";
   } finally {
     uploadingImage.value = false;
   }
@@ -561,12 +648,15 @@ function resetForm() {
   form.seed = "";
   referenceImageUrlsText.value = "";
   uploadedReferenceItems.value = [];
+  selectedReferenceAssetIds.value = [];
   result.value = null;
   errorMessage.value = "";
+  referenceError.value = "";
 }
 
 onMounted(async () => {
   await loadOptions();
+  await loadReferenceAssets();
 });
 
 watch(
@@ -621,7 +711,7 @@ watch(
 
 .asset-type-tabs {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 12px;
   margin-bottom: 18px;
 }
@@ -755,6 +845,78 @@ watch(
   border-radius: 50%;
   background: rgba(255, 255, 255, 0.12);
   color: rgba(255, 255, 255, 0.78);
+}
+
+.reference-library {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.reference-library__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: rgba(255, 255, 255, 0.76);
+  font-size: 0.86rem;
+}
+
+.reference-library__head span {
+  color: rgba(255, 255, 255, 0.48);
+}
+
+.reference-library-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(128px, 1fr));
+  gap: 10px;
+  min-height: 112px;
+}
+
+.reference-library-grid-empty {
+  display: flex;
+  align-items: center;
+}
+
+.reference-library-grid-empty::before {
+  content: "素材库暂无可用图片";
+  color: rgba(255, 255, 255, 0.46);
+  font-size: 0.9rem;
+}
+
+.reference-asset {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.16);
+  color: rgba(255, 255, 255, 0.74);
+  text-align: left;
+}
+
+.reference-asset img {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.28);
+  object-fit: cover;
+}
+
+.reference-asset span {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 0.8rem;
+}
+
+.reference-asset-selected {
+  border-color: rgba(145, 180, 255, 0.58);
+  background: rgba(90, 128, 210, 0.18);
+  box-shadow: inset 0 0 0 1px rgba(145, 180, 255, 0.18);
 }
 
 .result-grid {

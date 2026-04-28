@@ -631,6 +631,15 @@ const selectedVideoModelOption = computed<GenerationVideoModelInfo | null>(() =>
     videoModelOptions.value.find((item) => normalizeModelName(item.value) === selectedVideoModel) ?? null
   );
 });
+const selectedImageModelOption = computed<GenerationTextAnalysisModelInfo | null>(() => {
+  const selectedImageModel = normalizeModelName(form.value.imageModel);
+  if (!selectedImageModel) {
+    return null;
+  }
+  return (
+    imageModelOptions.value.find((item) => normalizeModelName(item.value) === selectedImageModel) ?? null
+  );
+});
 const videoSizeOptions = computed<GenerationVideoSizeOption[]>(() => {
   const source = options.value?.videoSizes ?? [];
   const targetAspectRatio = form.value.aspectRatio;
@@ -724,9 +733,16 @@ const selectedModelCount = computed(() => {
 const transcriptCharacterCount = computed(() => (form.value.transcriptText ?? "").trim().length);
 
 const seedCapabilityHint = computed(() => {
+  const imageSupportsSeed = Boolean(selectedImageModelOption.value?.supportsSeed);
   const videoSupportsSeed = Boolean(selectedVideoModelOption.value?.supportsSeed);
+  if (imageSupportsSeed && videoSupportsSeed) {
+    return "当前图片模型和视频模型都会使用该种子。";
+  }
+  if (imageSupportsSeed) {
+    return "当前图片模型会使用该种子，视频模型未声明支持种子。";
+  }
   if (videoSupportsSeed) {
-    return "当前视频模型会使用该种子。";
+    return "当前视频模型会使用该种子，图片模型未声明支持种子。";
   }
   return "当前所选模型未声明支持种子，保存后仅做任务记录。";
 });

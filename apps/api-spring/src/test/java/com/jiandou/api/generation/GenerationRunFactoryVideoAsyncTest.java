@@ -71,7 +71,7 @@ class GenerationRunFactoryVideoAsyncTest {
                 60,
                 "test"
             ),
-            new MediaProviderCapabilities(false, true, false, false, 1, 120, "i2v", java.util.List.of(), java.util.List.of(6, 8, 10))
+            new MediaProviderCapabilities(false, true, false, false, 1, 120, "i2v", java.util.List.of(), java.util.List.of(6, 8, 10), false)
         );
         ModelRuntimePropertiesResolver modelResolver = new ModelRuntimePropertiesResolver(new MockEnvironment()) {
             /**
@@ -294,7 +294,7 @@ class GenerationRunFactoryVideoAsyncTest {
                 60,
                 "test"
             ),
-            new MediaProviderCapabilities(false, true, false, false, 1, 120, "i2v", java.util.List.of(), java.util.List.of(6, 8, 10))
+            new MediaProviderCapabilities(false, true, false, false, 1, 120, "i2v", java.util.List.of(), java.util.List.of(6, 8, 10), false)
         );
         ModelRuntimePropertiesResolver modelResolver = new ModelRuntimePropertiesResolver(new MockEnvironment()) {
             @Override
@@ -427,7 +427,7 @@ class GenerationRunFactoryVideoAsyncTest {
                 60,
                 "test"
             ),
-            new MediaProviderCapabilities(false, true, false, false, 1, 120, "i2v", java.util.List.of(), java.util.List.of(6, 8, 10))
+            new MediaProviderCapabilities(false, true, false, false, 1, 120, "i2v", java.util.List.of(), java.util.List.of(6, 8, 10), false)
         );
         ModelRuntimePropertiesResolver modelResolver = new ModelRuntimePropertiesResolver(new MockEnvironment()) {
             @Override

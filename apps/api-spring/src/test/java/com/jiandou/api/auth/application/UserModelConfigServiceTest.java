@@ -43,7 +43,7 @@ class UserModelConfigServiceTest {
         ));
         when(resolver.resolveMediaProfile("seedance-v1", GenerationModelKinds.VIDEO, 7L)).thenReturn(new MediaProviderProfile(
             new MediaProviderConfig("video", "seedance-v1", "seedance", "seedance-v1", "", "https://video.example.com", "https://video.example.com/tasks", 30, "file"),
-            new MediaProviderCapabilities(true, true, false, false, 5, 120, "i2v", List.of(), List.of())
+            new MediaProviderCapabilities(true, true, false, false, 5, 120, "i2v", List.of(), List.of(), false)
         ));
         when(resolver.listSections("model.providers")).thenReturn(List.of(
             new ModelRuntimePropertiesResolver.ConfigSection("qwen", Map.of("provider", "qwen", "vendor", "aliyun")),

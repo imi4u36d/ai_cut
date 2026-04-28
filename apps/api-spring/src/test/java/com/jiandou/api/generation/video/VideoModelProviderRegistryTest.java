@@ -50,7 +50,7 @@ class VideoModelProviderRegistryTest {
                 60,
                 "test"
             ),
-            new MediaProviderCapabilities(false, true, false, false, 1, 30, "i2v", List.of(), List.of())
+            new MediaProviderCapabilities(false, true, false, false, 1, 30, "i2v", List.of(), List.of(), false)
         );
     }
 }

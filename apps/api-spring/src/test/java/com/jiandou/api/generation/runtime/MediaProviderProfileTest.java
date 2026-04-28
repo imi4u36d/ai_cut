@@ -18,7 +18,7 @@ class MediaProviderProfileTest {
         List<Integer> supportedDurations = new ArrayList<>(List.of(8));
         MediaProviderProfile profile = new MediaProviderProfile(
             new MediaProviderConfig("video", "seedance-v1", "volcengine", "seedance-v1", "key", "https://video.example.com/api", "https://task.example.com/api", -5, "cfg"),
-            new MediaProviderCapabilities(true, true, false, true, -3, 15, null, supportedSizes, supportedDurations)
+            new MediaProviderCapabilities(true, true, false, true, -3, 15, null, supportedSizes, supportedDurations, true)
         );
         supportedSizes.add("1080*1920");
         supportedDurations.add(12);
@@ -42,6 +42,7 @@ class MediaProviderProfileTest {
         assertEquals("", profile.generationMode());
         assertIterableEquals(List.of("720*1280"), profile.supportedSizes());
         assertIterableEquals(List.of(8), profile.supportedDurations());
+        assertTrue(profile.supportsImageDataUriReferences());
         assertEquals("video.example.com", profile.endpointHost());
         assertEquals("task.example.com", profile.taskEndpointHost());
     }

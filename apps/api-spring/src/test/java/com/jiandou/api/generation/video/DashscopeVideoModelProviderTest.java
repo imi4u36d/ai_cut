@@ -114,7 +114,7 @@ class DashscopeVideoModelProviderTest {
                 60,
                 "test"
             ),
-            new MediaProviderCapabilities(false, true, false, false, 8, 600, "i2v", List.of(), List.of(4, 6, 8))
+            new MediaProviderCapabilities(false, true, false, false, 8, 600, "i2v", List.of(), List.of(4, 6, 8), false)
         );
     }
 }

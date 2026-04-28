@@ -5,10 +5,10 @@ import com.jiandou.api.auth.security.SecurityCurrentUser;
 import com.jiandou.api.common.exception.ApiException;
 import com.jiandou.api.config.ApiPathConstants;
 import com.jiandou.api.config.JiandouStorageProperties;
-import com.jiandou.api.generation.GenerationRunKinds;
 import com.jiandou.api.generation.GenerationRunStatuses;
 import com.jiandou.api.generation.application.GenerationApplicationService;
 import com.jiandou.api.generation.exception.GenerationProviderException;
+import com.jiandou.api.generation.runtime.ModelRuntimePropertiesResolver;
 import com.jiandou.api.media.LocalMediaArtifactService;
 import com.jiandou.api.task.application.TaskStoryboardPlanner;
 import com.jiandou.api.task.infrastructure.mybatis.MaterialAssetEntity;
@@ -59,19 +59,24 @@ public class WorkflowApplicationService {
     private final TaskStoryboardPlanner storyboardPlanner;
     private final LocalMediaArtifactService localMediaArtifactService;
     private final JiandouStorageProperties storageProperties;
+    private final ModelRuntimePropertiesResolver modelResolver;
+    private final WorkflowStageGenerationStrategyResolver stageStrategyResolver;
 
     public WorkflowApplicationService(
         WorkflowRepository workflowRepository,
         GenerationApplicationService generationApplicationService,
         TaskStoryboardPlanner storyboardPlanner,
         LocalMediaArtifactService localMediaArtifactService,
-        JiandouStorageProperties storageProperties
+        JiandouStorageProperties storageProperties,
+        ModelRuntimePropertiesResolver modelResolver
     ) {
         this.workflowRepository = workflowRepository;
         this.generationApplicationService = generationApplicationService;
         this.storyboardPlanner = storyboardPlanner;
         this.localMediaArtifactService = localMediaArtifactService;
         this.storageProperties = storageProperties;
+        this.modelResolver = modelResolver;
+        this.stageStrategyResolver = new WorkflowStageGenerationStrategyResolver(modelResolver);
     }
 
     public Map<String, Object> createWorkflow(CreateWorkflowRequest request) {
@@ -597,7 +602,7 @@ public class WorkflowApplicationService {
         keyframeInputSummary.put("endFrameRemoteUrl", endFrameRemoteUrl);
         keyframeInputSummary.put("lastFrameRemoteUrl", endFrameRemoteUrl);
         keyframeInputSummary.put("continuitySource", continuitySource);
-        Integer keyframeSeed = resolvedKeyframeSeed(workflow, clipIndex);
+        Integer keyframeSeed = resolvedKeyframeSeedForImageModel(workflow, clipIndex);
         if (keyframeSeed != null) {
             keyframeInputSummary.put("seed", keyframeSeed);
         }
@@ -758,7 +763,7 @@ public class WorkflowApplicationService {
         inputSummary.put("endFrameUrl", endFrameUrl);
         inputSummary.put("lastFrameUrl", endFrameUrl);
         inputSummary.put("inheritedVersionId", selectedVersion == null ? "" : selectedVersion.getStageVersionId());
-        Integer keyframeSeed = resolvedKeyframeSeed(workflow, clipIndex);
+        Integer keyframeSeed = resolvedKeyframeSeedForImageModel(workflow, clipIndex);
         if (keyframeSeed != null) {
             inputSummary.put("seed", keyframeSeed);
         }
@@ -1146,13 +1151,14 @@ public class WorkflowApplicationService {
                 referenceImageUrls.add(referenceUrl);
             }
         }
-        referenceImageUrls = externallyAccessibleReferenceImageUrls(referenceImageUrls);
         String aspectRatio = trimmed(request == null ? "" : request.aspectRatio(), "9:16");
         String imageSize = trimmed(request == null ? "" : request.imageSize(), "");
         String textAnalysisModel = trimmed(request == null ? "" : request.textAnalysisModel(), "");
         String imageModel = trimmed(request == null ? "" : request.imageModel(), "");
         requireNonBlank(textAnalysisModel, "textAnalysisModel", "文本模型");
         requireNonBlank(imageModel, "imageModel", "图片模型");
+        WorkflowStageGenerationStrategy imageStrategy = stageStrategyResolver.materialImage(ownerUserId, imageModel, assetType);
+        referenceImageUrls = externallyAccessibleReferenceImageUrls(referenceImageUrls, imageStrategy.supportsImageDataUriReferences());
         requireNonBlank(description, "description", "素材描述");
         int[] dimensions = materialGenerationDimensions(assetType, aspectRatio, imageSize);
         StageWorkflowEntity materialContext = materialCenterContext(ownerUserId, aspectRatio, styleKeywords, textAnalysisModel, imageModel);
@@ -1167,6 +1173,7 @@ public class WorkflowApplicationService {
             textAnalysisModel,
             imageModel,
             request == null ? null : request.seed(),
+            imageStrategy,
             dimensions
         );
         Map<String, Object> run = createLoggedGenerationRun(
@@ -1912,15 +1919,14 @@ public class WorkflowApplicationService {
     }
 
     private Map<String, Object> buildStoryboardRunRequest(StageWorkflowEntity workflow, int versionNo) {
+        WorkflowStageGenerationStrategy strategy = stageStrategyResolver.storyboard(workflow);
         Map<String, Object> request = new LinkedHashMap<>();
         Map<String, Object> input = new LinkedHashMap<>();
         input.put("text", !trimmed(workflow.getTranscriptText(), "").isBlank() ? workflow.getTranscriptText() : firstNonBlank(workflow.getGlobalPrompt(), workflow.getTitle()));
-        request.put("kind", GenerationRunKinds.SCRIPT);
+        request.put("kind", strategy.runKind());
         request.put("auth", Map.of("userId", workflow.getOwnerUserId()));
         request.put("input", input);
-        request.put("model", Map.of(
-            "textAnalysisModel", workflow.getTextAnalysisModel()
-        ));
+        request.put("model", strategy.modelSection(workflow.getTextAnalysisModel()));
         request.put("options", Map.of(
             "visualStyle", firstNonBlank(workflow.getStylePreset(), "cinematic")
         ));
@@ -1928,21 +1934,21 @@ public class WorkflowApplicationService {
             "relativeDir", workflowRelativeDir(workflow.getWorkflowId()) + "/storyboards",
             "fileName", "storyboard-v" + versionNo + ".md"
         ));
+        request.put("metadata", Map.of("stageStrategy", strategy.metadata()));
         return request;
     }
 
     private Map<String, Object> buildStoryboardAdjustRunRequest(StageWorkflowEntity workflow, String sourceScriptMarkdown, String adjustmentPrompt, int versionNo) {
+        WorkflowStageGenerationStrategy strategy = stageStrategyResolver.storyboardAdjust(workflow);
         Map<String, Object> request = new LinkedHashMap<>();
         Map<String, Object> input = new LinkedHashMap<>();
         input.put("text", !trimmed(workflow.getTranscriptText(), "").isBlank() ? workflow.getTranscriptText() : firstNonBlank(workflow.getGlobalPrompt(), workflow.getTitle()));
         input.put("scriptMarkdown", sourceScriptMarkdown);
         input.put("adjustmentPrompt", adjustmentPrompt);
-        request.put("kind", GenerationRunKinds.SCRIPT_ADJUST);
+        request.put("kind", strategy.runKind());
         request.put("auth", Map.of("userId", workflow.getOwnerUserId()));
         request.put("input", input);
-        request.put("model", Map.of(
-            "textAnalysisModel", workflow.getTextAnalysisModel()
-        ));
+        request.put("model", strategy.modelSection(workflow.getTextAnalysisModel()));
         request.put("options", Map.of(
             "visualStyle", firstNonBlank(workflow.getStylePreset(), "cinematic")
         ));
@@ -1950,6 +1956,7 @@ public class WorkflowApplicationService {
             "relativeDir", workflowRelativeDir(workflow.getWorkflowId()) + "/storyboards",
             "fileName", "storyboard-v" + versionNo + ".md"
         ));
+        request.put("metadata", Map.of("stageStrategy", strategy.metadata()));
         return request;
     }
 
@@ -2251,7 +2258,7 @@ public class WorkflowApplicationService {
             intValue(result.get("height"), 0),
             false,
             stringValue(mapValue(result.get("metadata")).get("taskId")),
-            stringValue(mapValue(result.get("metadata")).get("remoteSourceUrl")),
+            resolveGeneratedMediaRemoteUrl(result),
             characterSheetAssetMetadata(slot, run, fileUrl)
         );
         asset.setAssetRole(VARIANT_KIND_CHARACTER_SHEET);
@@ -2282,7 +2289,7 @@ public class WorkflowApplicationService {
         inputSummary.put("characterAppearance", slot.characterAppearance());
         inputSummary.put("storyboardVersionId", storyboardVersion.getStageVersionId());
         inputSummary.put("imagePrompt", prompt);
-        Integer keyframeSeed = resolvedKeyframeSeed(workflow, clipIndex);
+        Integer keyframeSeed = resolvedKeyframeSeedForImageModel(workflow, clipIndex);
         if (keyframeSeed != null) {
             inputSummary.put("seed", keyframeSeed);
         }
@@ -2342,29 +2349,29 @@ public class WorkflowApplicationService {
         int versionNo,
         String prompt
     ) {
+        WorkflowStageGenerationStrategy strategy = stageStrategyResolver.characterSheet(workflow);
         Map<String, Object> request = new LinkedHashMap<>();
         Map<String, Object> input = new LinkedHashMap<>();
-        int[] dimensions = new int[] {1280, 720};
+        int[] dimensions = materialGenerationDimensions(VARIANT_KIND_CHARACTER_SHEET, "16:9", "");
         input.put("prompt", prompt);
         input.put("width", dimensions[0]);
         input.put("height", dimensions[1]);
         input.put("frameRole", VARIANT_KIND_CHARACTER_SHEET);
-        Integer keyframeSeed = resolvedKeyframeSeed(workflow, slot.syntheticClipIndex());
+        Integer keyframeSeed = resolvedKeyframeSeedForImageModel(workflow, slot.syntheticClipIndex(), strategy);
         if (keyframeSeed != null) {
             input.put("seed", keyframeSeed);
         }
-        request.put("kind", "image");
+        request.put("kind", strategy.runKind());
         request.put("auth", Map.of("userId", workflow.getOwnerUserId()));
         request.put("input", input);
-        request.put("model", Map.of(
-            "textAnalysisModel", workflow.getTextAnalysisModel(),
-            "providerModel", workflow.getImageModel()
-        ));
+        request.put("model", strategy.modelSection(workflow.getTextAnalysisModel()));
         request.put("options", Map.of("stylePreset", workflow.getStylePreset()));
         request.put("storage", Map.of(
             "relativeDir", workflowRelativeDir(workflow.getWorkflowId()) + "/keyframes",
-            "fileStem", "character-" + slot.syntheticClipIndex() + "-sheet-v" + versionNo
+            "fileStem", "character-" + slot.syntheticClipIndex() + "-sheet-v" + versionNo,
+            "requireRemoteSourceUrl", false
         ));
+        request.put("metadata", Map.of("stageStrategy", strategy.metadata()));
         return request;
     }
 
@@ -2380,10 +2387,12 @@ public class WorkflowApplicationService {
         String frameRole,
         String fileStem
     ) {
+        WorkflowStageGenerationStrategy strategy = stageStrategyResolver.keyframe(workflow);
         Map<String, Object> request = new LinkedHashMap<>();
         Map<String, Object> input = new LinkedHashMap<>();
         List<String> referenceImageUrls = externallyAccessibleReferenceImageUrls(
-            mergeReferenceImageUrls(continuityReferenceImageUrls, characterReferenceImageUrls)
+            mergeReferenceImageUrls(continuityReferenceImageUrls, characterReferenceImageUrls),
+            strategy.supportsImageDataUriReferences()
         );
         String continuityReferenceImageUrl = referenceImageUrls.isEmpty() ? "" : referenceImageUrls.get(0);
         input.put("prompt", composeVisualPrompt(workflow, joinPromptSections(
@@ -2398,22 +2407,21 @@ public class WorkflowApplicationService {
             input.put("referenceImageUrl", referenceImageUrls.get(0));
             input.put("referenceImageUrls", referenceImageUrls);
         }
-        Integer keyframeSeed = resolvedKeyframeSeed(workflow, clipIndex);
+        Integer keyframeSeed = resolvedKeyframeSeedForImageModel(workflow, clipIndex, strategy);
         if (keyframeSeed != null) {
             input.put("seed", keyframeSeed);
         }
-        request.put("kind", "image");
+        request.put("kind", strategy.runKind());
         request.put("auth", Map.of("userId", workflow.getOwnerUserId()));
         request.put("input", input);
-        request.put("model", Map.of(
-            "textAnalysisModel", workflow.getTextAnalysisModel(),
-            "providerModel", workflow.getImageModel()
-        ));
+        request.put("model", strategy.modelSection(workflow.getTextAnalysisModel()));
         request.put("options", Map.of("stylePreset", workflow.getStylePreset()));
         request.put("storage", Map.of(
             "relativeDir", workflowRelativeDir(workflow.getWorkflowId()) + "/keyframes",
-            "fileStem", trimmed(fileStem, "clip" + clipIndex + "-" + trimmed(frameRole, "first") + "-v" + versionNo)
+            "fileStem", trimmed(fileStem, "clip" + clipIndex + "-" + trimmed(frameRole, "first") + "-v" + versionNo),
+            "requireRemoteSourceUrl", false
         ));
+        request.put("metadata", Map.of("stageStrategy", strategy.metadata()));
         return request;
     }
 
@@ -2477,6 +2485,7 @@ public class WorkflowApplicationService {
         String firstFrameUrl,
         String lastFrameUrl
     ) {
+        WorkflowStageGenerationStrategy strategy = stageStrategyResolver.video(workflow);
         Map<String, Object> request = new LinkedHashMap<>();
         Map<String, Object> input = new LinkedHashMap<>();
         String externallyAccessibleFirstFrameUrl = compatibleVideoFrameUrl(firstFrameUrl, "video firstFrameUrl");
@@ -2498,18 +2507,16 @@ public class WorkflowApplicationService {
         if (videoSeed != null) {
             input.put("seed", videoSeed);
         }
-        request.put("kind", "video");
+        request.put("kind", strategy.runKind());
         request.put("auth", Map.of("userId", workflow.getOwnerUserId()));
         request.put("input", input);
-        request.put("model", Map.of(
-            "textAnalysisModel", workflow.getTextAnalysisModel(),
-            "providerModel", workflow.getVideoModel()
-        ));
+        request.put("model", strategy.modelSection(workflow.getTextAnalysisModel()));
         request.put("options", Map.of("stylePreset", workflow.getStylePreset()));
         request.put("storage", Map.of(
             "relativeDir", workflowRelativeDir(workflow.getWorkflowId()) + "/videos",
             "fileStem", "clip" + clipIndex + "-v" + versionNo
         ));
+        request.put("metadata", Map.of("stageStrategy", strategy.metadata()));
         return request;
     }
 
@@ -2723,6 +2730,30 @@ public class WorkflowApplicationService {
         String seedSource = workflowIdentity + ":clip:" + Math.max(1, clipIndex) + ":keyframe";
         int raw = UUID.nameUUIDFromBytes(seedSource.getBytes(StandardCharsets.UTF_8)).hashCode();
         return Math.floorMod(raw, Integer.MAX_VALUE - 1) + 1;
+    }
+
+    private Integer resolvedKeyframeSeedForImageModel(StageWorkflowEntity workflow, int clipIndex) {
+        return resolvedKeyframeSeedForImageModel(workflow, clipIndex, stageStrategyResolver.keyframe(workflow));
+    }
+
+    private Integer resolvedKeyframeSeedForImageModel(
+        StageWorkflowEntity workflow,
+        int clipIndex,
+        WorkflowStageGenerationStrategy strategy
+    ) {
+        if (strategy == null || !strategy.supportsSeed()) {
+            return null;
+        }
+        return resolvedKeyframeSeed(workflow, clipIndex);
+    }
+
+    private boolean imageModelSupportsSeed(String imageModel) {
+        return imageModelSupportsSeed(imageModel, stageStrategyResolver.materialImage(null, imageModel, "image"));
+    }
+
+    private boolean imageModelSupportsSeed(String imageModel, WorkflowStageGenerationStrategy strategy) {
+        String normalized = trimmed(imageModel, "");
+        return !normalized.isBlank() && strategy != null && strategy.supportsSeed();
     }
 
     private Integer resolvedVideoSeed(StageWorkflowEntity workflow) {
@@ -3602,12 +3633,16 @@ public class WorkflowApplicationService {
     }
 
     private List<String> externallyAccessibleReferenceImageUrls(List<String> referenceImageUrls) {
+        return externallyAccessibleReferenceImageUrls(referenceImageUrls, false);
+    }
+
+    private List<String> externallyAccessibleReferenceImageUrls(List<String> referenceImageUrls, boolean allowLocalImageDataUri) {
         if (referenceImageUrls == null || referenceImageUrls.isEmpty()) {
             return List.of();
         }
         List<String> urls = new ArrayList<>();
         for (String referenceImageUrl : referenceImageUrls) {
-            String normalizedUrl = externallyAccessibleMediaUrl(referenceImageUrl, "referenceImageUrl");
+            String normalizedUrl = externallyAccessibleMediaUrl(referenceImageUrl, "referenceImageUrl", allowLocalImageDataUri);
             if (normalizedUrl.isBlank()) {
                 continue;
             }
@@ -3619,11 +3654,15 @@ public class WorkflowApplicationService {
     }
 
     private String externallyAccessibleMediaUrl(String url, String fieldName) {
+        return externallyAccessibleMediaUrl(url, fieldName, false);
+    }
+
+    private String externallyAccessibleMediaUrl(String url, String fieldName, boolean allowLocalImageDataUri) {
         String normalized = trimmed(url, "");
         if (normalized.isBlank()) {
             return "";
         }
-        if (isAbsoluteHttpUrl(normalized)) {
+        if (isAbsoluteHttpUrl(normalized) || (allowLocalImageDataUri && isImageDataUri(normalized))) {
             return normalized;
         }
         if (normalized.startsWith(ApiPathConstants.STORAGE)) {
@@ -3636,6 +3675,17 @@ public class WorkflowApplicationService {
                     "storage_public_base_url_invalid",
                     "JIANDOU_STORAGE_PUBLIC_BASE_URL 必须生成公网可访问的 http(s) URL"
                 );
+            }
+            if (allowLocalImageDataUri) {
+                try {
+                    String dataUri = localMediaArtifactService.imageDataUriFromPublicUrl(normalized);
+                    if (dataUri != null && !dataUri.isBlank()) {
+                        return dataUri;
+                    }
+                } catch (RuntimeException ex) {
+                    throw badRequest("local_reference_image_unavailable", fieldName + " 本地资源无法转换为参考图输入：" + ex.getMessage());
+                }
+                throw badRequest("local_reference_image_unavailable", fieldName + " 本地资源无法转换为参考图输入");
             }
             throw badRequest(
                 "storage_public_base_url_missing",
@@ -3697,6 +3747,7 @@ public class WorkflowApplicationService {
         String textAnalysisModel,
         String imageModel,
         Integer seed,
+        WorkflowStageGenerationStrategy strategy,
         int[] dimensions
     ) {
         Map<String, Object> input = new LinkedHashMap<>();
@@ -3711,17 +3762,14 @@ public class WorkflowApplicationService {
             input.put("referenceImageUrl", referenceImageUrls.get(0));
             input.put("referenceImageUrls", referenceImageUrls);
         }
-        if (seed != null) {
+        if (seed != null && imageModelSupportsSeed(imageModel, strategy)) {
             input.put("seed", seed);
         }
         Map<String, Object> request = new LinkedHashMap<>();
-        request.put("kind", "image");
+        request.put("kind", strategy.runKind());
         request.put("auth", Map.of("userId", ownerUserId));
         request.put("input", input);
-        request.put("model", Map.of(
-            "textAnalysisModel", textAnalysisModel,
-            "providerModel", imageModel
-        ));
+        request.put("model", strategy.modelSection(textAnalysisModel));
         request.put("options", Map.of("stylePreset", styleKeywords == null || styleKeywords.isEmpty() ? "material-center" : String.join(", ", styleKeywords)));
         request.put("storage", Map.of(
             "relativeDir", "gen/material-center/" + assetType,
@@ -3732,7 +3780,8 @@ public class WorkflowApplicationService {
             "assetType", assetType,
             "title", title,
             "aspectRatio", aspectRatio,
-            "imageSize", dimensions[0] + "x" + dimensions[1]
+            "imageSize", dimensions[0] + "x" + dimensions[1],
+            "stageStrategy", strategy.metadata()
         ));
         return request;
     }
@@ -3950,14 +3999,26 @@ public class WorkflowApplicationService {
             stringValue(metadata.get("sourceUrl"))
         );
         if (!remoteUrl.isBlank()) {
-            return externallyAccessibleMediaUrl(remoteUrl, "generated remoteSourceUrl");
+            return generatedMediaReferenceUrl(remoteUrl, "generated remoteSourceUrl");
         }
         String fileUrl = firstNonBlank(
             stringValue(result.get("outputUrl")),
             stringValue(metadata.get("fileUrl")),
             stringValue(metadata.get("outputUrl"))
         );
-        return externallyAccessibleMediaUrl(fileUrl, "generated fileUrl");
+        return generatedMediaReferenceUrl(fileUrl, "generated fileUrl");
+    }
+
+    private String generatedMediaReferenceUrl(String url, String fieldName) {
+        String normalized = trimmed(url, "");
+        if (normalized.isBlank() || isAbsoluteHttpUrl(normalized) || isImageDataUri(normalized)) {
+            return normalized;
+        }
+        if (normalized.startsWith(ApiPathConstants.STORAGE)) {
+            String mappedUrl = storageProperties.buildExternallyAccessibleUrl(normalized);
+            return !mappedUrl.isBlank() && isAbsoluteHttpUrl(mappedUrl) ? mappedUrl : normalized;
+        }
+        return externallyAccessibleMediaUrl(normalized, fieldName);
     }
 
     private String normalizeFrameRole(String value) {

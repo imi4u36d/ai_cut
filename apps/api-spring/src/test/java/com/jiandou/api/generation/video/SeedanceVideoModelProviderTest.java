@@ -134,7 +134,7 @@ class SeedanceVideoModelProviderTest {
                 60,
                 "test"
             ),
-            new MediaProviderCapabilities(true, false, false, false, 8, 600, "i2v", List.of(), List.of(4, 6, 8, 10))
+            new MediaProviderCapabilities(true, false, false, false, 8, 600, "i2v", List.of(), List.of(4, 6, 8, 10), false)
         );
     }
 }

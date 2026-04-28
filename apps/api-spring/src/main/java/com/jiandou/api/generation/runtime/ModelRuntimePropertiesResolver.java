@@ -470,13 +470,14 @@ public class ModelRuntimePropertiesResolver {
                         GenerationModelKinds.VIDEO.equals(actualKind) ? "600" : "120"
                     ),
                     GenerationModelKinds.VIDEO.equals(actualKind) ? 600 : 120
-                ),
-                firstNonBlank(stringValue(modelValues.get("generation_mode")), GenerationModelKinds.VIDEO.equals(actualKind) ? "i2v" : ""),
-                parseStringList(modelValues.get("supported_sizes")),
-                parseIntegerList(modelValues.get("supported_durations"))
-            )
-        );
-    }
+	                ),
+	                firstNonBlank(stringValue(modelValues.get("generation_mode")), GenerationModelKinds.VIDEO.equals(actualKind) ? "i2v" : ""),
+	                parseStringList(modelValues.get("supported_sizes")),
+	                parseIntegerList(modelValues.get("supported_durations")),
+	                boolValue(stringValue(modelValues.get("supports_image_data_uri_references")))
+	            )
+	        );
+	    }
 
     /**
      * 处理快照。
@@ -798,14 +799,15 @@ public class ModelRuntimePropertiesResolver {
                 false,
                 false,
                 !video,
-                video ? 8 : 5,
-                video ? 600 : 120,
-                video ? "i2v" : "",
-                List.of(),
-                List.of()
-            )
-        );
-    }
+	                video ? 8 : 5,
+	                video ? 600 : 120,
+	                video ? "i2v" : "",
+	                List.of(),
+	                List.of(),
+	                false
+	            )
+	        );
+	    }
 
     private boolean resolveWatermarkDefault(String kind, String configuredWatermark) {
         if (!configuredWatermark.isBlank()) {

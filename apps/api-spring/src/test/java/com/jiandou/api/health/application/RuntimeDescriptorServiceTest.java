@@ -105,7 +105,7 @@ class RuntimeDescriptorServiceTest {
     private MediaProviderProfile readyMediaProfile(String modelName) {
         return new MediaProviderProfile(
             new MediaProviderConfig("video", modelName, "provider", modelName, "key", "https://api.example.com", "https://task.example.com", 30, "cfg"),
-            new MediaProviderCapabilities(true, true, false, false, 5, 120, "", List.of(), List.of())
+            new MediaProviderCapabilities(true, true, false, false, 5, 120, "", List.of(), List.of(), false)
         );
     }
 }

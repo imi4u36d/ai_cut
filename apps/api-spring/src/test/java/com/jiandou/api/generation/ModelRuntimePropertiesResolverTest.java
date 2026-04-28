@@ -159,6 +159,7 @@ class ModelRuntimePropertiesResolverTest {
         assertEquals("gpt-5.4", resolver.resolveTextProfile("gpt-5.4").modelName());
         assertEquals("gpt-5.5", resolver.resolveTextProfile("gpt-5.5").modelName());
         assertEquals("gpt-image-2", resolver.resolveImageProfile("gpt-image-2").modelName());
+        assertTrue(resolver.resolveImageProfile("gpt-image-2").supportsImageDataUriReferences());
         assertFalse(resolver.resolveTextProfile("gpt-5.4").supportsResponsesApi());
         assertFalse(resolver.resolveTextProfile("gpt-5.5").supportsResponsesApi());
     }
@@ -333,6 +334,7 @@ class ModelRuntimePropertiesResolverTest {
                       vendor: "deeps_api"
                       kind: "image"
                       provider_model: "gpt-image-2"
+                      supports_image_data_uri_references: true
                 """
         );
     }

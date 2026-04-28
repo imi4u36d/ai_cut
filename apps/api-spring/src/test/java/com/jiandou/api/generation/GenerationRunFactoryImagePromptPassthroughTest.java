@@ -1,6 +1,7 @@
 package com.jiandou.api.generation;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.jiandou.api.config.JiandouStorageProperties;
@@ -67,7 +68,7 @@ class GenerationRunFactoryImagePromptPassthroughTest {
                 60,
                 "test"
             ),
-            new MediaProviderCapabilities(false, false, false, false, 5, 120, "", java.util.List.of(), java.util.List.of())
+            new MediaProviderCapabilities(false, false, false, false, 5, 120, "", java.util.List.of(), java.util.List.of(), false)
         );
         ModelRuntimePropertiesResolver modelResolver = new ModelRuntimePropertiesResolver(new MockEnvironment()) {
             /**
@@ -145,6 +146,7 @@ class GenerationRunFactoryImagePromptPassthroughTest {
         LocalMediaArtifactService localMediaArtifactService = new LocalMediaArtifactService(storageProperties(tempDir), "ffmpeg");
         final String[] submittedPrompt = new String[1];
         final String[] submittedReferenceImageUrl = new String[1];
+        final Integer[] submittedSeed = new Integer[1];
         final java.util.List<String>[] submittedReferenceImageUrls = new java.util.List[] {java.util.List.of()};
         ImageModelProvider fakeImageModelProvider = new ImageModelProvider() {
             @Override
@@ -159,6 +161,7 @@ class GenerationRunFactoryImagePromptPassthroughTest {
             ) {
                 submittedPrompt[0] = request.prompt();
                 submittedReferenceImageUrl[0] = request.referenceImageUrl();
+                submittedSeed[0] = request.seed();
                 submittedReferenceImageUrls[0] = request.referenceImageUrls();
                 return new RemoteImageGenerationResult(
                     new byte[] {1, 2, 3},
@@ -200,6 +203,7 @@ class GenerationRunFactoryImagePromptPassthroughTest {
             "width", 720,
             "height", 1280,
             "frameRole", "first",
+            "seed", 12345,
             "referenceImageUrl", "https://example.com/reference.png"
         ));
         request.put("model", Map.of(
@@ -215,6 +219,7 @@ class GenerationRunFactoryImagePromptPassthroughTest {
         assertTrue(submittedPrompt[0].contains("不符合人体结构"));
         assertTrue(submittedPrompt[0].contains("不符合物理结构"));
         assertEquals("https://example.com/reference.png", submittedReferenceImageUrl[0]);
+        assertNull(submittedSeed[0]);
         assertEquals(java.util.List.of("https://example.com/reference.png"), submittedReferenceImageUrls[0]);
         @SuppressWarnings("unchecked")
         Map<String, Object> result = (Map<String, Object>) run.get("result");
@@ -224,6 +229,8 @@ class GenerationRunFactoryImagePromptPassthroughTest {
         assertTrue(String.valueOf(result.get("negativePrompt")).contains("不符合物理结构"));
         @SuppressWarnings("unchecked")
         Map<String, Object> metadata = (Map<String, Object>) result.get("metadata");
+        assertEquals(12345, metadata.get("requestedSeed"));
+        assertNull(metadata.get("imageGenerationSeed"));
         assertEquals(java.util.List.of("https://example.com/reference.png"), metadata.get("referenceImageUrls"));
         assertEquals("deeps_api", metadata.get("provider"));
         assertEquals("gpt-image-2", metadata.get("providerModel"));
@@ -260,7 +267,7 @@ class GenerationRunFactoryImagePromptPassthroughTest {
                 60,
                 "test"
             ),
-            new MediaProviderCapabilities(false, false, false, false, 5, 120, "", java.util.List.of(), java.util.List.of())
+            new MediaProviderCapabilities(false, false, false, false, 5, 120, "", java.util.List.of(), java.util.List.of(), false)
         );
         ModelRuntimePropertiesResolver modelResolver = new ModelRuntimePropertiesResolver(new MockEnvironment()) {
             @Override

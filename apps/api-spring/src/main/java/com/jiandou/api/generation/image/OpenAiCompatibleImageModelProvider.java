@@ -12,6 +12,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import org.springframework.stereotype.Component;
 
 /**
@@ -21,10 +23,11 @@ import org.springframework.stereotype.Component;
 public class OpenAiCompatibleImageModelProvider implements ImageModelProvider {
 
     private static final String PROVIDER_DEEPS_API = "deeps_api";
-    private static final String RESPONSES_PATH = "/responses";
-    private static final String RESPONSES_IMAGE_MAIN_MODEL = "gpt-5.4";
-    private static final String DEFAULT_GPT_IMAGE_QUALITY = "high";
+    private static final String IMAGE_GENERATIONS_PATH = "/images/generations";
+    private static final String IMAGE_EDITS_PATH = "/images/edits";
     private static final String DEFAULT_OUTPUT_FORMAT = "png";
+    private static final String DEFAULT_MODERATION = "auto";
+    private static final Pattern DATA_URI_PATTERN = Pattern.compile("^data:([^;,]+);base64,(.*)$", Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
 
     private final ImageProviderTransport transport;
 
@@ -45,22 +48,23 @@ public class OpenAiCompatibleImageModelProvider implements ImageModelProvider {
         String providerModel = blankTo(profile.modelName(), request.requestedModel());
         String size = resolveImageSize(profile, request.width(), request.height());
         List<String> referenceImageUrls = normalizeReferenceImageUrls(request.referenceImageUrls(), request.referenceImageUrl());
-        return generateWithResponses(profile, request, providerModel, size, referenceImageUrls);
+        return referenceImageUrls.isEmpty()
+            ? generateWithImagesApi(profile, request, providerModel, size)
+            : editWithImagesApi(profile, request, providerModel, size, referenceImageUrls);
     }
 
-    private RemoteImageGenerationResult generateWithResponses(
+    private RemoteImageGenerationResult generateWithImagesApi(
         MediaProviderProfile profile,
         ImageGenerationRequest request,
         String providerModel,
-        String size,
-        List<String> referenceImageUrls
+        String size
     ) {
-        String endpoint = resolveResponsesEndpoint(profile.baseUrl());
-        String action = referenceImageUrls.isEmpty() ? "generate" : "edit";
-        Map<String, Object> body = buildResponsesRequestBody(providerModel, request.prompt(), size, action, referenceImageUrls);
+        String endpoint = resolveImagesEndpoint(profile.baseUrl(), IMAGE_GENERATIONS_PATH);
+        Map<String, Object> body = buildImageGenerationRequestBody(providerModel, request.prompt(), size);
         Map<String, Object> providerRequest = new LinkedHashMap<>();
         providerRequest.put("method", "POST");
         providerRequest.put("endpoint", endpoint);
+        providerRequest.put("url", endpoint);
         providerRequest.put("body", body);
         long startedAt = System.nanoTime();
         HttpResponse<String> response = transport.sendJson(endpoint, profile.apiKey(), body, profile.timeoutSeconds(), Map.of());
@@ -69,46 +73,60 @@ public class OpenAiCompatibleImageModelProvider implements ImageModelProvider {
         return toResult(profile, request, providerModel, size, latencyMs, providerRequest, payload, response.statusCode());
     }
 
-    Map<String, Object> buildResponsesRequestBody(
+    private RemoteImageGenerationResult editWithImagesApi(
+        MediaProviderProfile profile,
+        ImageGenerationRequest request,
         String providerModel,
-        String prompt,
         String size,
-        String action,
         List<String> referenceImageUrls
     ) {
+        String endpoint = resolveImagesEndpoint(profile.baseUrl(), IMAGE_EDITS_PATH);
+        Map<String, String> fields = buildImageEditFields(providerModel, request.prompt(), size);
+        List<ImageProviderTransport.MultipartFilePart> files = buildReferenceImageParts(referenceImageUrls, profile.timeoutSeconds());
+        Map<String, Object> providerRequest = new LinkedHashMap<>();
+        providerRequest.put("method", "POST");
+        providerRequest.put("endpoint", endpoint);
+        providerRequest.put("url", endpoint);
+        providerRequest.put("fields", fields);
+        providerRequest.put("files", files.stream().map(this::filePartSummary).toList());
+        long startedAt = System.nanoTime();
+        HttpResponse<String> response = transport.sendMultipart(endpoint, profile.apiKey(), fields, files, profile.timeoutSeconds(), providerRequest);
+        int latencyMs = (int) ((System.nanoTime() - startedAt) / 1_000_000L);
+        Map<String, Object> payload = transport.decode(response.body());
+        return toResult(profile, request, providerModel, size, latencyMs, providerRequest, payload, response.statusCode());
+    }
+
+    Map<String, Object> buildImageGenerationRequestBody(String providerModel, String prompt, String size) {
         Map<String, Object> body = new LinkedHashMap<>();
-        body.put("model", RESPONSES_IMAGE_MAIN_MODEL);
-        body.put("input", buildResponsesInput(prompt, referenceImageUrls));
-        body.put("tools", List.of(Map.of(
-            "type", "image_generation",
-            "action", action,
-            "size", size,
-            "output_format", DEFAULT_OUTPUT_FORMAT,
-            "quality", DEFAULT_GPT_IMAGE_QUALITY
-        )));
-        body.put("tool_choice", "required");
+        body.put("model", providerModel);
+        body.put("prompt", prompt);
+        body.put("size", size);
+        body.put("output_format", DEFAULT_OUTPUT_FORMAT);
+        body.put("moderation", DEFAULT_MODERATION);
         return body;
     }
 
-    private Object buildResponsesInput(String prompt, List<String> referenceImageUrls) {
-        if (referenceImageUrls == null || referenceImageUrls.isEmpty()) {
-            return prompt;
-        }
-        List<Map<String, Object>> content = new ArrayList<>();
-        content.add(Map.of("type", "input_text", "text", prompt));
-        for (String referenceImageUrl : referenceImageUrls) {
-            if (!isAbsoluteHttpUrl(referenceImageUrl)) {
-                throw new GenerationProviderException("deeps image reference image must be an absolute http(s) URL: " + referenceImageUrl);
-            }
-            content.add(Map.of("type", "input_image", "image_url", referenceImageUrl, "detail", "high"));
-        }
-        return List.of(Map.of("role", "user", "content", content));
+    private Map<String, String> buildImageEditFields(String providerModel, String prompt, String size) {
+        Map<String, String> fields = new LinkedHashMap<>();
+        fields.put("model", providerModel);
+        fields.put("prompt", prompt);
+        fields.put("size", size);
+        fields.put("output_format", DEFAULT_OUTPUT_FORMAT);
+        fields.put("moderation", DEFAULT_MODERATION);
+        return fields;
     }
 
     String resolveImageSize(MediaProviderProfile profile, int width, int height) {
         List<String> supportedSizes = profile == null ? List.of() : profile.supportedSizes();
         if (supportedSizes.isEmpty()) {
             return width + "x" + height;
+        }
+        String requestedSize = Math.max(1, width) + "x" + Math.max(1, height);
+        for (String supportedSize : supportedSizes) {
+            int[] parsed = parseSize(supportedSize);
+            if (parsed[0] > 0 && parsed[1] > 0 && requestedSize.equals(parsed[0] + "x" + parsed[1])) {
+                return requestedSize;
+            }
         }
         double requestedAspect = height <= 0 ? 1.0 : Math.max(1, width) / (double) height;
         String best = "";
@@ -144,25 +162,85 @@ public class OpenAiCompatibleImageModelProvider implements ImageModelProvider {
         }
     }
 
-    String resolveResponsesEndpoint(String baseUrl) {
+    String resolveImagesEndpoint(String baseUrl, String imagePath) {
         String normalized = baseUrl == null ? "" : baseUrl.replaceAll("/+$", "");
         if (normalized.isBlank()) {
             return "";
         }
         String lower = normalized.toLowerCase(Locale.ROOT);
-        if (lower.endsWith(RESPONSES_PATH)) {
+        if (lower.endsWith(imagePath)) {
             return normalized;
         }
         if (lower.endsWith("/images/generations")) {
             normalized = normalized.substring(0, normalized.length() - "/images/generations".length());
         } else if (lower.endsWith("/images/edits")) {
             normalized = normalized.substring(0, normalized.length() - "/images/edits".length());
-        } else if (lower.endsWith(RESPONSES_PATH)) {
-            normalized = normalized.substring(0, normalized.length() - RESPONSES_PATH.length());
+        } else if (lower.endsWith("/responses")) {
+            normalized = normalized.substring(0, normalized.length() - "/responses".length());
         } else if (lower.endsWith("/chat/completions")) {
             normalized = normalized.substring(0, normalized.length() - "/chat/completions".length());
         }
-        return normalized + RESPONSES_PATH;
+        return normalized + imagePath;
+    }
+
+    private List<ImageProviderTransport.MultipartFilePart> buildReferenceImageParts(List<String> referenceImageUrls, int timeoutSeconds) {
+        List<ImageProviderTransport.MultipartFilePart> files = new ArrayList<>();
+        int index = 1;
+        for (String referenceImageUrl : referenceImageUrls) {
+            String normalized = referenceImageUrl == null ? "" : referenceImageUrl.trim();
+            if (isImageDataUri(normalized)) {
+                files.add(dataUriToFilePart(normalized, index++));
+                continue;
+            }
+            if (isAbsoluteHttpUrl(normalized)) {
+                ImageProviderTransport.DownloadedBinary binary = transport.downloadBinary(normalized, timeoutSeconds);
+                String mimeType = blankTo(binary.mimeType(), "image/png");
+                files.add(new ImageProviderTransport.MultipartFilePart("image[]", "input-" + index++ + fileExt(mimeType), mimeType, binary.data()));
+                continue;
+            }
+            throw new GenerationProviderException(
+                "deeps image reference image must be an absolute http(s) URL or image data URI: "
+                    + compactReferenceImageUrl(normalized)
+            );
+        }
+        return files;
+    }
+
+    private ImageProviderTransport.MultipartFilePart dataUriToFilePart(String dataUri, int index) {
+        Matcher matcher = DATA_URI_PATTERN.matcher(dataUri.trim());
+        if (!matcher.matches()) {
+            throw new GenerationProviderException("deeps image reference image data URI is invalid: " + compactReferenceImageUrl(dataUri));
+        }
+        String mimeType = blankTo(matcher.group(1), "image/png").toLowerCase(Locale.ROOT);
+        try {
+            byte[] data = Base64.getDecoder().decode(matcher.group(2).replaceAll("\\s+", ""));
+            return new ImageProviderTransport.MultipartFilePart("image[]", "input-" + index + fileExt(mimeType), mimeType, data);
+        } catch (IllegalArgumentException ex) {
+            throw new GenerationProviderException("deeps image reference image data URI contains invalid base64");
+        }
+    }
+
+    private Map<String, Object> filePartSummary(ImageProviderTransport.MultipartFilePart file) {
+        Map<String, Object> summary = new LinkedHashMap<>();
+        summary.put("fieldName", file.fieldName());
+        summary.put("fileName", file.fileName());
+        summary.put("contentType", file.contentType());
+        summary.put("sizeBytes", file.data() == null ? 0 : file.data().length);
+        return summary;
+    }
+
+    private String fileExt(String mimeType) {
+        String normalized = mimeType == null ? "" : mimeType.toLowerCase(Locale.ROOT);
+        if (normalized.contains("jpeg") || normalized.contains("jpg")) {
+            return ".jpg";
+        }
+        if (normalized.contains("webp")) {
+            return ".webp";
+        }
+        if (normalized.contains("gif")) {
+            return ".gif";
+        }
+        return ".png";
     }
 
     private RemoteImageGenerationResult toResult(
@@ -231,6 +309,22 @@ public class OpenAiCompatibleImageModelProvider implements ImageModelProvider {
         } catch (IllegalArgumentException ex) {
             return false;
         }
+    }
+
+    private boolean isImageDataUri(String url) {
+        String normalized = url == null ? "" : url.trim().toLowerCase(Locale.ROOT);
+        return normalized.startsWith("data:image/") && normalized.contains(";base64,");
+    }
+
+    private String compactReferenceImageUrl(String url) {
+        String normalized = url == null ? "" : url.trim();
+        if (isImageDataUri(normalized)) {
+            return "data:image/...;base64,...";
+        }
+        if (normalized.length() <= 160) {
+            return normalized;
+        }
+        return normalized.substring(0, 120) + "...";
     }
 
     private List<String> normalizeReferenceImageUrls(List<String> referenceImageUrls, String referenceImageUrl) {
