@@ -71,6 +71,7 @@ public class DefaultGenerationApplicationService implements GenerationApplicatio
         Map<String, Object> run = switch (kind.toLowerCase()) {
             case GenerationRunKinds.PROBE -> generationRunFactory.createProbeRun(runId, request);
             case GenerationRunKinds.SCRIPT -> generationRunFactory.createScriptRun(runId, request);
+            case GenerationRunKinds.SCRIPT_ADJUST -> generationRunFactory.createScriptAdjustRun(runId, request);
             case GenerationRunKinds.IMAGE -> generationRunFactory.createImageRun(runId, request);
             case GenerationRunKinds.VIDEO -> generationRunFactory.createVideoRun(runId, request);
             /**

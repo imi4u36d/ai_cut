@@ -405,7 +405,6 @@ const requestRows = computed(() => {
   }
   return [
     { label: "文本模型", value: formatTaskModelValue(requestSnapshot.value.textAnalysisModel) },
-    { label: "视觉模型", value: formatTaskModelValue(requestSnapshot.value.visionModel) },
     { label: "关键帧模型", value: formatTaskModelValue(requestSnapshot.value.imageModel) },
     { label: "视频模型", value: formatTaskModelValue(requestSnapshot.value.videoModel) },
     { label: "清晰度 / 画幅", value: formatTaskModelValue(requestSnapshot.value.videoSize) },

@@ -1,13 +1,15 @@
 /**
  * 素材库 API 请求封装。
  */
-import { getJson, patchJson, postJson } from "./client";
+import { getJson, patchJson, postForm, postJson } from "./client";
 import type {
+  CreateMaterialGenerationRequest,
+  ImageUploadResponse,
   MaterialAssetLibraryItem,
+  MaterialGenerationResponse,
   MaterialAssetQuery,
   ReuseMaterialRequest,
   UpdateMaterialAssetRatingRequest,
-  UpdateMaterialAssetTagsRequest,
   WorkflowDetail,
 } from "@/types";
 
@@ -19,8 +21,8 @@ function buildQuery(filters?: MaterialAssetQuery) {
   if (filters?.type?.trim()) {
     params.set("type", filters.type.trim());
   }
-  if (filters?.tag?.trim()) {
-    params.set("tag", filters.tag.trim());
+  if (filters?.assetType?.trim()) {
+    params.set("assetType", filters.assetType.trim());
   }
   if (typeof filters?.minRating === "number") {
     params.set("minRating", String(filters.minRating));
@@ -50,10 +52,16 @@ export function rateMaterialAsset(assetId: string, payload: UpdateMaterialAssetR
   return patchJson<MaterialAssetLibraryItem>(`/material-assets/${encodeURIComponent(assetId)}/rating`, payload);
 }
 
-export function updateMaterialAssetTags(assetId: string, payload: UpdateMaterialAssetTagsRequest) {
-  return patchJson<MaterialAssetLibraryItem>(`/material-assets/${encodeURIComponent(assetId)}/tags`, payload);
-}
-
 export function reuseMaterialAsset(assetId: string, payload: ReuseMaterialRequest = { mode: "clone" }) {
   return postJson<WorkflowDetail>(`/material-assets/${encodeURIComponent(assetId)}/reuse`, payload);
+}
+
+export function createMaterialGeneration(payload: CreateMaterialGenerationRequest) {
+  return postJson<MaterialGenerationResponse>("/material-center/generations", payload);
+}
+
+export function uploadImage(file: File) {
+  const form = new FormData();
+  form.append("file", file);
+  return postForm<ImageUploadResponse>("/uploads/images", form);
 }

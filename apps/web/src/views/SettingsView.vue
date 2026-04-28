@@ -231,7 +231,6 @@
                               <span v-if="item.generationMode" class="meta-chip meta-chip-muted">Mode: {{ item.generationMode }}</span>
                               <span v-if="item.supportsSeed" class="meta-chip meta-chip-ready">支持 Seed</span>
                               <span v-if="item.supportsResponsesApi" class="meta-chip meta-chip-ready">Responses API</span>
-                              <span v-if="item.prefersChatCompletionsForVision" class="meta-chip meta-chip-muted">Vision Chat</span>
                               <span v-for="size in item.supportedSizes" :key="`${item.name}-size-${size}`" class="meta-chip meta-chip-muted">{{ size }}</span>
                               <span v-for="duration in item.supportedDurations" :key="`${item.name}-duration-${duration}`" class="meta-chip meta-chip-muted">{{ duration }} 秒</span>
                             </div>
@@ -345,7 +344,7 @@ const groupedProviders = computed<ProviderVendorGroup[]>(() => {
     matcher: (item: AdminModelConfigModelItem) => boolean;
   }> = [
     { key: "text", title: "文本模型", matcher: (item) => item.kind === "text" },
-    { key: "visual", title: "视觉模型", matcher: (item) => item.kind === "vision" || item.kind === "image" },
+    { key: "visual", title: "图像模型", matcher: (item) => item.kind === "image" },
     { key: "video", title: "视频模型", matcher: (item) => item.kind === "video" },
   ];
 

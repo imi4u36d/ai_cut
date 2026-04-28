@@ -11,7 +11,6 @@ public record CreateGenerationTaskRequest(
     String creativePrompt,
     String aspectRatio,
     String textAnalysisModel,
-    String visionModel,
     String imageModel,
     String videoModel,
     String videoSize,

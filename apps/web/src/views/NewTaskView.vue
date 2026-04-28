@@ -32,12 +32,6 @@
 
             <label class="model-rail__item">
               <span class="model-rail__dot"></span>
-              <span class="model-rail__label">视觉模型</span>
-              <AppSelect v-model="form.visionModel" :options="visionModelSelectOptions" compact />
-            </label>
-
-            <label class="model-rail__item">
-              <span class="model-rail__dot"></span>
               <span class="model-rail__label">关键帧模型</span>
               <AppSelect v-model="form.imageModel" :options="imageModelSelectOptions" compact />
             </label>
@@ -395,7 +389,6 @@ const form = ref<CreateGenerationTaskRequest>({
   creativePrompt: "",
   aspectRatio: "9:16",
   textAnalysisModel: null,
-  visionModel: null,
   imageModel: null,
   videoModel: null,
   videoSize: null,
@@ -604,14 +597,6 @@ const aspectRatioOptions = computed<Array<GenerationAspectRatioOption & { value:
     },
   );
 });
-const visionModelOptions = computed<GenerationTextAnalysisModelInfo[]>(() => options.value?.visionModels ?? []);
-const visionModelSelectOptions = computed<AppSelectOption[]>(() =>
-  visionModelOptions.value.map((item) => ({
-    label: item.label,
-    value: item.value,
-    description: item.description || "",
-  })),
-);
 const imageModelOptions = computed<GenerationTextAnalysisModelInfo[]>(() => options.value?.imageModels ?? []);
 const imageModelSelectOptions = computed<AppSelectOption[]>(() =>
   imageModelOptions.value.map((item) => ({
@@ -637,15 +622,6 @@ const durationLimitModeOptions: AppSelectOption[] = [
   { label: "自动", value: "auto" },
   { label: "手动", value: "manual" },
 ];
-const selectedVisionModelOption = computed<GenerationTextAnalysisModelInfo | null>(() => {
-  const selectedVisionModel = normalizeModelName(form.value.visionModel);
-  if (!selectedVisionModel) {
-    return null;
-  }
-  return (
-    visionModelOptions.value.find((item) => normalizeModelName(item.value) === selectedVisionModel) ?? null
-  );
-});
 const selectedVideoModelOption = computed<GenerationVideoModelInfo | null>(() => {
   const selectedVideoModel = normalizeModelName(form.value.videoModel);
   if (!selectedVideoModel) {
@@ -740,7 +716,6 @@ const isDurationLimitValid = computed(() => {
 const selectedModelCount = computed(() => {
   return [
     form.value.textAnalysisModel,
-    form.value.visionModel,
     form.value.imageModel,
     form.value.videoModel,
   ].filter(Boolean).length;
@@ -749,16 +724,9 @@ const selectedModelCount = computed(() => {
 const transcriptCharacterCount = computed(() => (form.value.transcriptText ?? "").trim().length);
 
 const seedCapabilityHint = computed(() => {
-  const visionSupportsSeed = Boolean(selectedVisionModelOption.value?.supportsSeed);
   const videoSupportsSeed = Boolean(selectedVideoModelOption.value?.supportsSeed);
-  if (visionSupportsSeed && videoSupportsSeed) {
-    return "当前视觉模型和视频模型都会使用该种子。";
-  }
   if (videoSupportsSeed) {
-    return "当前仅视频模型会使用该种子。";
-  }
-  if (visionSupportsSeed) {
-    return "当前仅视觉模型会使用该种子。";
+    return "当前视频模型会使用该种子。";
   }
   return "当前所选模型未声明支持种子，保存后仅做任务记录。";
 });
@@ -832,7 +800,6 @@ const isFormReady = computed(() => {
   return Boolean(
     form.value.title.trim() &&
       form.value.textAnalysisModel &&
-      form.value.visionModel &&
       form.value.imageModel &&
       form.value.videoModel &&
       isDurationLimitValid.value &&
@@ -967,7 +934,6 @@ async function loadOptions() {
     options.value = result;
     form.value.aspectRatio = (result.defaultAspectRatio as "9:16" | "16:9" | null) || form.value.aspectRatio;
     form.value.textAnalysisModel = result.textAnalysisModels?.[0]?.value ?? null;
-    form.value.visionModel = result.visionModels?.[0]?.value ?? null;
     form.value.imageModel = result.imageModels?.[0]?.value ?? null;
     form.value.videoModel = result.videoModels?.[0]?.value ?? null;
     form.value.outputCount = "auto";
@@ -1101,7 +1067,6 @@ async function submitTask() {
       creativePrompt: creativePrompt || undefined,
       aspectRatio: form.value.aspectRatio,
       textAnalysisModel: form.value.textAnalysisModel || null,
-      visionModel: form.value.visionModel || null,
       imageModel: form.value.imageModel || null,
       videoModel: form.value.videoModel || null,
       videoSize: form.value.videoSize || null,

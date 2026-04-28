@@ -43,7 +43,6 @@ public record RuntimeDescriptorResponse(
      * @param primaryModel primary模型值
      * @param textAnalysisProvider 文本分析Provider值
      * @param textAnalysisModel 文本分析模型值
-     * @param visionModel 视觉模型值
      * @param endpointHost endpointHost值
      * @param apiKeyPresent APIKeyPresent值
      * @param ready ready值
@@ -58,7 +57,6 @@ public record RuntimeDescriptorResponse(
         @JsonProperty("primary_model") String primaryModel,
         @JsonProperty("text_analysis_provider") String textAnalysisProvider,
         @JsonProperty("text_analysis_model") String textAnalysisModel,
-        @JsonProperty("vision_model") String visionModel,
         @JsonProperty("endpoint_host") String endpointHost,
         @JsonProperty("api_key_present") boolean apiKeyPresent,
         boolean ready,

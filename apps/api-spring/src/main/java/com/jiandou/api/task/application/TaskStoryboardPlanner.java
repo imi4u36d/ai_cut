@@ -34,13 +34,12 @@ public class TaskStoryboardPlanner {
         "^\\s*(?<value>\\d{1,3}(?:\\.\\d+)?)\\s*$",
         Pattern.CASE_INSENSITIVE
     );
-    private static final Pattern CHARACTER_DEFINITION_LINE_PATTERN = Pattern.compile(
-        "^\\s*[-*]\\s*(?<name>[^：:]+?)\\s*[：:]\\s*(?<details>.+)$"
+    private static final Pattern CHARACTER_DEFINITION_LIST_PATTERN = Pattern.compile(
+        "^[-*]\\s*(?<name>[^：:|]+)[:：]\\s*(?<definition>.+)$"
     );
-    private static final Pattern CHARACTER_APPEARANCE_PATTERN = Pattern.compile(
-        "(?:外观锚点|外形定义|外观定义|外貌特征|人物外观)\\s*[：:](?<appearance>.+?)(?=(?:行为特征|说话风格|性格特征|角色关系|$))"
+    private static final Pattern CHARACTER_APPEARANCE_ANCHOR_PATTERN = Pattern.compile(
+        "外观锚点[:：](?<appearance>.*?)(?:[；;。.]\\s*(?:人物定位|行为特征|说话风格)[:：]|$)"
     );
-
     private final ModelRuntimePropertiesResolver modelResolver;
 
     /**
@@ -98,20 +97,112 @@ public class TaskStoryboardPlanner {
         String definitionsBlock = scriptStart > definitionsStart
             ? normalized.substring(definitionsStart, scriptStart)
             : normalized.substring(definitionsStart);
+        List<CharacterDefinition> listDefinitions = extractCharacterDefinitionsFromList(definitionsBlock);
+        if (!listDefinitions.isEmpty()) {
+            return listDefinitions;
+        }
+        return extractCharacterDefinitionsFromTable(definitionsBlock);
+    }
+
+    private List<CharacterDefinition> extractCharacterDefinitionsFromList(String definitionsBlock) {
         List<CharacterDefinition> definitions = new ArrayList<>();
-        for (String rawLine : definitionsBlock.split("\\R")) {
-            Matcher matcher = CHARACTER_DEFINITION_LINE_PATTERN.matcher(rawLine);
+        for (String rawLine : stringValue(definitionsBlock).split("\\R")) {
+            String stripped = rawLine.trim();
+            Matcher matcher = CHARACTER_DEFINITION_LIST_PATTERN.matcher(stripped);
             if (!matcher.matches()) {
                 continue;
             }
             String name = normalizeStoryboardPromptValue(matcher.group("name"));
-            String details = normalizeStoryboardPromptValue(matcher.group("details"));
-            String appearance = extractAppearanceDefinition(details);
-            if (!name.isBlank() && !appearance.isBlank() && !details.isBlank()) {
-                definitions.add(new CharacterDefinition(name, appearance, details));
+            String definition = normalizeStoryboardPromptValue(matcher.group("definition"));
+            if (name.isBlank() || definition.isBlank()) {
+                continue;
             }
+            definitions.add(new CharacterDefinition(name, extractAppearanceAnchor(definition), definition));
         }
         return definitions;
+    }
+
+    private String extractAppearanceAnchor(String definition) {
+        String normalized = normalizeStoryboardPromptValue(definition);
+        if (normalized.isBlank()) {
+            return "";
+        }
+        Matcher matcher = CHARACTER_APPEARANCE_ANCHOR_PATTERN.matcher(normalized);
+        if (matcher.find()) {
+            String appearance = trimAppearanceDefinition(matcher.group("appearance"));
+            if (!appearance.isBlank()) {
+                return appearance;
+            }
+        }
+        return trimAppearanceDefinition(normalized);
+    }
+
+    private List<CharacterDefinition> extractCharacterDefinitionsFromTable(String definitionsBlock) {
+        Map<String, CharacterDefinitionBuilder> builders = new LinkedHashMap<>();
+        CharacterDefinitionTableSchema schema = CharacterDefinitionTableSchema.empty();
+        for (String rawLine : stringValue(definitionsBlock).split("\\R")) {
+            String stripped = rawLine.trim();
+            if (!stripped.startsWith("|")) {
+                continue;
+            }
+            List<String> cells = splitTableRow(stripped);
+            if (cells.isEmpty() || isDividerRow(cells)) {
+                continue;
+            }
+            if (CharacterDefinitionTableSchema.looksLikeHeader(cells)) {
+                schema = CharacterDefinitionTableSchema.fromHeader(cells);
+                continue;
+            }
+            if (!schema.isValid() || schema.isHeaderRow(cells)) {
+                continue;
+            }
+            String name = normalizeStoryboardPromptValue(schema.value(cells, schema.nameIndex()));
+            if (schema.isSingleRowSchema()) {
+                String position = normalizeStoryboardPromptValue(schema.value(cells, schema.positionIndex()));
+                String genderAge = normalizeStoryboardPromptValue(schema.value(cells, schema.genderAgeIndex()));
+                String face = normalizeStoryboardPromptValue(schema.value(cells, schema.faceIndex()));
+                String hair = normalizeStoryboardPromptValue(schema.value(cells, schema.hairIndex()));
+                String body = normalizeStoryboardPromptValue(schema.value(cells, schema.bodyIndex()));
+                String clothing = normalizeStoryboardPromptValue(schema.value(cells, schema.clothingIndex()));
+                String stableAccessories = normalizeStoryboardPromptValue(schema.value(cells, schema.stableAccessoriesIndex()));
+                String immutableVisual = normalizeStoryboardPromptValue(schema.value(cells, schema.immutableVisualIndex()));
+                String appearance = trimAppearanceDefinition(schema.value(cells, schema.appearanceIndex()));
+                String behavior = normalizeStoryboardPromptValue(schema.value(cells, schema.behaviorIndex()));
+                String speech = normalizeStoryboardPromptValue(schema.value(cells, schema.speechIndex()));
+                if (name.isBlank() || !hasAnyKnownValue(appearance, genderAge, face, hair, body, clothing, stableAccessories, immutableVisual)) {
+                    continue;
+                }
+                builders.putIfAbsent(name, CharacterDefinitionBuilder.fromSingleRow(
+                    name,
+                    genderAge,
+                    position,
+                    face,
+                    hair,
+                    body,
+                    clothing,
+                    stableAccessories,
+                    immutableVisual,
+                    appearance,
+                    behavior,
+                    speech
+                ));
+                continue;
+            }
+            String gender = normalizeStoryboardPromptValue(schema.value(cells, schema.genderIndex()));
+            String age = normalizeStoryboardPromptValue(schema.value(cells, schema.ageIndex()));
+            String part = normalizeStoryboardPromptValue(schema.value(cells, schema.partIndex()));
+            String detail = normalizeStoryboardPromptValue(schema.value(cells, schema.detailIndex()));
+            if (!name.isBlank() && !part.isBlank() && !detail.isBlank()) {
+                CharacterDefinitionBuilder builder = builders.computeIfAbsent(name, CharacterDefinitionBuilder::new);
+                builder.setGender(gender);
+                builder.setAge(age);
+                builder.addPart(part, detail);
+            }
+        }
+        return builders.values().stream()
+            .map(CharacterDefinitionBuilder::build)
+            .filter(item -> !item.name().isBlank() && !item.appearance().isBlank())
+            .toList();
     }
 
     /**
@@ -248,7 +339,7 @@ public class TaskStoryboardPlanner {
      * @return 处理结果
      */
     public List<int[]> extractStoryboardShotDurationRanges(String storyboardMarkdown) {
-        String normalized = stringValue(storyboardMarkdown);
+        String normalized = storyboardSection(stringValue(storyboardMarkdown));
         if (normalized.isBlank()) {
             return List.of();
         }
@@ -291,7 +382,7 @@ public class TaskStoryboardPlanner {
             throw new IllegalStateException("分镜解析失败，分镜脚本不能为空，且必须是结构化 Markdown 表格。");
         }
         Map<String, String> characterAppearances = extractCharacterAppearanceMap(normalized);
-        List<String> lines = List.of(normalized.split("\\R"));
+        List<String> lines = List.of(storyboardSection(normalized).split("\\R"));
         StoryboardTableSchema schema = detectStoryboardTableSchema(lines);
         validateStructuredStoryboardSchema(schema);
         List<StoryboardShotPlan> shotPlans = new ArrayList<>();
@@ -362,6 +453,12 @@ public class TaskStoryboardPlanner {
             return shotPlans;
         }
         throw new IllegalStateException("分镜解析失败，结构化分镜表未生成有效镜头。");
+    }
+
+    private String storyboardSection(String storyboardMarkdown) {
+        String normalized = stringValue(storyboardMarkdown);
+        int scriptStart = normalized.indexOf("【分镜脚本】");
+        return scriptStart >= 0 ? normalized.substring(scriptStart) : normalized;
     }
 
     /**
@@ -661,24 +758,6 @@ public class TaskStoryboardPlanner {
     }
 
     /**
-     * 提取单个角色外观定义。
-     * @param details 角色定义详情
-     * @return 外观定义
-     */
-    private String extractAppearanceDefinition(String details) {
-        String normalized = normalizeStoryboardPromptValue(details);
-        if (normalized.isBlank()) {
-            return "";
-        }
-        Matcher matcher = CHARACTER_APPEARANCE_PATTERN.matcher(normalized);
-        if (matcher.find()) {
-            return trimAppearanceDefinition(normalizeStoryboardPromptValue(matcher.group("appearance")));
-        }
-        int behaviorIndex = indexOfFirst(normalized, "行为特征", "说话风格", "性格特征", "角色关系");
-        return behaviorIndex > 0 ? trimAppearanceDefinition(normalizeStoryboardPromptValue(normalized.substring(0, behaviorIndex))) : "";
-    }
-
-    /**
      * 为关键帧提示词补充角色外观定义。
      * @param prompt 原始提示词
      * @param characterAppearances 角色外观映射
@@ -714,24 +793,6 @@ public class TaskStoryboardPlanner {
     }
 
     /**
-     * 查找多个token中的最早位置。
-     * @param value 原始文本
-     * @param tokens token列表
-     * @return 最早位置
-     */
-    private int indexOfFirst(String value, String... tokens) {
-        int resolved = -1;
-        String normalized = stringValue(value);
-        for (String token : tokens) {
-            int current = normalized.indexOf(token);
-            if (current >= 0 && (resolved < 0 || current < resolved)) {
-                resolved = current;
-            }
-        }
-        return resolved;
-    }
-
-    /**
      * 清理外观定义末尾标点，避免重复包裹时出现冗余停顿。
      * @param value 原始外观定义
      * @return 清理后的外观定义
@@ -749,6 +810,305 @@ public class TaskStoryboardPlanner {
 
         public CharacterDefinition(String name, String appearance) {
             this(name, appearance, appearance);
+        }
+    }
+
+    private static final class CharacterDefinitionBuilder {
+        private final String name;
+        private String singleRowDefinition = "";
+        private String singleRowAppearance = "";
+        private String gender = "";
+        private String age = "";
+        private final Map<String, String> parts = new LinkedHashMap<>();
+
+        private CharacterDefinitionBuilder(String name) {
+            this.name = name;
+        }
+
+        private static CharacterDefinitionBuilder fromSingleRow(
+            String name,
+            String genderAge,
+            String position,
+            String face,
+            String hair,
+            String body,
+            String clothing,
+            String stableAccessories,
+            String immutableVisual,
+            String appearance,
+            String behavior,
+            String speech
+        ) {
+            CharacterDefinitionBuilder builder = new CharacterDefinitionBuilder(name);
+            builder.singleRowAppearance = joinLabeledKnownValues(
+                "性别年龄", genderAge,
+                "脸部五官", face,
+                "发型", hair,
+                "体型身高", body,
+                "服装", clothing,
+                "稳定穿戴配饰", stableAccessories,
+                "不可变视觉锚点", firstKnownValue(immutableVisual, appearance)
+            );
+            if (builder.singleRowAppearance.isBlank()) {
+                builder.singleRowAppearance = trimStaticAppearanceDefinition(appearance);
+            }
+            List<String> chunks = new ArrayList<>();
+            if (hasKnownValue(genderAge)) {
+                chunks.add("性别年龄：" + trimStaticAppearanceDefinition(genderAge));
+            }
+            if (hasKnownValue(position)) {
+                chunks.add("人物定位：" + trimStaticAppearanceDefinition(position));
+            }
+            addKnownChunk(chunks, "脸部五官", face);
+            addKnownChunk(chunks, "发型", hair);
+            addKnownChunk(chunks, "体型身高", body);
+            addKnownChunk(chunks, "服装", clothing);
+            addKnownChunk(chunks, "稳定穿戴配饰", stableAccessories);
+            addKnownChunk(chunks, "不可变视觉锚点", immutableVisual);
+            if (hasKnownValue(appearance)) {
+                chunks.add("外观锚点：" + trimStaticAppearanceDefinition(appearance));
+            }
+            if (hasKnownValue(behavior)) {
+                chunks.add("行为气质：" + trimStaticAppearanceDefinition(behavior));
+            }
+            if (hasKnownValue(speech)) {
+                chunks.add("说话风格：" + trimStaticAppearanceDefinition(speech));
+            }
+            builder.singleRowDefinition = String.join("；", chunks);
+            return builder;
+        }
+
+        private void setGender(String value) {
+            if (gender.isBlank() && value != null && !value.isBlank()) {
+                gender = value;
+            }
+        }
+
+        private void setAge(String value) {
+            if (age.isBlank() && value != null && !value.isBlank()) {
+                age = value;
+            }
+        }
+
+        private void addPart(String part, String detail) {
+            String normalizedPart = part == null ? "" : part.trim();
+            String normalizedDetail = detail == null ? "" : detail.trim();
+            if (!normalizedPart.isBlank() && !normalizedDetail.isBlank()) {
+                parts.put(normalizedPart, normalizedDetail);
+            }
+        }
+
+        private CharacterDefinition build() {
+            if (!singleRowAppearance.isBlank()) {
+                return new CharacterDefinition(name, singleRowAppearance, singleRowDefinition);
+            }
+            List<String> chunks = new ArrayList<>();
+            if (!gender.isBlank()) {
+                chunks.add("性别：" + gender);
+            }
+            if (!age.isBlank()) {
+                chunks.add("年龄：" + age);
+            }
+            for (Map.Entry<String, String> entry : parts.entrySet()) {
+                chunks.add(entry.getKey() + "：" + entry.getValue());
+            }
+            String definition = String.join("；", chunks);
+            return new CharacterDefinition(name, definition, definition);
+        }
+    }
+
+    private static String trimStaticAppearanceDefinition(String value) {
+        return String.valueOf(value == null ? "" : value)
+            .replace("<br>", " ")
+            .replace("<br/>", " ")
+            .replace("<br />", " ")
+            .replaceAll("\\s+", " ")
+            .replaceAll("[。；;，,]+$", "")
+            .trim();
+    }
+
+    private static boolean hasAnyKnownValue(String... values) {
+        for (String value : values) {
+            if (hasKnownValue(value)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean hasKnownValue(String value) {
+        String normalized = trimStaticAppearanceDefinition(value);
+        return !normalized.isBlank()
+            && !"未明确".equals(normalized)
+            && !"不明确".equals(normalized)
+            && !"未知".equals(normalized)
+            && !"无".equals(normalized)
+            && !"无明确".equals(normalized);
+    }
+
+    private static String firstKnownValue(String... values) {
+        for (String value : values) {
+            if (hasKnownValue(value)) {
+                return trimStaticAppearanceDefinition(value);
+            }
+        }
+        return "";
+    }
+
+    private static void addKnownChunk(List<String> chunks, String label, String value) {
+        if (hasKnownValue(value)) {
+            chunks.add(label + "：" + trimStaticAppearanceDefinition(value));
+        }
+    }
+
+    private static String joinLabeledKnownValues(String... labelValuePairs) {
+        List<String> chunks = new ArrayList<>();
+        for (int index = 0; index + 1 < labelValuePairs.length; index += 2) {
+            String label = labelValuePairs[index];
+            String value = labelValuePairs[index + 1];
+            if (hasKnownValue(value)) {
+                chunks.add(label + "：" + trimStaticAppearanceDefinition(value));
+            }
+        }
+        return String.join("；", chunks);
+    }
+
+    private record CharacterDefinitionTableSchema(
+        List<String> headerCells,
+        Integer nameIndex,
+        Integer genderAgeIndex,
+        Integer positionIndex,
+        Integer appearanceIndex,
+        Integer faceIndex,
+        Integer hairIndex,
+        Integer bodyIndex,
+        Integer clothingIndex,
+        Integer stableAccessoriesIndex,
+        Integer immutableVisualIndex,
+        Integer behaviorIndex,
+        Integer speechIndex,
+        Integer genderIndex,
+        Integer ageIndex,
+        Integer partIndex,
+        Integer detailIndex
+    ) {
+        private static CharacterDefinitionTableSchema empty() {
+            return new CharacterDefinitionTableSchema(
+                List.of(),
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null
+            );
+        }
+
+        private static CharacterDefinitionTableSchema fromHeader(List<String> headers) {
+            return new CharacterDefinitionTableSchema(
+                List.copyOf(headers),
+                resolve(headers, "角色", "姓名", "名称"),
+                resolve(headers, "性别年龄", "性别与年龄", "年龄性别"),
+                resolve(headers, "人物定位"),
+                resolve(headers, "外观锚点", "外观定义", "外形定义", "人物外观"),
+                resolve(headers, "脸部五官", "脸部", "五官", "面部特征"),
+                resolve(headers, "发型"),
+                resolve(headers, "体型身高", "身高体型", "体型", "身高"),
+                resolve(headers, "服装", "着装", "衣着"),
+                resolve(headers, "稳定穿戴配饰", "固定穿戴配饰", "稳定配饰", "穿戴配饰", "配饰"),
+                resolve(headers, "不可变视觉锚点", "固定视觉锚点", "视觉锚点"),
+                resolve(headers, "行为气质", "行为特征", "气质"),
+                resolve(headers, "说话风格"),
+                resolve(headers, "性别"),
+                resolve(headers, "年龄"),
+                resolve(headers, "部位"),
+                resolve(headers, "详细描述", "描述")
+            );
+        }
+
+        private static boolean looksLikeHeader(List<String> cells) {
+            boolean hasName = false;
+            boolean hasAppearance = false;
+            boolean hasDetailedVisual = false;
+            boolean hasLegacyPart = false;
+            boolean hasLegacyDetail = false;
+            for (String cell : cells) {
+                String normalized = normalizeHeader(cell);
+                hasName = hasName || normalized.contains("角色") || normalized.contains("姓名") || normalized.contains("名称");
+                hasAppearance = hasAppearance || normalized.contains("外观锚点") || normalized.contains("外观定义") || normalized.contains("外形定义");
+                hasDetailedVisual = hasDetailedVisual
+                    || normalized.contains("脸部五官")
+                    || normalized.contains("发型")
+                    || normalized.contains("体型身高")
+                    || normalized.contains("服装")
+                    || normalized.contains("不可变视觉锚点");
+                hasLegacyPart = hasLegacyPart || normalized.contains("部位");
+                hasLegacyDetail = hasLegacyDetail || normalized.contains("详细描述") || normalized.contains("描述");
+            }
+            return hasName && (hasAppearance || hasDetailedVisual || (hasLegacyPart && hasLegacyDetail));
+        }
+
+        private static Integer resolve(List<String> headers, String... aliases) {
+            for (int index = 0; index < headers.size(); index++) {
+                String header = normalizeHeader(headers.get(index));
+                for (String alias : aliases) {
+                    if (header.contains(normalizeHeader(alias))) {
+                        return index;
+                    }
+                }
+            }
+            return null;
+        }
+
+        private static String normalizeHeader(String value) {
+            return String.valueOf(value == null ? "" : value)
+                .trim()
+                .toLowerCase()
+                .replaceAll("[\\s_\\-()（）/\\\\+:：·,.，]", "");
+        }
+
+        private boolean isValid() {
+            return isSingleRowSchema()
+                || (nameIndex != null && genderIndex != null && ageIndex != null && partIndex != null && detailIndex != null);
+        }
+
+        private boolean isSingleRowSchema() {
+            return nameIndex != null
+                && positionIndex != null
+                && behaviorIndex != null
+                && speechIndex != null
+                && (appearanceIndex != null
+                    || faceIndex != null
+                    || hairIndex != null
+                    || bodyIndex != null
+                    || clothingIndex != null
+                    || immutableVisualIndex != null);
+        }
+
+        private boolean isHeaderRow(List<String> cells) {
+            if (headerCells.isEmpty() || cells.size() != headerCells.size()) {
+                return false;
+            }
+            for (int index = 0; index < cells.size(); index++) {
+                if (!normalizeHeader(cells.get(index)).equals(normalizeHeader(headerCells.get(index)))) {
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        private String value(List<String> cells, Integer index) {
+            return index == null || index < 0 || index >= cells.size() ? "" : cells.get(index);
         }
     }
 

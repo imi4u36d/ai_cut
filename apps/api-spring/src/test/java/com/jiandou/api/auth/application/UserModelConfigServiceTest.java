@@ -33,14 +33,13 @@ class UserModelConfigServiceTest {
         when(resolver.listModelsByKind(GenerationModelKinds.TEXT)).thenReturn(List.of(
             Map.of("value", "qwen-plus", "label", "Qwen Plus", "provider", "qwen", "vendor", "aliyun")
         ));
-        when(resolver.listModelsByKind(GenerationModelKinds.VISION)).thenReturn(List.of());
         when(resolver.listModelsByKind(GenerationModelKinds.IMAGE)).thenReturn(List.of());
         when(resolver.listModelsByKind(GenerationModelKinds.VIDEO)).thenReturn(List.of(
             Map.of("value", "seedance-v1", "label", "Seedance", "provider", "seedance", "vendor", "volcengine")
         ));
         when(resolver.resolveTextProfile("qwen-plus", 7L)).thenReturn(new ModelRuntimeProfile(
             new TextProviderConfig("text", "qwen-plus", "qwen", "qwen-plus", "user-secret", "https://dashscope.aliyuncs.com/compatible-mode/v1", 30, 0.2, 2000, "user-db"),
-            new TextProviderCapabilities(false, true, false)
+            new TextProviderCapabilities(false, true)
         ));
         when(resolver.resolveMediaProfile("seedance-v1", GenerationModelKinds.VIDEO, 7L)).thenReturn(new MediaProviderProfile(
             new MediaProviderConfig("video", "seedance-v1", "seedance", "seedance-v1", "", "https://video.example.com", "https://video.example.com/tasks", 30, "file"),
@@ -74,12 +73,11 @@ class UserModelConfigServiceTest {
         when(resolver.listModelsByKind(GenerationModelKinds.TEXT)).thenReturn(List.of(
             Map.of("value", "qwen-plus", "label", "Qwen Plus", "provider", "qwen", "vendor", "aliyun")
         ));
-        when(resolver.listModelsByKind(GenerationModelKinds.VISION)).thenReturn(List.of());
         when(resolver.listModelsByKind(GenerationModelKinds.IMAGE)).thenReturn(List.of());
         when(resolver.listModelsByKind(GenerationModelKinds.VIDEO)).thenReturn(List.of());
         when(resolver.resolveTextProfile("qwen-plus", 7L)).thenReturn(new ModelRuntimeProfile(
             new TextProviderConfig("text", "qwen-plus", "qwen", "qwen-plus", "", "https://dashscope.aliyuncs.com/compatible-mode/v1", 30, 0.2, 2000, "file"),
-            new TextProviderCapabilities(false, true, false)
+            new TextProviderCapabilities(false, true)
         ));
         when(resolver.listSections("model.providers")).thenReturn(List.of(
             new ModelRuntimePropertiesResolver.ConfigSection("qwen", Map.of("provider", "qwen", "vendor", "aliyun"))

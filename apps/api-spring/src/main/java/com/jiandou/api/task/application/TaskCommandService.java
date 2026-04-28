@@ -133,14 +133,7 @@ public class TaskCommandService {
              * @param "" ""值
              * @return 处理结果
              */
-            "textAnalysisModel", trimmed(request.textAnalysisModel(), ""),
-            /**
-             * 处理trimmed。
-             * @param request.visionModel( request.visionModel(值
-             * @param "" ""值
-             * @return 处理结果
-             */
-            "visionModel", trimmed(request.visionModel(), "")
+            "textAnalysisModel", trimmed(request.textAnalysisModel(), "")
         ));
         executionCoordinator.recordTrace(task, TaskStage.API.code(), "task.created", "生成任务已创建。", TraceLevel.INFO.value(), Map.of(
             "task_type", "generation",
@@ -365,7 +358,6 @@ public class TaskCommandService {
      */
     private void validateGenerationTaskRequest(CreateGenerationTaskRequest request) {
         requireSelectedModel(request.textAnalysisModel(), "textAnalysisModel", "文本模型");
-        requireSelectedModel(request.visionModel(), "visionModel", "视觉模型");
         requireSelectedModel(request.imageModel(), "imageModel", "关键帧模型");
         requireSelectedModel(request.videoModel(), "videoModel", "视频模型");
         normalizeOptionalSeed(request.seed());

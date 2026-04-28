@@ -33,11 +33,9 @@ class RuntimeDescriptorServiceTest {
         ModelRuntimePropertiesResolver resolver = mock(ModelRuntimePropertiesResolver.class);
         RuntimeDescriptorService service = new RuntimeDescriptorService(resolver, "JianDou API", appProperties(), storageProperties());
         when(resolver.listModelsByKind(GenerationModelKinds.TEXT)).thenReturn(List.of(Map.of("value", "gpt-4.1")));
-        when(resolver.listModelsByKind(GenerationModelKinds.VISION)).thenReturn(List.of(Map.of("value", "gpt-4.1-vision")));
         when(resolver.listModelsByKind(GenerationModelKinds.IMAGE)).thenReturn(List.of(Map.of("value", "seedream-3.0")));
         when(resolver.listModelsByKind(GenerationModelKinds.VIDEO)).thenReturn(List.of(Map.of("value", "seedance-1.0")));
         when(resolver.resolveTextProfile("gpt-4.1")).thenReturn(readyTextProfile("gpt-4.1"));
-        when(resolver.resolveTextProfile("gpt-4.1-vision")).thenReturn(readyTextProfile("gpt-4.1-vision"));
         when(resolver.resolveImageProfile("seedream-3.0")).thenReturn(readyMediaProfile("seedream-3.0"));
         when(resolver.resolveVideoProfile("seedance-1.0")).thenReturn(readyMediaProfile("seedance-1.0"));
         when(resolver.value("model", "temperature", "0.15")).thenReturn("0.35");
@@ -66,7 +64,6 @@ class RuntimeDescriptorServiceTest {
         ModelRuntimePropertiesResolver resolver = mock(ModelRuntimePropertiesResolver.class);
         RuntimeDescriptorService service = new RuntimeDescriptorService(resolver, "JianDou API", appProperties(), storageProperties());
         when(resolver.listModelsByKind(GenerationModelKinds.TEXT)).thenReturn(List.of());
-        when(resolver.listModelsByKind(GenerationModelKinds.VISION)).thenReturn(List.of());
         when(resolver.listModelsByKind(GenerationModelKinds.IMAGE)).thenReturn(List.of());
         when(resolver.listModelsByKind(GenerationModelKinds.VIDEO)).thenReturn(List.of());
         when(resolver.value("model", "temperature", "0.15")).thenReturn("bad");
@@ -80,7 +77,7 @@ class RuntimeDescriptorServiceTest {
         assertEquals(0.15, response.runtime().model().temperature());
         assertEquals(2000, response.runtime().model().maxTokens());
         assertEquals(
-            List.of("未配置可用文本模型", "未配置可用视觉模型", "未配置可用关键帧模型", "未配置可用视频模型"),
+            List.of("未配置可用文本模型", "未配置可用关键帧模型", "未配置可用视频模型"),
             response.runtime().model().configErrors()
         );
     }
@@ -101,7 +98,7 @@ class RuntimeDescriptorServiceTest {
     private ModelRuntimeProfile readyTextProfile(String modelName) {
         return new ModelRuntimeProfile(
             new TextProviderConfig("text", modelName, "openai", modelName, "key", "https://api.example.com/v1", 30, 0.2, 1000, "cfg"),
-            new TextProviderCapabilities(true, true, false)
+            new TextProviderCapabilities(true, true)
         );
     }
 

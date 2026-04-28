@@ -522,7 +522,6 @@ const selectedTaskParameterRows = computed(() => {
   const snapshot = selectedTaskRequestSnapshot.value;
   return [
     { label: "文本模型", value: formatTaskModelValue(snapshot.textAnalysisModel) },
-    { label: "视觉模型", value: formatTaskModelValue(snapshot.visionModel) },
     { label: "关键帧模型", value: formatTaskModelValue(snapshot.imageModel) },
     { label: "视频模型", value: formatTaskModelValue(snapshot.videoModel) },
     { label: "清晰度 / 画幅", value: formatTaskModelValue(snapshot.videoSize) },

@@ -1,9 +1,9 @@
 package com.jiandou.api.workflow.web.dto;
 
-public record CreateWorkflowRequest(
-    String title,
-    String transcriptText,
-    String globalPrompt,
+/**
+ * 工作流设置更新请求。
+ */
+public record UpdateWorkflowSettingsRequest(
     String aspectRatio,
     String stylePreset,
     String textAnalysisModel,
@@ -12,7 +12,6 @@ public record CreateWorkflowRequest(
     String videoSize,
     Integer keyframeSeed,
     Integer videoSeed,
-    Integer seed,
     String durationMode,
     Integer minDurationSeconds,
     Integer maxDurationSeconds

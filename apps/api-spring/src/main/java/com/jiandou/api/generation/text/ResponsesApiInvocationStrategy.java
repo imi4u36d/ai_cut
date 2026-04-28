@@ -1,10 +1,10 @@
 package com.jiandou.api.generation.text;
 
 import com.jiandou.api.generation.runtime.ModelRuntimeProfile;
-import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Locale;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 
@@ -23,13 +23,7 @@ public class ResponsesApiInvocationStrategy implements TextModelInvocationStrate
      */
     @Override
     public boolean supports(ModelRuntimeProfile profile, TextModelInvocation invocation) {
-        return TextModelTransportPolicy.supportsResponsesApi(profile)
-            /**
-             * 处理视觉。
-             * @param TextModelTransportPolicy.prefersChatCompletionsForVision(profile 文本模型传输Policy.prefersChatCompletionsForVision(profile值
-             * @return 处理结果
-             */
-            && !(invocation.vision() && TextModelTransportPolicy.prefersChatCompletionsForVision(profile));
+        return TextModelTransportPolicy.supportsResponsesApi(profile);
     }
 
     /**
@@ -40,21 +34,7 @@ public class ResponsesApiInvocationStrategy implements TextModelInvocationStrate
      */
     @Override
     public PreparedTextModelRequest prepare(ModelRuntimeProfile profile, TextModelInvocation invocation) {
-        Map<String, Object> body = invocation.vision()
-            /**
-             * 构建视觉请求。
-             * @param profile.modelName( profile.modelName(值
-             * @param invocation 调用值
-             * @return 处理结果
-             */
-            ? buildVisionRequest(profile.modelName(), invocation)
-            /**
-             * 构建文本请求。
-             * @param profile.modelName( profile.modelName(值
-             * @param invocation 调用值
-             * @return 处理结果
-             */
-            : buildTextRequest(profile.modelName(), invocation);
+        Map<String, Object> body = buildTextRequest(profile, invocation);
         return new PreparedTextModelRequest(
             TextModelTransportPolicy.resolveEndpoint(profile.baseUrl(), true),
             body,
@@ -64,13 +44,13 @@ public class ResponsesApiInvocationStrategy implements TextModelInvocationStrate
 
     /**
      * 构建文本请求。
-     * @param modelName 模型Name值
+     * @param profile profile值
      * @param invocation 调用值
      * @return 处理结果
      */
-    private Map<String, Object> buildTextRequest(String modelName, TextModelInvocation invocation) {
+    private Map<String, Object> buildTextRequest(ModelRuntimeProfile profile, TextModelInvocation invocation) {
         Map<String, Object> body = new LinkedHashMap<>();
-        body.put("model", modelName);
+        body.put("model", profile.modelName());
         body.put("input", List.of(
             Map.of(
                 "role", "system",
@@ -83,38 +63,21 @@ public class ResponsesApiInvocationStrategy implements TextModelInvocationStrate
         ));
         body.put("temperature", invocation.temperature());
         body.put("max_output_tokens", invocation.maxTokens());
+        if (shouldUseThinking(profile)) {
+            body.put("reasoning", Map.of("effort", "medium"));
+        }
         return body;
     }
 
-    /**
-     * 构建视觉请求。
-     * @param modelName 模型Name值
-     * @param invocation 调用值
-     * @return 处理结果
-     */
-    private Map<String, Object> buildVisionRequest(String modelName, TextModelInvocation invocation) {
-        List<Map<String, Object>> userContent = new ArrayList<>();
-        userContent.add(Map.of("type", "input_text", "text", invocation.userPrompt()));
-        for (String imageUrl : invocation.imageUrls()) {
-            userContent.add(Map.of("type", "input_image", "image_url", imageUrl));
-        }
-        Map<String, Object> body = new LinkedHashMap<>();
-        body.put("model", modelName);
-        body.put("input", List.of(
-            Map.of(
-                "role", "system",
-                "content", List.of(Map.of("type", "input_text", "text", invocation.systemPrompt()))
-            ),
-            Map.of(
-                "role", "user",
-                "content", userContent
-            )
-        ));
-        body.put("temperature", invocation.temperature());
-        body.put("max_output_tokens", invocation.maxTokens());
-        if (invocation.seed() != null) {
-            body.put("seed", invocation.seed());
-        }
-        return body;
+    private boolean shouldUseThinking(ModelRuntimeProfile profile) {
+        String provider = normalize(profile.provider());
+        String model = normalize(profile.modelName());
+        String host = normalize(profile.endpointHost());
+        return provider.contains("qwen") || model.startsWith("qwen") || host.contains("dashscope.aliyuncs.com");
     }
+
+    private String normalize(String value) {
+        return value == null ? "" : value.trim().toLowerCase(Locale.ROOT);
+    }
+
 }

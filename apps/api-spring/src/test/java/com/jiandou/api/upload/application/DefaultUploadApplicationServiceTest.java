@@ -35,6 +35,7 @@ class DefaultUploadApplicationServiceTest {
         assertTrue(response.assetId().startsWith("asset_"));
         assertEquals("My Demo 视频.txt", response.fileName());
         assertTrue(response.fileUrl().startsWith("/storage/uploads/" + response.assetId() + "_"));
+        assertTrue(response.publicUrl().isBlank());
         assertEquals(5L, response.sizeBytes());
         List<Path> storedFiles = Files.list(tempDir.resolve("uploads")).toList();
         assertEquals(1, storedFiles.size());
@@ -53,6 +54,19 @@ class DefaultUploadApplicationServiceTest {
 
         assertEquals("UPLOAD_SAVE_FAILED", ex.code());
         assertEquals("文件保存失败", ex.getMessage());
+    }
+
+    @Test
+    void uploadImageReturnsMappedPublicUrlWhenConfigured() {
+        JiandouStorageProperties properties = storageProperties();
+        properties.setPublicBaseUrl("https://assets.example.com/storage");
+        DefaultUploadApplicationService service = new DefaultUploadApplicationService(properties);
+        MockMultipartFile file = new MockMultipartFile("file", "avatar.png", "image/png", "png".getBytes());
+
+        UploadAssetResponse response = service.uploadImage(file);
+
+        assertTrue(response.fileUrl().startsWith("/storage/uploads/" + response.assetId() + "_"));
+        assertTrue(response.publicUrl().startsWith("https://assets.example.com/storage/uploads/" + response.assetId() + "_"));
     }
 
     private JiandouStorageProperties storageProperties() {

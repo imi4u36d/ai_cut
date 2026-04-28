@@ -51,6 +51,16 @@ public class DefaultUploadApplicationService implements UploadApplicationService
     }
 
     /**
+     * 上传图片。
+     * @param file 待上传的文件
+     * @return 处理结果
+     */
+    @Override
+    public UploadAssetResponse uploadImage(MultipartFile file) {
+        return saveFile(file);
+    }
+
+    /**
      * 上传接口统一通过该方法生成资产标识、清洗文件名并写入磁盘。
      */
     private UploadAssetResponse saveFile(MultipartFile file) {
@@ -61,10 +71,12 @@ public class DefaultUploadApplicationService implements UploadApplicationService
             String storedName = assetId + "_" + originalName.replaceAll("[^A-Za-z0-9._-]+", "_");
             Path target = uploadsDir.resolve(storedName).normalize();
             file.transferTo(target);
+            String relativePath = storageProperties.getUploadsDir() + "/" + storedName;
             return new UploadAssetResponse(
                 assetId,
                 originalName,
-                storageProperties.buildPublicUrl(storageProperties.getUploadsDir() + "/" + storedName),
+                storageProperties.buildPublicUrl(relativePath),
+                storageProperties.buildExternallyAccessibleUrl(relativePath),
                 Files.size(target)
             );
         } catch (IOException ex) {

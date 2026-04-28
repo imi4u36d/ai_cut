@@ -62,8 +62,10 @@ class TaskStoryboardPlannerParsingTest {
 
         String storyboardMarkdown = """
             【角色定义信息】
-            - 林舒：女性，约28岁。外观锚点：鬓角垂落一缕碎发，身着素色针织开衫与深色长裤，随身携带皮质单肩包。行为特征：情绪内敛克制，说话时常回避直视。说话风格：语气平静略带自嘲。
-            - 周泽：男性，约29岁。外观锚点：穿着深灰休闲西装外套，内搭素色衬衫，坐姿微前倾。行为特征：主动开口但声音干涩。说话风格：低沉缓慢。
+            | 角色 | 性别年龄 | 人物定位 | 脸部五官 | 发型 | 体型身高 | 服装 | 稳定穿戴配饰 | 不可变视觉锚点 | 行为气质 | 说话风格 |
+            | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+            | 林舒 | 女性，约28岁 | 被迫回到旧图书馆调查失踪线索的女主 | 椭圆脸，眉眼清淡，眼神克制 | 深黑中长发，鬓角垂落一缕碎发 | 身高约168cm，身形清瘦 | 素色针织开衫与深色长裤 | 细肩带皮质单肩包 | 深黑中长发、清瘦体型、素色针织开衫与深色长裤 | 情绪内敛克制 | 语气平静略带自嘲 |
+            | 周泽 | 男性，约29岁 | 掌握部分线索但不愿完全说破的旧识 | 窄长脸，内双，鼻梁挺直 | 黑色侧分短发 | 身高约182cm，身形修长，坐姿微前倾 | 深灰休闲西装外套，内搭素色衬衫 | 极细黑框眼镜 | 黑色侧分短发、修长体型、深灰休闲西装外套 | 主动开口但声音干涩 | 低沉缓慢 |
 
             【分镜脚本】
             | 镜号 | 首帧描述 (Start Frame) | 尾帧描述 (End Frame) | 分镜内容描述 | 时长 |
@@ -75,15 +77,15 @@ class TaskStoryboardPlannerParsingTest {
 
         assertEquals(1, shotPlans.size());
         assertEquals(
-            "周泽（穿着深灰休闲西装外套，内搭素色衬衫，坐姿微前倾）身体微前倾，双手交握置于桌下，目光落在对面林舒（鬓角垂落一缕碎发，身着素色针织开衫与深色长裤，随身携带皮质单肩包）侧脸。",
+            "周泽（性别年龄：男性，约29岁；脸部五官：窄长脸，内双，鼻梁挺直；发型：黑色侧分短发；体型身高：身高约182cm，身形修长，坐姿微前倾；服装：深灰休闲西装外套，内搭素色衬衫；稳定穿戴配饰：极细黑框眼镜；不可变视觉锚点：黑色侧分短发、修长体型、深灰休闲西装外套）身体微前倾，双手交握置于桌下，目光落在对面林舒（性别年龄：女性，约28岁；脸部五官：椭圆脸，眉眼清淡，眼神克制；发型：深黑中长发，鬓角垂落一缕碎发；体型身高：身高约168cm，身形清瘦；服装：素色针织开衫与深色长裤；稳定穿戴配饰：细肩带皮质单肩包；不可变视觉锚点：深黑中长发、清瘦体型、素色针织开衫与深色长裤）侧脸。",
             shotPlans.get(0).startFramePrompt()
         );
         assertEquals(
-            "林舒（鬓角垂落一缕碎发，身着素色针织开衫与深色长裤，随身携带皮质单肩包）视线仍停留在窗外雨痕，周泽（穿着深灰休闲西装外套，内搭素色衬衫，坐姿微前倾）将小布袋推至桌面中央。",
+            "林舒（性别年龄：女性，约28岁；脸部五官：椭圆脸，眉眼清淡，眼神克制；发型：深黑中长发，鬓角垂落一缕碎发；体型身高：身高约168cm，身形清瘦；服装：素色针织开衫与深色长裤；稳定穿戴配饰：细肩带皮质单肩包；不可变视觉锚点：深黑中长发、清瘦体型、素色针织开衫与深色长裤）视线仍停留在窗外雨痕，周泽（性别年龄：男性，约29岁；脸部五官：窄长脸，内双，鼻梁挺直；发型：黑色侧分短发；体型身高：身高约182cm，身形修长，坐姿微前倾；服装：深灰休闲西装外套，内搭素色衬衫；稳定穿戴配饰：极细黑框眼镜；不可变视觉锚点：黑色侧分短发、修长体型、深灰休闲西装外套）将小布袋推至桌面中央。",
             shotPlans.get(0).endFramePrompt()
         );
-        assertTrue(shotPlans.get(0).videoPrompt().contains("周泽（穿着深灰休闲西装外套"));
-        assertTrue(shotPlans.get(0).videoPrompt().contains("林舒（鬓角垂落一缕碎发"));
+        assertTrue(shotPlans.get(0).videoPrompt().contains("周泽（性别年龄：男性，约29岁"));
+        assertTrue(shotPlans.get(0).videoPrompt().contains("林舒（性别年龄：女性，约28岁"));
     }
 
     /**
@@ -91,6 +93,34 @@ class TaskStoryboardPlannerParsingTest {
      */
     @Test
     void extractsCharacterDefinitionsInStoryboardOrder() {
+        TaskStoryboardPlanner planner = new TaskStoryboardPlanner(new ModelRuntimePropertiesResolver(new MockEnvironment()));
+
+        String storyboardMarkdown = """
+            【角色定义信息】
+            | 角色 | 性别年龄 | 人物定位 | 脸部五官 | 发型 | 体型身高 | 服装 | 稳定穿戴配饰 | 不可变视觉锚点 | 行为气质 | 说话风格 |
+            | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+            | 林舒 | 女性，约28岁 | 被迫回到旧图书馆调查失踪线索的女主 | 椭圆脸，眉眼清淡，眼神克制 | 深黑中长发，鬓角垂落一缕碎发 | 身高约168cm，身形清瘦 | 素色针织开衫与深色长裤 | 细肩带皮质单肩包 | 深黑中长发、清瘦体型、素色针织开衫与深色长裤 | 情绪内敛克制 | 语气平静略带自嘲 |
+            | 周泽 | 男性，约29岁 | 掌握部分线索但不愿完全说破的旧识 | 窄长脸，内双，鼻梁挺直 | 黑色侧分短发 | 身高约182cm，身形修长，坐姿微前倾 | 深灰休闲西装外套，内搭素色衬衫 | 极细黑框眼镜 | 黑色侧分短发、修长体型、深灰休闲西装外套 | 主动开口但声音干涩 | 低沉缓慢 |
+
+            【分镜脚本】
+            | 镜号 | 首帧描述 | 尾帧描述 | 分镜内容描述 | 时长 |
+            | :--- | :--- | :--- | :--- | :--- |
+            | 001 | 周泽坐在桌前。 | 林舒看向窗外。 | 镜头轻微横移。 | 10s |
+            """;
+
+        List<TaskStoryboardPlanner.CharacterDefinition> definitions = planner.extractCharacterDefinitions(storyboardMarkdown);
+
+        assertEquals(2, definitions.size());
+        assertEquals("林舒", definitions.get(0).name());
+        assertEquals("性别年龄：女性，约28岁；脸部五官：椭圆脸，眉眼清淡，眼神克制；发型：深黑中长发，鬓角垂落一缕碎发；体型身高：身高约168cm，身形清瘦；服装：素色针织开衫与深色长裤；稳定穿戴配饰：细肩带皮质单肩包；不可变视觉锚点：深黑中长发、清瘦体型、素色针织开衫与深色长裤", definitions.get(0).appearance());
+        assertEquals("性别年龄：女性，约28岁；人物定位：被迫回到旧图书馆调查失踪线索的女主；脸部五官：椭圆脸，眉眼清淡，眼神克制；发型：深黑中长发，鬓角垂落一缕碎发；体型身高：身高约168cm，身形清瘦；服装：素色针织开衫与深色长裤；稳定穿戴配饰：细肩带皮质单肩包；不可变视觉锚点：深黑中长发、清瘦体型、素色针织开衫与深色长裤；行为气质：情绪内敛克制；说话风格：语气平静略带自嘲", definitions.get(0).definition());
+        assertEquals("周泽", definitions.get(1).name());
+        assertEquals("性别年龄：男性，约29岁；脸部五官：窄长脸，内双，鼻梁挺直；发型：黑色侧分短发；体型身高：身高约182cm，身形修长，坐姿微前倾；服装：深灰休闲西装外套，内搭素色衬衫；稳定穿戴配饰：极细黑框眼镜；不可变视觉锚点：黑色侧分短发、修长体型、深灰休闲西装外套", definitions.get(1).appearance());
+        assertEquals("性别年龄：男性，约29岁；人物定位：掌握部分线索但不愿完全说破的旧识；脸部五官：窄长脸，内双，鼻梁挺直；发型：黑色侧分短发；体型身高：身高约182cm，身形修长，坐姿微前倾；服装：深灰休闲西装外套，内搭素色衬衫；稳定穿戴配饰：极细黑框眼镜；不可变视觉锚点：黑色侧分短发、修长体型、深灰休闲西装外套；行为气质：主动开口但声音干涩；说话风格：低沉缓慢", definitions.get(1).definition());
+    }
+
+    @Test
+    void extractsCharacterDefinitionsFromListFormat() {
         TaskStoryboardPlanner planner = new TaskStoryboardPlanner(new ModelRuntimePropertiesResolver(new MockEnvironment()));
 
         String storyboardMarkdown = """
@@ -109,10 +139,8 @@ class TaskStoryboardPlannerParsingTest {
         assertEquals(2, definitions.size());
         assertEquals("林舒", definitions.get(0).name());
         assertEquals("鬓角垂落一缕碎发，身着素色针织开衫与深色长裤，随身携带皮质单肩包", definitions.get(0).appearance());
-        assertEquals("女性，约28岁。外观锚点：鬓角垂落一缕碎发，身着素色针织开衫与深色长裤，随身携带皮质单肩包。行为特征：情绪内敛克制。", definitions.get(0).definition());
         assertEquals("周泽", definitions.get(1).name());
         assertEquals("穿着深灰休闲西装外套，内搭素色衬衫，坐姿微前倾", definitions.get(1).appearance());
-        assertEquals("男性，约29岁。外观锚点：穿着深灰休闲西装外套，内搭素色衬衫，坐姿微前倾。行为特征：主动开口但声音干涩。", definitions.get(1).definition());
     }
 
     /**

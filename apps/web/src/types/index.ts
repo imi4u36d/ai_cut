@@ -129,6 +129,15 @@ export interface UploadResponse {
   sizeBytes: number;
 }
 
+export interface ImageUploadResponse {
+  assetId?: string | null;
+  fileName?: string | null;
+  fileUrl: string;
+  publicUrl?: string | null;
+  previewUrl?: string | null;
+  sizeBytes?: number | null;
+}
+
 /**
  * Create生成任务请求体。
  */
@@ -137,7 +146,6 @@ export interface CreateGenerationTaskRequest {
   creativePrompt?: string | null;
   aspectRatio: "9:16" | "16:9";
   textAnalysisModel?: string | null;
-  visionModel?: string | null;
   imageModel?: string | null;
   videoModel?: string | null;
   videoSize?: string | null;
@@ -346,8 +354,6 @@ export interface GenerationOptionsResponse {
   defaultVideoModel?: string | null;
   textAnalysisModels?: GenerationTextAnalysisModelInfo[];
   defaultTextAnalysisModel?: string | null;
-  visionModels?: GenerationTextAnalysisModelInfo[];
-  defaultVisionModel?: string | null;
   imageModels?: GenerationTextAnalysisModelInfo[];
   videoSizes: GenerationVideoSizeOption[];
   videoDurations: GenerationVideoDurationOption[];
@@ -417,7 +423,6 @@ export interface AdminModelConfigModelItem {
   description: string;
   supportsSeed: boolean;
   supportsResponsesApi: boolean;
-  prefersChatCompletionsForVision: boolean;
   generationMode: string;
   supportedSizes: string[];
   supportedDurations: number[];
@@ -756,7 +761,6 @@ export interface TaskRequestSnapshot {
   aspectRatio?: string | null;
   stylePreset?: string | null;
   textAnalysisModel?: string | null;
-  visionModel?: string | null;
   imageModel?: string | null;
   videoModel?: string | null;
   videoSize?: string | null;
@@ -813,7 +817,6 @@ export interface TaskDetail extends TaskListItem {
  */
 export interface TaskShowcaseModels {
   textAnalysisModel?: string | null;
-  visionModel?: string | null;
   imageModel?: string | null;
   videoModel?: string | null;
 }
@@ -871,7 +874,6 @@ export interface HealthModelSummary {
   primary_model: string | null;
   text_analysis_provider?: string | null;
   text_analysis_model?: string | null;
-  vision_model?: string | null;
   endpoint_host?: string;
   api_key_present: boolean;
   ready: boolean;
@@ -942,7 +944,6 @@ export interface AdminOverview {
   modelReady: boolean;
   primaryModel: string | null;
   textModel?: string | null;
-  visionModel?: string | null;
   recentTasks: TaskListItem[];
   recentFailures: TaskListItem[];
   recentRunningTasks: TaskListItem[];
@@ -1029,7 +1030,7 @@ export interface AdminTaskBatchResult {
   failed: AdminTaskBatchFailure[];
 }
 
-export type WorkflowStageType = "storyboard" | "keyframe" | "video" | "joined";
+export type WorkflowStageType = "storyboard" | "keyframe" | "video" | "joined" | "material_center";
 
 export interface CreateWorkflowRequest {
   title: string;
@@ -1038,13 +1039,27 @@ export interface CreateWorkflowRequest {
   aspectRatio: "9:16" | "16:9";
   stylePreset?: string | null;
   textAnalysisModel: string;
-  visionModel: string;
   imageModel: string;
   videoModel: string;
   videoSize?: string | null;
   keyframeSeed?: number | null;
   videoSeed?: number | null;
   seed?: number | null;
+  durationMode?: "auto" | "manual" | string | null;
+  minDurationSeconds?: number | null;
+  maxDurationSeconds?: number | null;
+}
+
+export interface UpdateWorkflowSettingsRequest {
+  aspectRatio: string;
+  stylePreset: string;
+  textAnalysisModel: string;
+  imageModel: string;
+  videoModel: string;
+  videoSize: string;
+  keyframeSeed?: number | null;
+  videoSeed?: number | null;
+  durationMode?: "auto" | "manual" | string | null;
   minDurationSeconds?: number | null;
   maxDurationSeconds?: number | null;
 }
@@ -1059,20 +1074,15 @@ export interface RateStageVersionRequest {
   effectRatingNote?: string | null;
 }
 
-export interface MaterialAssetTag {
-  id: string;
-  tagType: "system" | "custom";
-  tagKey: string;
-  tagValue: string;
-}
-
 export interface MaterialAssetLibraryItem {
   id: string;
-  workflowId: string;
+  workflowId?: string | null;
   stageType: WorkflowStageType;
   clipIndex: number;
   versionNo: number;
   selectedForNext: boolean;
+  assetType?: MaterialAssetType | string | null;
+  assetRole?: string | null;
   userRating?: number | null;
   ratingNote?: string | null;
   mediaType: "text" | "image" | "video" | string;
@@ -1090,7 +1100,6 @@ export interface MaterialAssetLibraryItem {
   metadata?: Record<string, unknown> | null;
   createdAt: string;
   updatedAt: string;
-  tags: MaterialAssetTag[];
 }
 
 export interface StageVersion {
@@ -1168,13 +1177,13 @@ export interface WorkflowDetail {
   aspectRatio: string;
   stylePreset?: string | null;
   textAnalysisModel: string;
-  visionModel: string;
   imageModel: string;
   videoModel: string;
   videoSize?: string | null;
   keyframeSeed?: number | null;
   videoSeed?: number | null;
   seed?: number | null;
+  durationMode?: string | null;
   minDurationSeconds?: number | null;
   maxDurationSeconds?: number | null;
   status: string;
@@ -1191,23 +1200,46 @@ export interface WorkflowDetail {
   finalResult?: MaterialAssetLibraryItem | null;
 }
 
+export type MaterialAssetType = "character_sheet" | "scene" | "prop" | "workflow";
+
 export interface MaterialAssetQuery {
   q?: string;
   type?: WorkflowStageType | "";
-  tag?: string;
+  assetType?: MaterialAssetType | "";
   minRating?: number | null;
   model?: string;
   aspectRatio?: string;
   clipIndex?: number | null;
 }
 
+export interface CreateMaterialGenerationRequest {
+  assetType: Exclude<MaterialAssetType, "workflow">;
+  title: string;
+  description?: string | null;
+  styleKeywords?: string[];
+  aspectRatio: string;
+  textAnalysisModel?: string | null;
+  imageModel?: string | null;
+  seed?: number | null;
+  referenceImageUrls?: string[];
+  referenceAssetIds?: string[];
+}
+
+export interface MaterialGenerationResponse {
+  id?: string | null;
+  asset?: MaterialAssetLibraryItem | null;
+  assets?: MaterialAssetLibraryItem[];
+  outputUrl?: string | null;
+  previewUrl?: string | null;
+  fileUrl?: string | null;
+  title?: string | null;
+  status?: string | null;
+  metadata?: Record<string, unknown> | null;
+}
+
 export interface UpdateMaterialAssetRatingRequest {
   effectRating: number;
   effectRatingNote?: string | null;
-}
-
-export interface UpdateMaterialAssetTagsRequest {
-  tags: string[];
 }
 
 export interface ReuseMaterialRequest {

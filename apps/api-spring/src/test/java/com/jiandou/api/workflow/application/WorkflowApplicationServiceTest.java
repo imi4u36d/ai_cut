@@ -6,7 +6,6 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anySet;
@@ -19,6 +18,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.jiandou.api.auth.security.CurrentUserPrincipal;
+import com.jiandou.api.config.JiandouStorageProperties;
 import com.jiandou.api.generation.exception.GenerationProviderException;
 import com.jiandou.api.generation.application.GenerationApplicationService;
 import com.jiandou.api.media.LocalMediaArtifactService;
@@ -28,6 +28,9 @@ import com.jiandou.api.workflow.WorkflowConstants;
 import com.jiandou.api.workflow.infrastructure.WorkflowJsonSupport;
 import com.jiandou.api.workflow.infrastructure.mybatis.StageVersionEntity;
 import com.jiandou.api.workflow.infrastructure.mybatis.StageWorkflowEntity;
+import com.jiandou.api.workflow.web.dto.CreateMaterialGenerationRequest;
+import com.jiandou.api.workflow.web.dto.SelectCharacterSheetAssetRequest;
+import com.jiandou.api.workflow.web.dto.UpdateWorkflowSettingsRequest;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
@@ -49,6 +52,7 @@ class WorkflowApplicationServiceTest {
     private GenerationApplicationService generationApplicationService;
     private TaskStoryboardPlanner storyboardPlanner;
     private LocalMediaArtifactService localMediaArtifactService;
+    private JiandouStorageProperties storageProperties;
     private WorkflowApplicationService service;
 
     private Map<String, StageWorkflowEntity> workflows;
@@ -61,7 +65,8 @@ class WorkflowApplicationServiceTest {
         generationApplicationService = mock(GenerationApplicationService.class);
         storyboardPlanner = mock(TaskStoryboardPlanner.class);
         localMediaArtifactService = mock(LocalMediaArtifactService.class);
-        service = new WorkflowApplicationService(workflowRepository, generationApplicationService, storyboardPlanner, localMediaArtifactService);
+        storageProperties = new JiandouStorageProperties();
+        service = new WorkflowApplicationService(workflowRepository, generationApplicationService, storyboardPlanner, localMediaArtifactService, storageProperties);
 
         workflows = new LinkedHashMap<>();
         versions = new LinkedHashMap<>();
@@ -91,9 +96,6 @@ class WorkflowApplicationServiceTest {
         });
         when(workflowRepository.findMaterialAssetsByIds(anySet(), anyLong())).thenAnswer(invocation -> findMaterialAssets(invocation.getArgument(0)));
         when(workflowRepository.listMaterialAssets(anyLong())).thenAnswer(invocation -> new ArrayList<>(assets.values()));
-        when(workflowRepository.listTags(anyString())).thenReturn(List.of());
-        when(workflowRepository.listTagsByAssetIds(anyCollection())).thenReturn(Map.of());
-        doNothing().when(workflowRepository).saveMaterialAssetTags(anyString(), any());
         doNothing().when(workflowRepository).saveSystemLog(anyString(), anyString(), anyString(), anyString(), anyString(), anyString(), any());
         doNothing().when(workflowRepository).saveModelCall(anyString(), any());
         doAnswer(invocation -> {
@@ -146,6 +148,33 @@ class WorkflowApplicationServiceTest {
     @AfterEach
     void tearDown() {
         SecurityContextHolder.clearContext();
+    }
+
+    @Test
+    void createWorkflowUsesDefaultDurationRangeWhenAutomatic() {
+        Map<String, Object> detail = service.createWorkflow(new com.jiandou.api.workflow.web.dto.CreateWorkflowRequest(
+            "demo workflow",
+            "正文",
+            "",
+            "9:16",
+            "cinematic",
+            "text-model",
+            "image-model",
+            "video-model",
+            "720*1280",
+            null,
+            null,
+            null,
+            "auto",
+            null,
+            null
+        ));
+
+        StageWorkflowEntity created = workflows.get(detail.get("id"));
+        assertNotNull(created);
+        assertEquals("auto", created.getDurationMode());
+        assertEquals(5, created.getMinDurationSeconds());
+        assertEquals(12, created.getMaxDurationSeconds());
     }
 
     @Test
@@ -232,10 +261,15 @@ class WorkflowApplicationServiceTest {
         assertTrue(String.valueOf(mapValue(requests.get(0).get("input")).get("prompt")).contains("角色完整定义：女性，约28岁"));
         assertTrue(String.valueOf(mapValue(requests.get(0).get("input")).get("prompt")).contains("三视图设定图"));
         assertTrue(String.valueOf(mapValue(requests.get(0).get("input")).get("prompt")).contains("完整的从头到脚全身像"));
+        assertTrue(String.valueOf(mapValue(requests.get(0).get("input")).get("prompt")).contains("禁止半身像"));
+        assertTrue(String.valueOf(mapValue(requests.get(0).get("input")).get("prompt")).contains("双手空置"));
+        assertTrue(String.valueOf(mapValue(requests.get(0).get("input")).get("prompt")).contains("禁止手拿"));
         assertTrue(String.valueOf(mapValue(requests.get(0).get("input")).get("prompt")).contains("不得出现任何文字"));
         assertTrue(String.valueOf(mapValue(requests.get(0).get("input")).get("prompt")).contains("背景必须是纯白色背景"));
         assertTrue(String.valueOf(mapValue(requests.get(1).get("input")).get("prompt")).contains("全局画风要求：新海诚动漫风"));
         assertTrue(String.valueOf(mapValue(requests.get(1).get("input")).get("prompt")).contains("三视图设定图"));
+        assertNotNull(mapValue(requests.get(0).get("input")).get("seed"));
+        assertNotNull(mapValue(requests.get(1).get("input")).get("seed"));
         assertTrue(String.valueOf(mapValue(requests.get(2).get("input")).get("prompt")).contains("全局画风要求：新海诚动漫风"));
         assertEquals("first", mapValue(requests.get(2).get("input")).get("frameRole"));
         assertTrue(String.valueOf(mapValue(requests.get(3).get("input")).get("prompt")).contains("全局画风要求：新海诚动漫风"));
@@ -251,7 +285,12 @@ class WorkflowApplicationServiceTest {
         List<Map<String, Object>> characterSheets = listValue(detail.get("characterSheets"));
         assertEquals(2, characterSheets.size());
         assertEquals("林舒", characterSheets.get(0).get("characterName"));
-        assertFalse(listValue(characterSheets.get(0).get("versions")).isEmpty());
+        List<Map<String, Object>> firstCharacterSheetVersions = listValue(characterSheets.get(0).get("versions"));
+        assertFalse(firstCharacterSheetVersions.isEmpty());
+        assertEquals(
+            mapValue(requests.get(0).get("input")).get("seed"),
+            mapValue(firstCharacterSheetVersions.get(0).get("inputSummary")).get("seed")
+        );
     }
 
     @Test
@@ -453,29 +492,6 @@ class WorkflowApplicationServiceTest {
     }
 
     @Test
-    void generateVideoAppendsExtraPromptToVideoRequest() {
-        StageWorkflowEntity workflow = workflow("wf_video_extra");
-        workflows.put(workflow.getWorkflowId(), workflow);
-        versions.put("sv_story", storyboardVersion(workflow.getWorkflowId(), storyboardClips()));
-        versions.put("sv_key_extra", keyframeVersion(workflow.getWorkflowId(), 1, "asset_key_extra", "https://cdn.example.com/clip1-last-extra.png"));
-        assets.put("asset_key_extra", asset(workflow.getWorkflowId(), "asset_key_extra", WorkflowConstants.STAGE_KEYFRAME, 1, "https://cdn.example.com/clip1-last-extra.png", "image/png"));
-        when(generationApplicationService.createRun(any())).thenReturn(videoRun(
-            "run_video_extra",
-            "https://cdn.example.com/clip1-extra.mp4",
-            "https://cdn.example.com/clip1-first-extra.png",
-            "https://cdn.example.com/clip1-last-extra.png",
-            "https://cdn.example.com/clip1-generated-last-extra.png"
-        ));
-
-        service.generateVideo("wf_video_extra", 1, "补充要求：镜头运动更稳定，结尾停顿半秒。");
-
-        ArgumentCaptor<Map<String, Object>> requestCaptor = ArgumentCaptor.forClass(Map.class);
-        verify(generationApplicationService).createRun(requestCaptor.capture());
-        Map<String, Object> input = mapValue(requestCaptor.getValue().get("input"));
-        assertTrue(String.valueOf(input.get("prompt")).contains("额外追加生成要求：补充要求：镜头运动更稳定，结尾停顿半秒。"));
-    }
-
-    @Test
     void workflowDetailResolvesSecondClipStartFrameFromCurrentPreviousSelection() {
         StageWorkflowEntity workflow = workflow("wf_detail_sync");
         workflow.setSelectedStoryboardVersionId("sv_story");
@@ -566,41 +582,123 @@ class WorkflowApplicationServiceTest {
     }
 
     @Test
-    void generateStoryboardPassesExtraPromptToScriptRun() {
-        StageWorkflowEntity workflow = workflow("wf_story_extra");
-        workflow.setSelectedStoryboardVersionId("");
+    void updateWorkflowSettingsPersistsStructuredColumns() {
+        StageWorkflowEntity workflow = workflow("wf_settings");
         workflows.put(workflow.getWorkflowId(), workflow);
-        when(generationApplicationService.createRun(any())).thenReturn(scriptRun(
-            "run_story_extra",
-            generatedStoryboardMarkdown(),
-            "https://cdn.example.com/storyboard-extra.md"
+
+        Map<String, Object> detail = service.updateWorkflowSettings("wf_settings", new UpdateWorkflowSettingsRequest(
+            "16:9",
+            "noir",
+            "text-model-next",
+            "image-model-next",
+            "video-model-next",
+            "1280*720",
+            1234,
+            5678,
+            "manual",
+            6,
+            9
         ));
 
-        service.generateStoryboard("wf_story_extra", "补充要求：加强结尾停顿感。");
-
-        ArgumentCaptor<Map<String, Object>> requestCaptor = ArgumentCaptor.forClass(Map.class);
-        verify(generationApplicationService).createRun(requestCaptor.capture());
-        Map<String, Object> input = mapValue(requestCaptor.getValue().get("input"));
-        assertEquals("补充要求：加强结尾停顿感。", input.get("extraPrompt"));
+        StageWorkflowEntity updated = workflows.get("wf_settings");
+        assertEquals("16:9", updated.getAspectRatio());
+        assertEquals("noir", updated.getStylePreset());
+        assertEquals("text-model-next", updated.getTextAnalysisModel());
+        assertEquals("image-model-next", updated.getImageModel());
+        assertEquals("video-model-next", updated.getVideoModel());
+        assertEquals("1280*720", updated.getVideoSize());
+        assertEquals(1234, updated.getKeyframeSeed());
+        assertEquals(5678, updated.getVideoSeed());
+        assertEquals("manual", updated.getDurationMode());
+        assertEquals(null, updated.getTaskSeed());
+        assertEquals(6, updated.getMinDurationSeconds());
+        assertEquals(9, updated.getMaxDurationSeconds());
+        assertEquals("16:9", detail.get("aspectRatio"));
+        assertEquals("manual", detail.get("durationMode"));
+        assertEquals("video-model-next", detail.get("videoModel"));
+        verify(workflowRepository).saveSystemLog(
+            org.mockito.ArgumentMatchers.eq("wf_settings"),
+            org.mockito.ArgumentMatchers.eq("workflow"),
+            org.mockito.ArgumentMatchers.eq("settings"),
+            org.mockito.ArgumentMatchers.eq("workflow.settings.updated"),
+            org.mockito.ArgumentMatchers.eq("INFO"),
+            org.mockito.ArgumentMatchers.eq("工作流设置已更新"),
+            any()
+        );
     }
 
     @Test
-    void generateKeyframeAppendsExtraPromptToImageRequests() {
-        StageWorkflowEntity workflow = workflow("wf_key_extra");
+    void updateWorkflowSettingsKeepsAutomaticDurationMode() {
+        StageWorkflowEntity workflow = workflow("wf_settings_auto");
+        workflow.setDurationMode("manual");
+        workflow.setMinDurationSeconds(6);
+        workflow.setMaxDurationSeconds(9);
         workflows.put(workflow.getWorkflowId(), workflow);
-        versions.put("sv_story", storyboardVersion(workflow.getWorkflowId(), storyboardClips()));
-        when(generationApplicationService.createRun(any())).thenReturn(
-            imageRun("run_start_extra", "https://cdn.example.com/clip1-first-extra.png"),
-            imageRun("run_end_extra", "https://cdn.example.com/clip1-last-extra.png")
-        );
 
-        service.generateKeyframe("wf_key_extra", 1, "补充要求：人物抬手动作再克制一点。");
+        Map<String, Object> detail = service.updateWorkflowSettings("wf_settings_auto", new UpdateWorkflowSettingsRequest(
+            "9:16",
+            "cinematic",
+            "text-model",
+            "image-model",
+            "video-model",
+            "720*1280",
+            null,
+            null,
+            "auto",
+            null,
+            null
+        ));
+
+        StageWorkflowEntity updated = workflows.get("wf_settings_auto");
+        assertEquals("auto", updated.getDurationMode());
+        assertEquals(5, updated.getMinDurationSeconds());
+        assertEquals(12, updated.getMaxDurationSeconds());
+        assertEquals("auto", detail.get("durationMode"));
+    }
+
+    @Test
+    void adjustStoryboardCreatesNewVersionFromExistingMarkdown() {
+        StageWorkflowEntity workflow = workflow("wf_story_adjust");
+        workflows.put(workflow.getWorkflowId(), workflow);
+        versions.put("sv_story", storyboardVersion(workflow.getWorkflowId(), storyboardClips(), storyboardMarkdownWithCharacters()));
+        when(generationApplicationService.createRun(any())).thenReturn(scriptRun(
+            "run_story_adjust",
+            "script_adjust",
+            adjustedStoryboardMarkdown(),
+            "https://cdn.example.com/storyboard-v2.md"
+        ));
+
+        Map<String, Object> detail = service.adjustStoryboard("wf_story_adjust", "sv_story", "加强角色三视图外观信息");
 
         ArgumentCaptor<Map<String, Object>> requestCaptor = ArgumentCaptor.forClass(Map.class);
-        verify(generationApplicationService, times(2)).createRun(requestCaptor.capture());
-        List<Map<String, Object>> requests = requestCaptor.getAllValues();
-        assertTrue(String.valueOf(mapValue(requests.get(0).get("input")).get("prompt")).contains("额外追加生成要求：补充要求：人物抬手动作再克制一点。"));
-        assertTrue(String.valueOf(mapValue(requests.get(1).get("input")).get("prompt")).contains("额外追加生成要求：补充要求：人物抬手动作再克制一点。"));
+        verify(generationApplicationService).createRun(requestCaptor.capture());
+        Map<String, Object> request = requestCaptor.getValue();
+        assertEquals("script_adjust", request.get("kind"));
+        Map<String, Object> input = mapValue(request.get("input"));
+        assertEquals(storyboardMarkdownWithCharacters().trim(), String.valueOf(input.get("scriptMarkdown")).trim());
+        assertEquals("加强角色三视图外观信息", input.get("adjustmentPrompt"));
+        assertEquals("text-model", mapValue(request.get("model")).get("textAnalysisModel"));
+
+        StageVersionEntity adjustedVersion = versions.values().stream()
+            .filter(item -> WorkflowConstants.STAGE_STORYBOARD.equals(item.getStageType()))
+            .filter(item -> intValue(item.getVersionNo(), 0) == 2)
+            .findFirst()
+            .orElseThrow();
+        assertEquals("sv_story", adjustedVersion.getParentVersionId());
+        assertEquals(0, intValue(adjustedVersion.getSelected(), 0));
+        Map<String, Object> outputSummary = WorkflowJsonSupport.readMap(adjustedVersion.getOutputSummaryJson());
+        assertEquals(adjustedStoryboardMarkdown().trim(), String.valueOf(outputSummary.get("scriptMarkdown")).trim());
+        assertEquals("sv_story", outputSummary.get("sourceVersionId"));
+        assertEquals("加强角色三视图外观信息", outputSummary.get("adjustmentPrompt"));
+        assertEquals("sv_story", workflows.get("wf_story_adjust").getSelectedStoryboardVersionId());
+        assertEquals(2, listValue(detail.get("storyboardVersions")).size());
+
+        ArgumentCaptor<Map<String, Object>> modelCallCaptor = ArgumentCaptor.forClass(Map.class);
+        verify(workflowRepository).saveModelCall(org.mockito.ArgumentMatchers.eq("wf_story_adjust"), modelCallCaptor.capture());
+        Map<String, Object> modelCall = modelCallCaptor.getValue();
+        assertEquals("script_adjust", modelCall.get("callKind"));
+        assertEquals("workflow.storyboard.adjust", modelCall.get("operation"));
+        assertEquals("sv_story", mapValue(mapValue(modelCall.get("requestPayload")).get("context")).get("sourceVersionId"));
     }
 
     @Test
@@ -622,6 +720,136 @@ class WorkflowApplicationServiceTest {
         List<Map<String, Object>> characterSheets = listValue(detail.get("characterSheets"));
         List<Map<String, Object>> sheetVersions = listValue(characterSheets.get(0).get("versions"));
         assertTrue(sheetVersions.stream().anyMatch(item -> "sv_sheet_2".equals(item.get("id")) && Boolean.TRUE.equals(item.get("selected"))));
+    }
+
+    @Test
+    void createMaterialGenerationStoresStandaloneAssetWithMetadata() {
+        when(generationApplicationService.createRun(any())).thenReturn(
+            imageRun("run_material_scene", "https://cdn.example.com/material-scene.png", "https://remote.example.com/material-scene.png")
+        );
+
+        Map<String, Object> row = service.createMaterialGeneration(new CreateMaterialGenerationRequest(
+            "scene",
+            "雨夜街角",
+            "湿润柏油路、霓虹招牌、窄巷纵深",
+            List.of("cinematic", "rainy night"),
+            List.of("https://cdn.example.com/ref.png"),
+            List.of(),
+            "16:9",
+            "text-model",
+            "image-model",
+            1234
+        ));
+
+        ArgumentCaptor<Map<String, Object>> requestCaptor = ArgumentCaptor.forClass(Map.class);
+        verify(generationApplicationService).createRun(requestCaptor.capture());
+        Map<String, Object> input = mapValue(requestCaptor.getValue().get("input"));
+        assertEquals("image", requestCaptor.getValue().get("kind"));
+        assertEquals("scene", input.get("frameRole"));
+        assertEquals("https://cdn.example.com/ref.png", input.get("referenceImageUrl"));
+        assertTrue(String.valueOf(input.get("prompt")).contains("生成类型：场景概念图"));
+        assertEquals("雨夜街角", row.get("title"));
+        assertEquals("", row.get("workflowId"));
+        assertEquals("material_center", row.get("stageType"));
+        assertEquals("scene", row.get("assetType"));
+        Map<String, Object> metadata = mapValue(row.get("metadata"));
+        assertEquals("湿润柏油路、霓虹招牌、窄巷纵深", metadata.get("description"));
+        assertEquals("https://remote.example.com/material-scene.png", metadata.get("remoteSourceUrl"));
+    }
+
+    @Test
+    void listMaterialAssetsClassifiesWorkflowGeneratedCharacterSheetsByVariantKind() {
+        MaterialAssetEntity generatedSheet = asset(
+            "wf_story",
+            "asset_generated_suwan_sheet",
+            WorkflowConstants.STAGE_KEYFRAME,
+            1002,
+            "https://cdn.example.com/suwan-sheet.png",
+            "image/png"
+        );
+        generatedSheet.setTitle("操场偶遇 角色三视图 苏晚 V1");
+        generatedSheet.setAssetRole(WorkflowConstants.STAGE_KEYFRAME);
+        generatedSheet.setMetadataJson(WorkflowJsonSupport.write(Map.of(
+            "variantKind", "character_sheet",
+            "characterName", "苏晚",
+            "sheetUrl", "https://cdn.example.com/suwan-sheet.png"
+        )));
+        assets.put(generatedSheet.getMaterialAssetId(), generatedSheet);
+
+        List<Map<String, Object>> rows = service.listMaterialAssets("苏晚", null, null, null, null, null, "character_sheet");
+
+        assertEquals(1, rows.size());
+        assertEquals(generatedSheet.getMaterialAssetId(), rows.get(0).get("id"));
+        assertEquals("character_sheet", rows.get(0).get("assetType"));
+    }
+
+    @Test
+    void createMaterialGenerationMapsLocalStorageReferencesToPublicBaseUrl() {
+        storageProperties.setPublicBaseUrl("https://assets.example.com/storage");
+        when(generationApplicationService.createRun(any())).thenReturn(
+            imageRun("run_material_prop", "https://cdn.example.com/material-prop.png", "")
+        );
+
+        service.createMaterialGeneration(new CreateMaterialGenerationRequest(
+            "prop",
+            "黄铜钥匙",
+            "旧黄铜钥匙，边缘有磨损",
+            List.of(),
+            List.of("/storage/uploads/ref-key.png"),
+            List.of(),
+            "1:1",
+            "text-model",
+            "image-model",
+            null
+        ));
+
+        ArgumentCaptor<Map<String, Object>> requestCaptor = ArgumentCaptor.forClass(Map.class);
+        verify(generationApplicationService).createRun(requestCaptor.capture());
+        Map<String, Object> input = mapValue(requestCaptor.getValue().get("input"));
+        assertEquals("https://assets.example.com/storage/uploads/ref-key.png", input.get("referenceImageUrl"));
+        assertEquals(List.of("https://assets.example.com/storage/uploads/ref-key.png"), listValue(input.get("referenceImageUrls")));
+    }
+
+    @Test
+    void selectCharacterSheetAssetClonesLibraryAssetIntoWorkflowVersion() {
+        StageWorkflowEntity workflow = workflow("wf_pick_sheet_asset");
+        workflows.put(workflow.getWorkflowId(), workflow);
+        versions.put("sv_story", storyboardVersion(workflow.getWorkflowId(), storyboardClips(), storyboardMarkdownWithCharacters()));
+        when(storyboardPlanner.extractCharacterDefinitions(anyString())).thenReturn(List.of(
+            new TaskStoryboardPlanner.CharacterDefinition("林舒", "鬓角碎发，素色针织开衫", "女性，外观锚点：鬓角碎发，素色针织开衫")
+        ));
+        MaterialAssetEntity libraryAsset = asset("", "asset_library_sheet", "material_center", 0, "https://cdn.example.com/library-sheet.png", "image/png");
+        libraryAsset.setAssetRole("character_sheet");
+        libraryAsset.setSelectedForNext(0);
+        libraryAsset.setMetadataJson(WorkflowJsonSupport.write(Map.of(
+            "assetType", "character_sheet",
+            "description", "林舒三视图",
+            "styleKeywords", List.of("clean")
+        )));
+        assets.put(libraryAsset.getMaterialAssetId(), libraryAsset);
+
+        Map<String, Object> detail = service.selectCharacterSheetAsset(
+            workflow.getWorkflowId(),
+            1001,
+            new SelectCharacterSheetAssetRequest(libraryAsset.getMaterialAssetId())
+        );
+
+        List<StageVersionEntity> sheetVersions = listStageVersions(workflow.getWorkflowId()).stream()
+            .filter(item -> intValue(item.getClipIndex(), 0) == 1001)
+            .toList();
+        assertEquals(1, sheetVersions.size());
+        StageVersionEntity version = sheetVersions.get(0);
+        assertEquals(libraryAsset.getMaterialAssetId(), version.getSourceMaterialAssetId());
+        assertEquals(1, version.getSelected());
+        assertEquals("character_sheet", mapValue(WorkflowJsonSupport.readMap(version.getOutputSummaryJson())).get("variantKind"));
+        MaterialAssetEntity boundAsset = assets.get(version.getMaterialAssetId());
+        assertNotNull(boundAsset);
+        assertEquals(workflow.getWorkflowId(), boundAsset.getWorkflowId());
+        assertEquals("character_sheet", boundAsset.getAssetRole());
+        assertEquals(libraryAsset.getMaterialAssetId(), boundAsset.getSourceMaterialId());
+        assertEquals(0, libraryAsset.getSelectedForNext());
+        List<Map<String, Object>> characterSheets = listValue(detail.get("characterSheets"));
+        assertFalse(listValue(characterSheets.get(0).get("versions")).isEmpty());
     }
 
     @Test
@@ -748,12 +976,12 @@ class WorkflowApplicationServiceTest {
         workflow.setAspectRatio("9:16");
         workflow.setStylePreset("cinematic");
         workflow.setTextAnalysisModel("text-model");
-        workflow.setVisionModel("vision-model");
         workflow.setImageModel("image-model");
         workflow.setVideoModel("video-model");
         workflow.setVideoSize("720*1280");
+        workflow.setDurationMode("auto");
         workflow.setMinDurationSeconds(5);
-        workflow.setMaxDurationSeconds(5);
+        workflow.setMaxDurationSeconds(12);
         workflow.setCurrentStage(WorkflowConstants.STAGE_KEYFRAME);
         workflow.setStatus(WorkflowConstants.STATUS_READY);
         workflow.setSelectedStoryboardVersionId(workflowId.equals("wf_2") ? "sv_story_2" : "sv_story");
@@ -1008,6 +1236,20 @@ class WorkflowApplicationServiceTest {
             """;
     }
 
+    private String adjustedStoryboardMarkdown() {
+        return """
+            【角色定义信息】
+            | 角色 | 性别年龄 | 人物定位 | 脸部五官 | 发型 | 体型身高 | 服装 | 稳定穿戴配饰 | 不可变视觉锚点 | 行为气质 | 说话风格 |
+            | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+            | 林舒 | 女性，约28岁 | 被旧案牵引进图书馆的调查者 | 杏眼，鼻梁挺直，唇形偏薄 | 黑色低马尾，鬓角一缕碎发 | 中等身高，肩背偏瘦 | 素色针织开衫，深色长裤 | 细框眼镜 | 鬓角碎发、细框眼镜、素色针织开衫、深色长裤 | 克制谨慎 | 低声短句 |
+
+            【分镜脚本】
+            | 镜号 | 首帧描述 | 尾帧描述 | 分镜内容描述 | 时长 |
+            | :--- | :--- | :--- | :--- | :--- |
+            | 001 | 林舒（鬓角碎发、细框眼镜、素色针织开衫、深色长裤）站在废弃图书馆门口，画面左侧是半开的木门，右侧是落灰书架。 | 林舒（鬓角碎发、细框眼镜、素色针织开衫、深色长裤）仍站在同一扇半开木门旁，转头望向右侧落灰书架。 | 林舒推开木门后停住，先观察门内过道，再转头看向右侧书架。 | 5s |
+            """;
+    }
+
     private Map<String, Object> imageRun(String runId, String fileUrl) {
         return imageRun(runId, fileUrl, fileUrl);
     }
@@ -1031,9 +1273,13 @@ class WorkflowApplicationServiceTest {
     }
 
     private Map<String, Object> scriptRun(String runId, String scriptMarkdown, String markdownUrl) {
+        return scriptRun(runId, "script", scriptMarkdown, markdownUrl);
+    }
+
+    private Map<String, Object> scriptRun(String runId, String kind, String scriptMarkdown, String markdownUrl) {
         return Map.of(
             "id", runId,
-            "kind", "script",
+            "kind", kind,
             "status", "succeeded",
             "result", Map.of(
                 "scriptMarkdown", scriptMarkdown,

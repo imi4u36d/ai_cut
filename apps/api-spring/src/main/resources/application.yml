@@ -43,6 +43,7 @@ jiandou:
     root-dir: ${JIANDOU_STORAGE_ROOT:../../storage}
     uploads-dir: uploads
     generation-runs-dir: gen/_runs
+    public-base-url: ${JIANDOU_STORAGE_PUBLIC_BASE_URL:}
   task:
     defaults:
       source-file-name: text_prompt

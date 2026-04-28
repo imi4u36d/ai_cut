@@ -32,7 +32,6 @@ class TaskRequestSnapshotFactoryTest {
             null,
             null,
             " text-model ",
-            "",
             " image-model ",
             " video-model ",
             " ",
@@ -53,7 +52,6 @@ class TaskRequestSnapshotFactoryTest {
         assertEquals("9:16", snapshot.aspectRatio());
         assertEquals("noir", snapshot.stylePreset());
         assertEquals("text-model", snapshot.textAnalysisModel());
-        assertEquals("", snapshot.visionModel());
         assertEquals("image-model", snapshot.imageModel());
         assertEquals("video-model", snapshot.videoModel());
         assertEquals("1080*1920", snapshot.videoSize());
@@ -73,7 +71,6 @@ class TaskRequestSnapshotFactoryTest {
         TaskRecord task = new TaskRecord();
         CreateGenerationTaskRequest request = new CreateGenerationTaskRequest(
             "title",
-            null,
             null,
             null,
             null,

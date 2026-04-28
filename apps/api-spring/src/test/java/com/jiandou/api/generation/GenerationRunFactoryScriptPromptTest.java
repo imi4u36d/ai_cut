@@ -42,6 +42,11 @@ class GenerationRunFactoryScriptPromptTest {
 
     private static final String SCRIPT_SYSTEM_PROMPT = """
         ### AI 短剧分镜生成指令（严格执行版）
+        表格必须严格使用以下表头：`| 角色 | 性别年龄 | 人物定位 | 脸部五官 | 发型 | 体型身高 | 服装 | 稳定穿戴配饰 | 不可变视觉锚点 | 行为气质 | 说话风格 |`
+        每个核心角色只能占一行
+        人物定位 指角色在故事里的身份、关系、目标、当前处境或剧情功能
+        不可变视觉锚点 只允许写身体、脸、发型、体型、固定着装和稳定穿戴配饰
+        禁止写抱试卷、拿飞盘、手持手机、当前姿势、当前动作、场景物件、临时道具或剧情状态
         必须输出 Markdown 表格
         分镜内容描述必须尽可能详细
         运镜只能使用极简基础表达
@@ -83,6 +88,11 @@ class GenerationRunFactoryScriptPromptTest {
     void createScriptRunUsesRefactoredStoryboardPromptContract() {
         List<String> promptRows = List.of(
             "### AI 短剧分镜生成指令（严格执行版）",
+            "表格必须严格使用以下表头：`| 角色 | 性别年龄 | 人物定位 | 脸部五官 | 发型 | 体型身高 | 服装 | 稳定穿戴配饰 | 不可变视觉锚点 | 行为气质 | 说话风格 |`",
+            "每个核心角色只能占一行",
+            "人物定位 指角色在故事里的身份、关系、目标、当前处境或剧情功能",
+            "不可变视觉锚点 只允许写身体、脸、发型、体型、固定着装和稳定穿戴配饰",
+            "禁止写抱试卷、拿飞盘、手持手机、当前姿势、当前动作、场景物件、临时道具或剧情状态",
             "必须输出 Markdown 表格",
             "分镜内容描述必须尽可能详细",
             "运镜只能使用极简基础表达",
@@ -195,10 +205,7 @@ class GenerationRunFactoryScriptPromptTest {
 
         Map<String, Object> request = new LinkedHashMap<>();
         request.put("kind", "script");
-        request.put("input", Map.of(
-            "text", "女主在雨夜街头看见失踪多年的哥哥。",
-            "extraPrompt", "补充要求：人物表情更克制，离别氛围更冷。"
-        ));
+        request.put("input", Map.of("text", "女主在雨夜街头看见失踪多年的哥哥。"));
         request.put("model", Map.of("textAnalysisModel", "gpt-text"));
         request.put("options", Map.of("visualStyle", "电影写实"));
 
@@ -212,8 +219,7 @@ class GenerationRunFactoryScriptPromptTest {
         assertFalse(capturedSystemPrompt[0].contains("下一拍衔接"));
         assertEquals(2, invocationCount[0]);
         assertTrue(capturedUserPrompt[0].contains("请严格遵循 system prompt 的输出格式与规则"));
-        assertTrue(capturedUserPrompt[0].contains("【额外追加要求】"));
-        assertTrue(capturedUserPrompt[0].contains("补充要求：人物表情更克制，离别氛围更冷。"));
+        assertFalse(capturedUserPrompt[0].contains("【额外追加要求】"));
         assertTrue(capturedReviewSystemPrompt[0].contains("二次审校要求"));
         assertTrue(capturedReviewSystemPrompt[0].contains("遗漏共同背景平面/其他环境锚点"));
         assertTrue(capturedReviewSystemPrompt[0].contains("空间定位逻辑"));
@@ -227,8 +233,7 @@ class GenerationRunFactoryScriptPromptTest {
         assertTrue(capturedReviewUserPrompt[0].contains("是否写出桌子、门、过道、墙角、书架等其他环境锚点"));
         assertTrue(capturedReviewUserPrompt[0].contains("人物位置是否使用“画面左侧/右侧 + 背景参照物”的双重锚定"));
         assertTrue(capturedReviewUserPrompt[0].contains("尾帧人物位置是首帧动作的自然延续"));
-        assertTrue(capturedReviewUserPrompt[0].contains("【额外追加要求】"));
-        assertTrue(capturedReviewUserPrompt[0].contains("补充要求：人物表情更克制，离别氛围更冷。"));
+        assertFalse(capturedReviewUserPrompt[0].contains("【额外追加要求】"));
         assertTrue(capturedReviewUserPrompt[0].contains("林舒站在桌边。"));
         @SuppressWarnings("unchecked")
         Map<String, Object> result = (Map<String, Object>) run.get("result");
@@ -236,7 +241,7 @@ class GenerationRunFactoryScriptPromptTest {
         @SuppressWarnings("unchecked")
         Map<String, Object> metadata = (Map<String, Object>) result.get("metadata");
         assertTrue(String.valueOf(metadata.get("draftScriptMarkdown")).contains("林舒站在桌边。"));
-        assertEquals("补充要求：人物表情更克制，离别氛围更冷。", metadata.get("extraPrompt"));
+        assertFalse(metadata.containsKey("extraPrompt"));
         assertEquals(true, metadata.get("reviewApplied"));
         assertEquals(2, ((java.util.List<?>) metadata.get("providerInteractions")).size());
         assertTrue(String.valueOf(metadata.get("providerRequest")).contains("https://api.example.com/v1/responses"));
@@ -315,6 +320,148 @@ class GenerationRunFactoryScriptPromptTest {
         assertEquals("resp_script_review_invalid", metadata.get("reviewResponseId"));
         assertEquals("review output missing character definitions", metadata.get("reviewFallbackReason"));
         assertEquals(2, ((java.util.List<?>) metadata.get("providerInteractions")).size());
+    }
+
+    @Test
+    void createScriptAdjustRunUsesOriginalStoryboardAndOptionalRequirement() {
+        String[] capturedSystemPrompt = new String[1];
+        String[] capturedUserPrompt = new String[1];
+        int[] invocationCount = new int[1];
+        TextModelProviderRegistry textModelProviderRegistry = registry(new TextModelProvider() {
+            @Override
+            public boolean supports(ModelRuntimeProfile profile) {
+                return true;
+            }
+
+            @Override
+            public TextModelResponse generate(
+                ModelRuntimeProfile profile,
+                TextModelInvocation invocation
+            ) {
+                TextCompletionInvocation textInvocation = (TextCompletionInvocation) invocation;
+                invocationCount[0]++;
+                capturedSystemPrompt[0] = textInvocation.systemPrompt();
+                capturedUserPrompt[0] = textInvocation.userPrompt();
+                return new TextModelResponse(
+                    """
+                        【角色定义信息】
+                        | 角色 | 性别年龄 | 人物定位 | 脸部五官 | 发型 | 体型身高 | 服装 | 稳定穿戴配饰 | 不可变视觉锚点 | 行为气质 | 说话风格 |
+                        | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+                        | 林舒 | 女性，28岁 | 调查者 | 杏眼，薄唇 | 黑色低马尾 | 中等身高 | 素色针织开衫 | 细框眼镜 | 黑色低马尾、细框眼镜、素色针织开衫 | 克制 | 低声短句 |
+
+                        【分镜脚本】
+                        | 镜号 | 首帧描述 (Start Frame) | 尾帧描述 (End Frame) | 分镜内容描述 | 时长 |
+                        | :--- | :--- | :--- | :--- | :--- |
+                        | 001 | 林舒站在门口。 | 林舒走到书架旁。 | 林舒从门口走到书架旁。 | 8s |
+                        """,
+                    "https://api.example.com/v1/responses",
+                    "api.example.com",
+                    10,
+                    true,
+                    "resp_script_adjust",
+                    Map.of("endpoint", "https://api.example.com/v1/responses", "body", Map.of("model", "gpt-text")),
+                    Map.of("id", "resp_script_adjust"),
+                    200
+                );
+            }
+        });
+        GenerationRunFactory factory = createFactory(textModelProviderRegistry);
+        String sourceStoryboard = """
+            【角色定义信息】
+            - 林舒：外观锚点未明确。
+
+            【分镜脚本】
+            | 镜号 | 首帧描述 | 尾帧描述 | 分镜内容描述 | 时长 |
+            | :--- | :--- | :--- | :--- | :--- |
+            | 001 | 林舒站在门口。 | 林舒走到书架旁。 | 林舒移动。 | 8s |
+            """;
+
+        Map<String, Object> request = new LinkedHashMap<>();
+        request.put("kind", "script_adjust");
+        request.put("input", Map.of(
+            "text", "林舒进入废弃图书馆。",
+            "scriptMarkdown", sourceStoryboard,
+            "adjustmentPrompt", "补强角色三视图外观信息"
+        ));
+        request.put("model", Map.of("textAnalysisModel", "gpt-text"));
+        request.put("options", Map.of("visualStyle", "电影写实"));
+
+        Map<String, Object> run = factory.createScriptAdjustRun("run_script_adjust_1", request);
+
+        assertEquals(1, invocationCount[0]);
+        assertTrue(capturedSystemPrompt[0].contains("二次审校要求"));
+        assertTrue(capturedUserPrompt[0].contains("# 原分镜脚本"));
+        assertTrue(capturedUserPrompt[0].contains("补强角色三视图外观信息"));
+        assertTrue(capturedUserPrompt[0].contains("林舒移动。"));
+        @SuppressWarnings("unchecked")
+        Map<String, Object> result = (Map<String, Object>) run.get("result");
+        assertEquals("script_adjust", result.get("kind"));
+        assertEquals("user_prompt", result.get("adjustmentMode"));
+        assertTrue(String.valueOf(result.get("scriptMarkdown")).contains("细框眼镜"));
+        @SuppressWarnings("unchecked")
+        Map<String, Object> metadata = (Map<String, Object>) result.get("metadata");
+        assertEquals("补强角色三视图外观信息", metadata.get("adjustmentPrompt"));
+        assertEquals(1, ((java.util.List<?>) metadata.get("providerInteractions")).size());
+    }
+
+    @Test
+    void createScriptAdjustRunUsesSelfReviewWhenRequirementBlank() {
+        String[] capturedUserPrompt = new String[1];
+        TextModelProviderRegistry textModelProviderRegistry = registry(new TextModelProvider() {
+            @Override
+            public boolean supports(ModelRuntimeProfile profile) {
+                return true;
+            }
+
+            @Override
+            public TextModelResponse generate(
+                ModelRuntimeProfile profile,
+                TextModelInvocation invocation
+            ) {
+                capturedUserPrompt[0] = ((TextCompletionInvocation) invocation).userPrompt();
+                return new TextModelResponse(
+                    """
+                        【角色定义信息】
+                        - 林舒：外观锚点未明确。
+
+                        【分镜脚本】
+                        | 镜号 | 首帧描述 | 尾帧描述 | 分镜内容描述 | 时长 |
+                        | :--- | :--- | :--- | :--- | :--- |
+                        | 001 | 林舒站在门口。 | 林舒走到书架旁。 | 林舒从门口走到书架旁。 | 8s |
+                        """,
+                    "https://api.example.com/v1/responses",
+                    "api.example.com",
+                    10,
+                    true,
+                    "resp_script_adjust_self",
+                    Map.of("endpoint", "https://api.example.com/v1/responses", "body", Map.of("model", "gpt-text")),
+                    Map.of("id", "resp_script_adjust_self"),
+                    200
+                );
+            }
+        });
+        GenerationRunFactory factory = createFactory(textModelProviderRegistry);
+        Map<String, Object> request = new LinkedHashMap<>();
+        request.put("kind", "script_adjust");
+        request.put("input", Map.of(
+            "scriptMarkdown", """
+                【角色定义信息】
+                - 林舒：外观锚点未明确。
+
+                【分镜脚本】
+                | 镜号 | 首帧描述 | 尾帧描述 | 分镜内容描述 | 时长 |
+                | :--- | :--- | :--- | :--- | :--- |
+                | 001 | 林舒站在门口。 | 林舒走到书架旁。 | 林舒移动。 | 8s |
+                """
+        ));
+        request.put("model", Map.of("textAnalysisModel", "gpt-text"));
+
+        Map<String, Object> run = factory.createScriptAdjustRun("run_script_adjust_2", request);
+
+        assertTrue(capturedUserPrompt[0].contains("用户没有输入额外调整要求"));
+        @SuppressWarnings("unchecked")
+        Map<String, Object> result = (Map<String, Object>) run.get("result");
+        assertEquals("self_review", result.get("adjustmentMode"));
     }
 
     /**

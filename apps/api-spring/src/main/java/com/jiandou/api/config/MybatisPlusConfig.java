@@ -16,7 +16,6 @@ import com.jiandou.api.task.infrastructure.mybatis.TaskResultMapper;
 import com.jiandou.api.task.infrastructure.mybatis.TaskStageRunMapper;
 import com.jiandou.api.task.infrastructure.mybatis.TaskStatusHistoryMapper;
 import com.jiandou.api.task.infrastructure.mybatis.WorkerInstanceMapper;
-import com.jiandou.api.workflow.infrastructure.mybatis.MaterialAssetTagMapper;
 import com.jiandou.api.workflow.infrastructure.mybatis.StageVersionMapper;
 import com.jiandou.api.workflow.infrastructure.mybatis.StageWorkflowMapper;
 import com.zaxxer.hikari.HikariDataSource;
@@ -73,7 +72,6 @@ public class MybatisPlusConfig {
         configuration.addMapper(TaskModelCallMapper.class);
         configuration.addMapper(TaskResultMapper.class);
         configuration.addMapper(MaterialAssetMapper.class);
-        configuration.addMapper(MaterialAssetTagMapper.class);
         configuration.addMapper(SystemLogMapper.class);
         configuration.addMapper(TaskQueueEventMapper.class);
         configuration.addMapper(WorkerInstanceMapper.class);

@@ -17,7 +17,6 @@ import com.jiandou.api.generation.runtime.ModelRuntimePropertiesResolver;
 import com.jiandou.api.generation.runtime.PromptTemplateResolver;
 import com.jiandou.api.generation.text.TextCompletionInvocation;
 import com.jiandou.api.generation.text.TextModelProviderRegistry;
-import com.jiandou.api.generation.text.VisionCompletionInvocation;
 import com.jiandou.api.generation.video.VideoGenerationRequest;
 import com.jiandou.api.generation.video.VideoModelProvider;
 import com.jiandou.api.generation.video.VideoModelProviderRegistry;
@@ -163,14 +162,13 @@ public class GenerationRunFactory {
     public Map<String, Object> createScriptRun(String runId, Map<String, Object> request) {
         Long userId = userIdFromRequest(request);
         String sourceText = support.nestedValue(request, "input", "text", "");
-        String extraPrompt = support.nestedValue(request, "input", "extraPrompt", "");
         String visualStyle = support.nestedValue(request, "options", "visualStyle", "AI 自动决策");
         String requestedModel = support.requiredModel(support.nestedValue(request, "model", "textAnalysisModel", ""), "textAnalysisModel", "文本模型");
         ModelRuntimeProfile profile = modelResolver.resolveTextProfile(requestedModel, userId);
         if (sourceText.isBlank()) {
             throw new IllegalArgumentException("脚本输入文本不能为空");
         }
-        String prompt = buildScriptUserPrompt(sourceText, visualStyle, extraPrompt);
+        String prompt = buildScriptUserPrompt(sourceText, visualStyle);
         List<Map<String, Object>> callChain = new ArrayList<>();
         List<Map<String, Object>> providerInteractions = new ArrayList<>();
         TextModelResponse draftResponse = textModelProviderRegistry.resolve(profile).generate(
@@ -194,7 +192,7 @@ public class GenerationRunFactory {
             "responsesApi", draftResponse.responsesApi(),
             "responseId", draftResponse.responseId()
         )));
-        String reviewPrompt = buildScriptReviewUserPrompt(sourceText, visualStyle, draftScriptMarkdown, extraPrompt);
+        String reviewPrompt = buildScriptReviewUserPrompt(sourceText, visualStyle, draftScriptMarkdown);
         String scriptMarkdown = draftScriptMarkdown;
         TextModelResponse finalResponse = draftResponse;
         TextModelResponse reviewResponse = null;
@@ -258,7 +256,6 @@ public class GenerationRunFactory {
         );
         Map<String, Object> metadata = new LinkedHashMap<>();
         metadata.put("visualStyle", visualStyle);
-        metadata.put("extraPrompt", extraPrompt);
         metadata.put("draftScriptMarkdown", draftScriptMarkdown);
         metadata.put("scriptMarkdown", scriptMarkdown);
         metadata.put("reviewApplied", reviewApplied);
@@ -279,7 +276,6 @@ public class GenerationRunFactory {
         result.put("kind", GenerationRunKinds.SCRIPT);
         result.put("sourceText", sourceText);
         result.put("visualStyle", visualStyle);
-        result.put("extraPrompt", extraPrompt);
         result.put("prompt", prompt);
         result.put("outputFormat", "markdown");
         result.put("scriptMarkdown", scriptMarkdown);
@@ -290,6 +286,99 @@ public class GenerationRunFactory {
         result.put("metadata", metadata);
         result.put("modelInfo", modelInfo);
         return support.runEnvelope(runId, GenerationRunKinds.SCRIPT, request, result, "resultScript");
+    }
+
+    /**
+     * 创建脚本调整运行。
+     * @param runId 运行标识值
+     * @param request 请求体
+     * @return 处理结果
+     */
+    public Map<String, Object> createScriptAdjustRun(String runId, Map<String, Object> request) {
+        Long userId = userIdFromRequest(request);
+        String sourceText = support.firstNonBlank(
+            support.nestedValue(request, "input", "text", ""),
+            support.nestedValue(request, "input", "sourceText", "")
+        );
+        String scriptMarkdown = support.nestedValue(request, "input", "scriptMarkdown", "");
+        String adjustmentPrompt = support.nestedValue(request, "input", "adjustmentPrompt", "");
+        String visualStyle = support.nestedValue(request, "options", "visualStyle", "AI 自动决策");
+        String requestedModel = support.requiredModel(support.nestedValue(request, "model", "textAnalysisModel", ""), "textAnalysisModel", "文本模型");
+        ModelRuntimeProfile profile = modelResolver.resolveTextProfile(requestedModel, userId);
+        if (scriptMarkdown.isBlank()) {
+            throw new IllegalArgumentException("原分镜脚本不能为空");
+        }
+        String prompt = buildScriptAdjustUserPrompt(sourceText, visualStyle, scriptMarkdown, adjustmentPrompt);
+        List<Map<String, Object>> callChain = new ArrayList<>();
+        List<Map<String, Object>> providerInteractions = new ArrayList<>();
+        TextModelResponse adjustResponse = textModelProviderRegistry.resolve(profile).generate(
+            profile,
+            new TextCompletionInvocation(
+                buildScriptReviewSystemPrompt(),
+                prompt,
+                support.boundedTemperature(profile.temperature(), 0.0, 0.2),
+                Math.max(800, profile.maxTokens())
+            )
+        );
+        providerInteractions.add(textProviderInteraction("adjust", adjustResponse));
+        callChain.add(support.callLog("script", "script.adjust_requested", "success", "分镜脚本调整请求已发送到文本模型。", Map.of(
+            "provider", profile.provider(),
+            "modelName", profile.modelName(),
+            "endpointHost", adjustResponse.endpointHost()
+        )));
+        String adjustedScriptMarkdown = support.stripMarkdownFence(adjustResponse.text());
+        String invalidReason = invalidStoryboardMarkdownReason(adjustedScriptMarkdown);
+        if (!invalidReason.isBlank()) {
+            callChain.add(support.callLog("script", "script.adjust_invalid", "error", "分镜脚本调整结果无效。", Map.of(
+                "reason", invalidReason,
+                "responseId", adjustResponse.responseId()
+            )));
+            throw new IllegalStateException("分镜脚本调整结果无效：" + invalidReason);
+        }
+        callChain.add(support.callLog("script", "script.adjust_completed", "success", "分镜脚本调整完成。", Map.of(
+            "latencyMs", adjustResponse.latencyMs(),
+            "responsesApi", adjustResponse.responsesApi(),
+            "responseId", adjustResponse.responseId(),
+            "adjustmentMode", adjustmentPrompt.isBlank() ? "self_review" : "user_prompt"
+        )));
+        TextArtifact markdownArtifact = support.writeTextArtifact(runId, request, "script.md", adjustedScriptMarkdown);
+        Map<String, Object> modelInfo = support.buildModelInfo(
+            profile,
+            requestedModel,
+            "script",
+            adjustResponse,
+            "spring-text-script-adjust"
+        );
+        Map<String, Object> metadata = new LinkedHashMap<>();
+        metadata.put("visualStyle", visualStyle);
+        metadata.put("scriptMarkdown", adjustedScriptMarkdown);
+        metadata.put("sourceScriptMarkdown", scriptMarkdown);
+        metadata.put("adjustmentPrompt", adjustmentPrompt);
+        metadata.put("adjustmentMode", adjustmentPrompt.isBlank() ? "self_review" : "user_prompt");
+        metadata.put("adjustmentResponseId", adjustResponse.responseId());
+        metadata.put("providerInteractions", providerInteractions);
+        metadata.put("providerRequest", adjustResponse.providerRequest());
+        metadata.put("providerResponse", adjustResponse.providerResponse());
+        metadata.put("providerHttpStatus", adjustResponse.httpStatus());
+        metadata.put("fileUrl", markdownArtifact.publicUrl());
+        metadata.put("configSource", profile.source());
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("runId", runId);
+        result.put("kind", GenerationRunKinds.SCRIPT_ADJUST);
+        result.put("sourceText", sourceText);
+        result.put("visualStyle", visualStyle);
+        result.put("prompt", prompt);
+        result.put("adjustmentPrompt", adjustmentPrompt);
+        result.put("adjustmentMode", adjustmentPrompt.isBlank() ? "self_review" : "user_prompt");
+        result.put("outputFormat", "markdown");
+        result.put("scriptMarkdown", adjustedScriptMarkdown);
+        result.put("markdownPath", markdownArtifact.absolutePath());
+        result.put("markdownUrl", markdownArtifact.publicUrl());
+        result.put("mimeType", "text/markdown");
+        result.put("callChain", callChain);
+        result.put("metadata", metadata);
+        result.put("modelInfo", modelInfo);
+        return support.runEnvelope(runId, GenerationRunKinds.SCRIPT_ADJUST, request, result, "resultScript");
     }
 
     /**
@@ -376,7 +465,6 @@ public class GenerationRunFactory {
         metadata.put("promptRewriteProvider", keyframeAttempt == null ? textProfile.provider() : keyframeAttempt.profile().provider());
         metadata.put("promptRewriteModel", keyframeAttempt == null ? textProfile.modelName() : keyframeAttempt.profile().modelName());
         metadata.put("promptRewriteSkipped", true);
-        metadata.put("visionAnalysisSkipped", true);
         metadata.put("referenceImageUrl", referenceImageUrl);
         metadata.put("referenceImageUrls", referenceImageUrls);
         metadata.put("requestedSeed", requestedSeed);
@@ -437,7 +525,6 @@ public class GenerationRunFactory {
         Integer requestedSeed = support.nestedNullableInt(request, "input", "seed");
         String stylePreset = support.nestedValue(request, "options", "stylePreset", modelResolver.value("catalog.defaults", "style_preset", "cinematic"));
         String textModel = support.requiredModel(support.nestedValue(request, "model", "textAnalysisModel", ""), "textAnalysisModel", "文本模型");
-        String requestedVisionModel = support.requiredModel(support.nestedValue(request, "model", "visionModel", ""), "visionModel", "视觉模型");
         String requestedVideoModel = support.requiredModel(support.nestedValue(request, "model", "providerModel", ""), "providerModel", "视频模型");
         MediaProviderProfile videoProfile = modelResolver.resolveMediaProfile(requestedVideoModel, GenerationModelKinds.VIDEO, userId);
         int durationSeconds = normalizeVideoDurationSeconds(
@@ -453,42 +540,9 @@ public class GenerationRunFactory {
         boolean generateAudio = support.nestedBoolean(request, "input", "generateAudio", true);
         boolean returnLastFrame = support.nestedBoolean(request, "input", "returnLastFrame", true);
         ModelRuntimeProfile textProfile = modelResolver.resolveTextProfile(textModel, userId);
-        ModelRuntimeProfile visionProfile = modelResolver.resolveTextProfile(requestedVisionModel, userId);
-        Integer appliedVisionSeed = visionProfile.supportsSeed() ? requestedSeed : null;
         Integer appliedVideoSeed = videoProfile.supportsSeed() ? requestedSeed : null;
         List<Map<String, Object>> callChain = new ArrayList<>();
-        TextModelResponse visionResponse = null;
-        String visionAnalysisNotes = "";
         List<Map<String, Object>> providerInteractions = new ArrayList<>();
-        if (!firstFrameUrl.isBlank()) {
-            List<String> images = new ArrayList<>();
-            String normalizedFirstFrameUrl = normalizeExternalMediaUrl(firstFrameUrl);
-            if (!normalizedFirstFrameUrl.isBlank()) {
-                images.add(normalizedFirstFrameUrl);
-            }
-            String normalizedLastFrameUrl = normalizeExternalMediaUrl(lastFrameUrl);
-            if (!normalizedLastFrameUrl.isBlank()) {
-                images.add(normalizedLastFrameUrl);
-            }
-            visionResponse = textModelProviderRegistry.resolve(visionProfile).generate(
-                visionProfile,
-                new VisionCompletionInvocation(
-                    buildVisionAnalysisSystemPrompt("video"),
-                    buildVisionAnalysisUserPrompt("video", prompt, stylePreset),
-                    0.2,
-                    640,
-                    images,
-                    appliedVisionSeed
-                )
-            );
-            visionAnalysisNotes = support.stripMarkdownFence(visionResponse.text());
-            providerInteractions.add(textProviderInteraction("vision", visionResponse));
-            callChain.add(support.callLog("vision", "video.reference_analyzed", "success", "视觉模型已完成首尾帧分析。", Map.of(
-                "latencyMs", visionResponse.latencyMs(),
-                "endpointHost", visionResponse.endpointHost(),
-                "modelName", visionProfile.modelName()
-            )));
-        }
         String negativePrompt = buildNegativePrompt("video");
         String shapedPrompt = support.appendNegativePrompt(prompt, negativePrompt);
         boolean cameraFixed = support.nestedBoolean(request, "input", "cameraFixed", support.inferSeedanceCameraFixed(shapedPrompt, videoProfile.cameraFixed()));
@@ -548,13 +602,6 @@ public class GenerationRunFactory {
         metadata.put("hasAudio", generateAudio);
         metadata.put("textAnalysisProvider", textProfile.provider());
         metadata.put("textAnalysisModel", textProfile.modelName());
-        metadata.put("visionAnalysisProvider", visionProfile.provider());
-        metadata.put("visionAnalysisModel", visionProfile.modelName());
-        metadata.put("visionAnalysisEndpointHost", visionResponse == null ? visionProfile.endpointHost() : visionResponse.endpointHost());
-        metadata.put("visionAnalysisNotes", visionAnalysisNotes);
-        if (visionResponse != null) {
-            metadata.put("visionProviderInteraction", textProviderInteraction("vision", visionResponse));
-        }
         metadata.put("configSource", videoProfile.source());
         metadata.put("remoteSourceUrl", "");
         metadata.put("provider", submission.provider());
@@ -571,7 +618,6 @@ public class GenerationRunFactory {
         metadata.put("requestedDurationSeconds", requestedDurationSeconds);
         metadata.put("appliedDurationSeconds", durationSeconds);
         metadata.put("requestedSeed", requestedSeed);
-        metadata.put("visionAnalysisSeed", appliedVisionSeed);
         metadata.put("videoGenerationSeed", appliedVideoSeed);
         metadata.put("cameraFixed", cameraFixed);
         metadata.put("watermark", watermark);
@@ -594,12 +640,12 @@ public class GenerationRunFactory {
         result.put("modelInfo", support.buildMediaModelInfo(
             textProfile,
             null,
-            visionProfile,
+            null,
             videoProfile,
             requestedVideoModel,
             GenerationModelKinds.VIDEO,
             null,
-            visionResponse,
+            null,
             submission.providerModel(),
             submission.endpointHost(),
             submission.taskEndpointHost(),
@@ -876,7 +922,7 @@ public class GenerationRunFactory {
      * @param visualStyle visual风格值
      * @return 处理结果
      */
-    private String buildScriptUserPrompt(String sourceText, String visualStyle, String extraPrompt) {
+    private String buildScriptUserPrompt(String sourceText, String visualStyle) {
         String styleLine = "AI 自动决策".equalsIgnoreCase(visualStyle) || visualStyle.isBlank()
             ? "请根据题材自动选择并保持统一风格。"
             : "额外视觉风格要求：" + visualStyle + "。";
@@ -887,12 +933,10 @@ public class GenerationRunFactory {
             【小说内容】：
             %s
 
-            %s
-
             ---
 
             请严格遵循 system prompt 的输出格式与规则，不要输出解释性文字。
-            """.formatted(styleLine, sourceText, buildExtraPromptSection(extraPrompt));
+            """.formatted(styleLine, sourceText);
     }
 
     private String buildScriptReviewSystemPrompt() {
@@ -907,13 +951,14 @@ public class GenerationRunFactory {
             4. 同一镜头内首尾帧是否真正属于同一场景、同一空间坐标系、同一 seed 理解下的连续画面。
             5. 是否存在复杂运镜、氛围词、空泛修辞，若有必须删减为简单直接的可执行描述。
             6. 重点检查空间定位逻辑：是否先建立全局坐标系，并明确镜头视角（正视/侧视/俯视）、背景层、前景/中景/远景深度层；多人是否共享同一背景平面，是否补充了桌子、门、过道、墙角、书架等其他环境锚点；人物位置是否使用“画面左侧/右侧 + 背景参照物”的双重锚定；人物移动路径是否避开桌子、墙壁等固定障碍；相对而坐时左右人物朝向是否相对；起身、转身等动作是否预留足够物理空间；同一镜头内背景元素不得位移或左右互换，尾帧人物位置必须是首帧动作的自然延续，严禁瞬移。
+            7. 逐段检查上一段、当前段、下一段是否能合理串联；人物进入/离开、转身、坐下/起身、拿取/放下道具、场景切换必须有可见路径或明确触发动作，人物和场景变化必须符合基本物理规律，禁止瞬移、穿墙、无因变装、无因换场、无因改变道具位置。
 
             你的任务是输出“修正后的完整最终版分镜脚本”，不是输出审校意见。
             只输出最终的 `【角色定义信息】` 和 `【分镜脚本】`。
             """;
     }
 
-    private String buildScriptReviewUserPrompt(String sourceText, String visualStyle, String draftScriptMarkdown, String extraPrompt) {
+    private String buildScriptReviewUserPrompt(String sourceText, String visualStyle, String draftScriptMarkdown) {
         String styleLine = "AI 自动决策".equalsIgnoreCase(visualStyle) || visualStyle.isBlank()
             ? "请保持题材匹配但不要额外发散风格。"
             : "额外视觉风格要求：" + visualStyle + "。";
@@ -931,20 +976,44 @@ public class GenerationRunFactory {
             # 当前分镜初稿
             %s
 
+            ---
+
+            请直接输出修正后的完整最终版分镜脚本，不要解释改了什么，不要输出审校说明。
+            """.formatted(sourceText, styleLine, draftScriptMarkdown);
+    }
+
+    private String buildScriptAdjustUserPrompt(String sourceText, String visualStyle, String sourceScriptMarkdown, String adjustmentPrompt) {
+        String styleLine = "AI 自动决策".equalsIgnoreCase(visualStyle) || visualStyle.isBlank()
+            ? "请保持题材匹配但不要额外发散风格。"
+            : "额外视觉风格要求：" + visualStyle + "。";
+        String requirement = adjustmentPrompt == null || adjustmentPrompt.isBlank()
+            ? "用户没有输入额外调整要求。请你自行审查原分镜脚本，修正角色定义、首尾帧连续性、空间锚点、物理合理性、对白来源和输出格式问题。"
+            : "请优先落实以下用户调整要求，同时保留原分镜中已经合理、连续、符合格式的内容：\n" + adjustmentPrompt.trim();
+        String sourceSection = sourceText == null || sourceText.isBlank()
+            ? "未提供额外原始正文，请以原分镜脚本为主进行审校。"
+            : sourceText;
+        return """
+            # 任务说明
+            请基于原分镜脚本进行二次调整，输出一个可直接替换使用的完整新版分镜脚本。
+            这不是输出审校意见，也不是只输出差异；必须输出完整的 `【角色定义信息】` 和 `【分镜脚本】`。
+            调整时必须遵循 system prompt 中的角色定义、单角色单行、角色三视图可用外观信息、不可变视觉锚点、首尾帧连续性、空间定位和物理合理性规则。
+
+            # 原始正文
+            %s
+
+            # 风格要求
+            %s
+
+            # 调整要求
+            %s
+
+            # 原分镜脚本
             %s
 
             ---
 
-            请直接输出修正后的完整最终版分镜脚本，不要解释改了什么，不要输出审校说明。
-            """.formatted(sourceText, styleLine, draftScriptMarkdown, buildExtraPromptSection(extraPrompt));
-    }
-
-    private String buildExtraPromptSection(String extraPrompt) {
-        String normalized = extraPrompt == null ? "" : extraPrompt.trim();
-        if (normalized.isBlank()) {
-            return "";
-        }
-        return "【额外追加要求】：\n" + normalized;
+            请直接输出调整后的完整最终版分镜脚本，不要解释改了什么，不要输出审校说明。
+            """.formatted(sourceSection, styleLine, requirement, sourceScriptMarkdown);
     }
 
     private String invalidStoryboardMarkdownReason(String storyboardMarkdown) {
@@ -976,35 +1045,6 @@ public class GenerationRunFactory {
             return "review output missing storyboard rows";
         }
         return "";
-    }
-
-    /**
-     * 构建视觉分析系统提示词。
-     * @param mediaKind 媒体类型值
-     * @return 处理结果
-     */
-    private String buildVisionAnalysisSystemPrompt(String mediaKind) {
-        return """
-            你是影视连续性审校助手。结合用户剧情与图片输出两行内容：
-            1. 画面确认：当前画面关键可保留事实。
-            2. 连续性要求：后续%s生成必须保持或修正的要点。
-            """.formatted("video".equals(mediaKind) ? "视频" : "图片");
-    }
-
-    /**
-     * 构建视觉分析User提示词。
-     * @param mediaKind 媒体类型值
-     * @param prompt 提示词值
-     * @param stylePreset 风格预设值
-     * @return 处理结果
-     */
-    private String buildVisionAnalysisUserPrompt(String mediaKind, String prompt, String stylePreset) {
-        return """
-            请结合图片分析当前视觉内容，并为后续%s生成提炼约束。
-            风格预设：%s。
-            剧情任务：
-            %s
-            """.formatted("video".equals(mediaKind) ? "视频" : "图片", stylePreset, prompt);
     }
 
     /**

@@ -657,7 +657,6 @@ public class TaskViewMapper {
         GenerationRequestSnapshot snapshot = task.requestSnapshot() == null ? GenerationRequestSnapshot.empty() : task.requestSnapshot();
         Map<String, Object> row = new LinkedHashMap<>();
         row.put("textAnalysisModel", blankToNull(snapshot.textAnalysisModel()));
-        row.put("visionModel", blankToNull(snapshot.visionModel()));
         row.put("imageModel", blankToNull(snapshot.imageModel()));
         row.put("videoModel", blankToNull(snapshot.videoModel()));
         return row;

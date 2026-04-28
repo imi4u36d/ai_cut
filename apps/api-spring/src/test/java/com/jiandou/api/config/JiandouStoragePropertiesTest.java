@@ -30,6 +30,18 @@ class JiandouStoragePropertiesTest {
         );
     }
 
+    @Test
+    void buildExternallyAccessibleUrlUsesConfiguredStorageBase() {
+        JiandouStorageProperties properties = storageProperties(tempDir);
+        properties.setPublicBaseUrl("https://cdn.example.com/storage/");
+
+        assertEquals("https://cdn.example.com/storage/uploads/demo.png", properties.buildExternallyAccessibleUrl("uploads/demo.png"));
+        assertEquals(
+            tempDir.resolve("uploads/demo.png").toAbsolutePath().normalize(),
+            properties.resolvePublicUrl("https://cdn.example.com/storage/uploads/demo.png")
+        );
+    }
+
     private JiandouStorageProperties storageProperties(Path rootDir) {
         JiandouStorageProperties properties = new JiandouStorageProperties();
         properties.setRootDir(rootDir.toString());

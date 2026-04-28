@@ -23,7 +23,6 @@ import com.jiandou.api.generation.text.TextCompletionInvocation;
 import com.jiandou.api.generation.text.TextModelInvocation;
 import com.jiandou.api.generation.text.TextModelProvider;
 import com.jiandou.api.generation.text.TextModelProviderRegistry;
-import com.jiandou.api.generation.text.VisionCompletionInvocation;
 import com.jiandou.api.generation.video.VideoGenerationRequest;
 import com.jiandou.api.generation.video.VideoModelProvider;
 import com.jiandou.api.generation.video.VideoModelProviderRegistry;
@@ -53,16 +52,6 @@ class GenerationRunFactoryVideoAsyncTest {
         ModelRuntimeProfile textProfile = new ModelRuntimeProfile(
             "openai",
             "gpt-text",
-            "k",
-            "https://api.example.com/v1",
-            60,
-            0.2,
-            2048,
-            "test"
-        );
-        ModelRuntimeProfile visionProfile = new ModelRuntimeProfile(
-            "openai",
-            "gpt-vision",
             "k",
             "https://api.example.com/v1",
             60,
@@ -102,7 +91,7 @@ class GenerationRunFactoryVideoAsyncTest {
              */
             @Override
             public ModelRuntimeProfile resolveTextProfile(String requestedModel) {
-                return "gpt-vision".equals(requestedModel) ? visionProfile : textProfile;
+                return textProfile;
             }
 
             /**
@@ -165,16 +154,6 @@ class GenerationRunFactoryVideoAsyncTest {
                 ModelRuntimeProfile profile,
                 TextModelInvocation invocation
             ) {
-                if (invocation instanceof VisionCompletionInvocation) {
-                    return new TextModelResponse(
-                        "vision notes",
-                        "https://api.example.com/v1/responses",
-                        "api.example.com",
-                        10,
-                        true,
-                        "resp_2"
-                    );
-                }
                 TextCompletionInvocation textInvocation = (TextCompletionInvocation) invocation;
                 return new TextModelResponse(
                     textInvocation.userPrompt(),
@@ -253,7 +232,6 @@ class GenerationRunFactoryVideoAsyncTest {
         ));
         request.put("model", Map.of(
             "textAnalysisModel", "gpt-text",
-            "visionModel", "gpt-vision",
             "providerModel", "wan2.2-i2v-plus"
         ));
         request.put("options", Map.of("stylePreset", "cinematic"));
@@ -304,16 +282,6 @@ class GenerationRunFactoryVideoAsyncTest {
             2048,
             "test"
         );
-        ModelRuntimeProfile visionProfile = new ModelRuntimeProfile(
-            "openai",
-            "gpt-vision",
-            "k",
-            "https://api.example.com/v1",
-            60,
-            0.2,
-            2048,
-            "test"
-        );
         MediaProviderProfile videoProfile = new MediaProviderProfile(
             new MediaProviderConfig(
                 "video",
@@ -336,7 +304,7 @@ class GenerationRunFactoryVideoAsyncTest {
 
             @Override
             public ModelRuntimeProfile resolveTextProfile(String requestedModel) {
-                return "gpt-vision".equals(requestedModel) ? visionProfile : textProfile;
+                return textProfile;
             }
 
             @Override
@@ -403,7 +371,6 @@ class GenerationRunFactoryVideoAsyncTest {
         ));
         request.put("model", Map.of(
             "textAnalysisModel", "gpt-text",
-            "visionModel", "gpt-vision",
             "providerModel", "wan2.2-i2v-plus"
         ));
         request.put("options", Map.of("stylePreset", "cinematic"));
@@ -417,16 +384,6 @@ class GenerationRunFactoryVideoAsyncTest {
         ModelRuntimeProfile textProfile = new ModelRuntimeProfile(
             "openai",
             "gpt-text",
-            "k",
-            "https://api.example.com/v1",
-            60,
-            0.2,
-            2048,
-            "test"
-        );
-        ModelRuntimeProfile visionProfile = new ModelRuntimeProfile(
-            "openai",
-            "gpt-vision",
             "k",
             "https://api.example.com/v1",
             60,
@@ -456,7 +413,7 @@ class GenerationRunFactoryVideoAsyncTest {
 
             @Override
             public ModelRuntimeProfile resolveTextProfile(String requestedModel) {
-                return "gpt-vision".equals(requestedModel) ? visionProfile : textProfile;
+                return textProfile;
             }
 
             @Override
@@ -492,16 +449,6 @@ class GenerationRunFactoryVideoAsyncTest {
 
             @Override
             public TextModelResponse generate(ModelRuntimeProfile profile, TextModelInvocation invocation) {
-                if (invocation instanceof VisionCompletionInvocation) {
-                    return new TextModelResponse(
-                        "vision notes",
-                        "https://api.example.com/v1/responses",
-                        "api.example.com",
-                        10,
-                        true,
-                        "resp_2"
-                    );
-                }
                 TextCompletionInvocation textInvocation = (TextCompletionInvocation) invocation;
                 return new TextModelResponse(
                     textInvocation.userPrompt(),
@@ -564,7 +511,6 @@ class GenerationRunFactoryVideoAsyncTest {
         ));
         request.put("model", Map.of(
             "textAnalysisModel", "gpt-text",
-            "visionModel", "gpt-vision",
             "providerModel", "wan2.2-i2v-plus"
         ));
         request.put("options", Map.of("stylePreset", "cinematic"));

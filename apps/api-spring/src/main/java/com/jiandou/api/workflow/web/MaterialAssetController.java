@@ -4,7 +4,6 @@ import com.jiandou.api.config.ApiPathConstants;
 import com.jiandou.api.workflow.application.WorkflowApplicationService;
 import com.jiandou.api.workflow.web.dto.ReuseMaterialRequest;
 import com.jiandou.api.workflow.web.dto.UpdateMaterialAssetRatingRequest;
-import com.jiandou.api.workflow.web.dto.UpdateMaterialAssetTagsRequest;
 import java.util.List;
 import java.util.Map;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -30,13 +29,13 @@ public class MaterialAssetController {
     public List<Map<String, Object>> listMaterialAssets(
         @RequestParam(value = "q", required = false) String q,
         @RequestParam(value = "type", required = false) String type,
-        @RequestParam(value = "tag", required = false) String tag,
         @RequestParam(value = "minRating", required = false) Integer minRating,
         @RequestParam(value = "model", required = false) String model,
         @RequestParam(value = "aspectRatio", required = false) String aspectRatio,
-        @RequestParam(value = "clipIndex", required = false) Integer clipIndex
+        @RequestParam(value = "clipIndex", required = false) Integer clipIndex,
+        @RequestParam(value = "assetType", required = false) String assetType
     ) {
-        return workflowService.listMaterialAssets(q, type, tag, minRating, model, aspectRatio, clipIndex);
+        return workflowService.listMaterialAssets(q, type, minRating, model, aspectRatio, clipIndex, assetType);
     }
 
     @GetMapping("/{assetId}")
@@ -49,13 +48,9 @@ public class MaterialAssetController {
         return workflowService.rateMaterialAsset(assetId, request);
     }
 
-    @PatchMapping("/{assetId}/tags")
-    public Map<String, Object> updateMaterialAssetTags(@PathVariable String assetId, @RequestBody UpdateMaterialAssetTagsRequest request) {
-        return workflowService.updateMaterialAssetTags(assetId, request);
-    }
-
     @PostMapping("/{assetId}/reuse")
     public Map<String, Object> reuseMaterialAsset(@PathVariable String assetId, @RequestBody(required = false) ReuseMaterialRequest request) {
         return workflowService.reuseMaterialAsset(assetId, request == null ? new ReuseMaterialRequest("clone") : request);
     }
+
 }

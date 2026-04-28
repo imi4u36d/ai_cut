@@ -18,6 +18,7 @@ model:
       kind: "text"
       label: "qwen3.6-flash"
       provider_model: "qwen3.6-flash-2026-04-16"
+      max_tokens: 8000
       family: "qwen"
       capabilities:
         - "text_analysis"
@@ -37,18 +38,6 @@ model:
         - "creative_prompt"
         - "script_generation"
       description: "Qwen 通用文本模型 qwen3.5-flash。"
-    "qwen3-vl-flash":
-      provider: "qwen"
-      vendor: "aliyun"
-      kind: "vision"
-      label: "Qwen 3 VL Flash"
-      provider_model: "qwen3-vl-flash-2026-01-22"
-      family: "qwen-vl"
-      supports_seed: true
-      capabilities:
-        - "vision_analysis"
-        - "prompt_rewrite"
-      description: "Qwen 视觉理解快速模型。"
     "Doubao-Seedream-4.5":
       provider: "seedream"
       vendor: "volcengine"

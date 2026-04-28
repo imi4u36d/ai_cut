@@ -19,7 +19,7 @@ class UploadControllerTest {
         UploadApplicationService service = mock(UploadApplicationService.class);
         UploadController controller = new UploadController(service);
         MockMultipartFile file = new MockMultipartFile("file", "a.txt", "text/plain", "a".getBytes());
-        UploadAssetResponse response = new UploadAssetResponse("asset_1", "a.txt", "/storage/uploads/a.txt", 1L);
+        UploadAssetResponse response = new UploadAssetResponse("asset_1", "a.txt", "/storage/uploads/a.txt", "", 1L);
         when(service.uploadText(file)).thenReturn(response);
 
         assertSame(response, controller.uploadText(file));

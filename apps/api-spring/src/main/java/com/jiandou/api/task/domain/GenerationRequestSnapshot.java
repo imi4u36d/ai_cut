@@ -14,7 +14,6 @@ public record GenerationRequestSnapshot(
     String aspectRatio,
     String stylePreset,
     String textAnalysisModel,
-    String visionModel,
     String imageModel,
     String videoModel,
     String videoSize,
@@ -38,7 +37,6 @@ public record GenerationRequestSnapshot(
             "",
             "",
             "cinematic",
-            "",
             "",
             "",
             "",
@@ -69,7 +67,6 @@ public record GenerationRequestSnapshot(
             stringValue(map.get("aspectRatio"), ""),
             stringValue(map.get("stylePreset"), "cinematic"),
             stringValue(map.get("textAnalysisModel"), ""),
-            stringValue(map.get("visionModel"), ""),
             stringValue(map.get("imageModel"), ""),
             stringValue(map.get("videoModel"), ""),
             stringValue(map.get("videoSize"), ""),
@@ -95,7 +92,6 @@ public record GenerationRequestSnapshot(
         row.put("aspectRatio", aspectRatio);
         row.put("stylePreset", stylePreset);
         row.put("textAnalysisModel", textAnalysisModel);
-        row.put("visionModel", visionModel);
         row.put("imageModel", imageModel);
         row.put("videoModel", videoModel);
         row.put("videoSize", videoSize);
@@ -117,7 +113,6 @@ public record GenerationRequestSnapshot(
     public String modelValue(String fieldName) {
         return switch (fieldName) {
             case "textAnalysisModel" -> textAnalysisModel;
-            case "visionModel" -> visionModel;
             case "imageModel" -> imageModel;
             case "videoModel" -> videoModel;
             default -> "";

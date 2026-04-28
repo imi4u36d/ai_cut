@@ -103,7 +103,7 @@ public class ModelRuntimePropertiesResolver {
                     intValue(firstNonBlank(current.value("model", "max_tokens"), "2000"), 2000),
                     current.source()
                 ),
-                new TextProviderCapabilities(false, false, false)
+                new TextProviderCapabilities(false, false)
             );
         }
         ResolvedModel resolvedModel = resolveConfiguredModel(current, modelName);
@@ -171,15 +171,7 @@ public class ModelRuntimePropertiesResolver {
             ),
             new TextProviderCapabilities(
                 boolValue(stringValue(modelValues.get("supports_seed"))),
-                resolveTextSupportsResponsesApi(current, providerSection, provider, baseUrl),
-                resolveTextPrefersChatCompletionsForVision(
-                    current,
-                    modelSection,
-                    providerSection,
-                    provider,
-                    firstNonBlank(configuredProviderModel(modelName, resolvedModel), resolvedModel.canonicalName(), modelName),
-                    baseUrl
-                )
+                resolveTextSupportsResponsesApi(current, providerSection, provider, baseUrl)
             )
         );
     }
@@ -268,11 +260,10 @@ public class ModelRuntimePropertiesResolver {
             item.put("family", trimToEmpty(stringValue(section.get("family"))));
             item.put("description", trimToEmpty(stringValue(section.get("description"))));
             item.put("kind", targetKind);
-            if (GenerationModelKinds.TEXT.equals(targetKind) || GenerationModelKinds.VISION.equals(targetKind)) {
+            if (GenerationModelKinds.TEXT.equals(targetKind)) {
                 ModelRuntimeProfile textProfile = resolveTextProfile(entry.getKey());
                 item.put("supportsSeed", textProfile.supportsSeed());
                 item.put("supportsResponsesApi", textProfile.supportsResponsesApi());
-                item.put("prefersChatCompletionsForVision", textProfile.prefersChatCompletionsForVision());
                 items.add(item);
                 continue;
             }
@@ -894,24 +885,6 @@ public class ModelRuntimePropertiesResolver {
         return supportsResponsesApiByDefault(provider, baseUrl);
     }
 
-    private boolean resolveTextPrefersChatCompletionsForVision(
-        ConfigSnapshot current,
-        String modelSection,
-        String providerSection,
-        String provider,
-        String modelName,
-        String baseUrl
-    ) {
-        String configured = firstNonBlank(
-            current.value(modelSection, "vision_use_chat_completions"),
-            current.value(providerSection + ".extras", "vision_use_chat_completions")
-        );
-        if (!configured.isBlank()) {
-            return boolValue(configured);
-        }
-        return prefersChatCompletionsForVisionByDefault(provider, modelName, baseUrl);
-    }
-
     private boolean supportsResponsesApiByDefault(String provider, String baseUrl) {
         String normalizedProvider = trimToEmpty(provider).toLowerCase(Locale.ROOT);
         String normalizedBaseUrl = trimToEmpty(baseUrl).toLowerCase(Locale.ROOT);
@@ -922,15 +895,6 @@ public class ModelRuntimePropertiesResolver {
             || normalizedBaseUrl.contains("openai.com")
             || normalizedBaseUrl.contains("dashscope.aliyuncs.com")
             || normalizedBaseUrl.contains("volces.com/api/v3");
-    }
-
-    private boolean prefersChatCompletionsForVisionByDefault(String provider, String modelName, String baseUrl) {
-        String normalizedProvider = trimToEmpty(provider).toLowerCase(Locale.ROOT);
-        String normalizedModelName = trimToEmpty(modelName).toLowerCase(Locale.ROOT);
-        String normalizedBaseUrl = trimToEmpty(baseUrl).toLowerCase(Locale.ROOT);
-        return "qwen".equals(normalizedProvider)
-            || normalizedModelName.contains("-vl-")
-            || normalizedBaseUrl.contains("dashscope.aliyuncs.com");
     }
 
     /**

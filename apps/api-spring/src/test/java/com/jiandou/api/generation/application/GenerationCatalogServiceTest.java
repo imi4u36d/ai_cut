@@ -66,7 +66,6 @@ class GenerationCatalogServiceTest {
             new ConfigSection("8", Map.of("label", "8 秒"))
         ));
         when(modelResolver.listModelsByKind(GenerationModelKinds.TEXT)).thenReturn(List.of(Map.of("value", "gpt-4.1")));
-        when(modelResolver.listModelsByKind(GenerationModelKinds.VISION)).thenReturn(List.of(Map.of("value", "gpt-4.1-vision")));
         when(modelResolver.listModelsByKind(GenerationModelKinds.IMAGE)).thenReturn(List.of(Map.of("value", "seedream-3.0")));
         when(modelResolver.listModelsByKind(GenerationModelKinds.VIDEO)).thenReturn(List.of(
             Map.of("value", "seedance", "supportedSizes", List.of("720*1280"), "supportedDurations", List.of(8)),

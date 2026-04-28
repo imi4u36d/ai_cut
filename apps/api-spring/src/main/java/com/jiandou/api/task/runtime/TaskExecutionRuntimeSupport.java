@@ -264,12 +264,6 @@ class TaskExecutionRuntimeSupport {
                  */
                 "textAnalysisModel", textAnalysisModel(task),
                 /**
-                 * 处理视觉模型。
-                 * @param task 要处理的任务对象
-                 * @return 处理结果
-                 */
-                "visionModel", visionModel(task),
-                /**
                  * 处理视频模型。
                  * @param task 要处理的任务对象
                  * @return 处理结果
@@ -336,15 +330,6 @@ class TaskExecutionRuntimeSupport {
      */
     private String videoModel(TaskRecord task) {
         return requiredSnapshotModel(task, "videoModel", "视频模型");
-    }
-
-    /**
-     * 处理视觉模型。
-     * @param task 要处理的任务对象
-     * @return 处理结果
-     */
-    private String visionModel(TaskRecord task) {
-        return requiredSnapshotModel(task, "visionModel", "视觉模型");
     }
 
     /**

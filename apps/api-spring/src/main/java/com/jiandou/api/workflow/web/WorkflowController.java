@@ -2,10 +2,12 @@ package com.jiandou.api.workflow.web;
 
 import com.jiandou.api.config.ApiPathConstants;
 import com.jiandou.api.workflow.application.WorkflowApplicationService;
+import com.jiandou.api.workflow.web.dto.AdjustStoryboardRequest;
 import com.jiandou.api.workflow.web.dto.CreateWorkflowRequest;
-import com.jiandou.api.workflow.web.dto.GenerateStageRequest;
 import com.jiandou.api.workflow.web.dto.RateStageVersionRequest;
 import com.jiandou.api.workflow.web.dto.RateWorkflowRequest;
+import com.jiandou.api.workflow.web.dto.SelectCharacterSheetAssetRequest;
+import com.jiandou.api.workflow.web.dto.UpdateWorkflowSettingsRequest;
 import java.util.List;
 import java.util.Map;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -48,12 +50,17 @@ public class WorkflowController {
         return workflowService.deleteWorkflow(workflowId);
     }
 
-    @PostMapping("/{workflowId}/storyboards/generate")
-    public Map<String, Object> generateStoryboard(
+    @PatchMapping("/{workflowId}/settings")
+    public Map<String, Object> updateWorkflowSettings(
         @PathVariable String workflowId,
-        @RequestBody(required = false) GenerateStageRequest request
+        @RequestBody UpdateWorkflowSettingsRequest request
     ) {
-        return workflowService.generateStoryboard(workflowId, request == null ? "" : request.extraPrompt());
+        return workflowService.updateWorkflowSettings(workflowId, request);
+    }
+
+    @PostMapping("/{workflowId}/storyboards/generate")
+    public Map<String, Object> generateStoryboard(@PathVariable String workflowId) {
+        return workflowService.generateStoryboard(workflowId);
     }
 
     @PostMapping("/{workflowId}/storyboards/{versionId}/select")
@@ -61,13 +68,30 @@ public class WorkflowController {
         return workflowService.selectStoryboard(workflowId, versionId);
     }
 
+    @PostMapping("/{workflowId}/storyboards/{versionId}/adjust")
+    public Map<String, Object> adjustStoryboard(
+        @PathVariable String workflowId,
+        @PathVariable String versionId,
+        @RequestBody(required = false) AdjustStoryboardRequest request
+    ) {
+        return workflowService.adjustStoryboard(workflowId, versionId, request == null ? "" : request.prompt());
+    }
+
     @PostMapping("/{workflowId}/clips/{clipIndex}/keyframes/generate")
     public Map<String, Object> generateKeyframe(
         @PathVariable String workflowId,
-        @PathVariable int clipIndex,
-        @RequestBody(required = false) GenerateStageRequest request
+        @PathVariable int clipIndex
     ) {
-        return workflowService.generateKeyframe(workflowId, clipIndex, request == null ? "" : request.extraPrompt());
+        return workflowService.generateKeyframe(workflowId, clipIndex);
+    }
+
+    @PostMapping("/{workflowId}/clips/{clipIndex}/keyframes/{frameRole}/generate")
+    public Map<String, Object> generateKeyframeFrame(
+        @PathVariable String workflowId,
+        @PathVariable int clipIndex,
+        @PathVariable String frameRole
+    ) {
+        return workflowService.generateKeyframeFrame(workflowId, clipIndex, frameRole);
     }
 
     @PostMapping("/{workflowId}/clips/{clipIndex}/keyframes/{versionId}/select")
@@ -75,13 +99,31 @@ public class WorkflowController {
         return workflowService.selectKeyframe(workflowId, clipIndex, versionId);
     }
 
+    @PostMapping("/{workflowId}/clips/{clipIndex}/keyframes/{versionId}/frames/{frameRole}/select")
+    public Map<String, Object> selectKeyframeFrame(
+        @PathVariable String workflowId,
+        @PathVariable int clipIndex,
+        @PathVariable String versionId,
+        @PathVariable String frameRole
+    ) {
+        return workflowService.selectKeyframeFrame(workflowId, clipIndex, versionId, frameRole);
+    }
+
+    @PostMapping("/{workflowId}/character-sheets/{clipIndex}/select-asset")
+    public Map<String, Object> selectCharacterSheetAsset(
+        @PathVariable String workflowId,
+        @PathVariable int clipIndex,
+        @RequestBody SelectCharacterSheetAssetRequest request
+    ) {
+        return workflowService.selectCharacterSheetAsset(workflowId, clipIndex, request);
+    }
+
     @PostMapping("/{workflowId}/clips/{clipIndex}/videos/generate")
     public Map<String, Object> generateVideo(
         @PathVariable String workflowId,
-        @PathVariable int clipIndex,
-        @RequestBody(required = false) GenerateStageRequest request
+        @PathVariable int clipIndex
     ) {
-        return workflowService.generateVideo(workflowId, clipIndex, request == null ? "" : request.extraPrompt());
+        return workflowService.generateVideo(workflowId, clipIndex);
     }
 
     @PostMapping("/{workflowId}/clips/{clipIndex}/videos/{versionId}/select")

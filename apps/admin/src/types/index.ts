@@ -156,5 +156,4 @@ export interface AdminOverviewResponse {
   modelReady: boolean;
   primaryModel?: string | null;
   textModel?: string | null;
-  visionModel?: string | null;
 }

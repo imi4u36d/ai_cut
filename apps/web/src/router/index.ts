@@ -8,6 +8,7 @@ import ActivateInviteView from "@/views/ActivateInviteView.vue";
 import ForbiddenView from "@/views/ForbiddenView.vue";
 import HomeView from "@/views/HomeView.vue";
 import LoginView from "@/views/LoginView.vue";
+import MaterialCenterView from "@/views/MaterialCenterView.vue";
 import MaterialLibraryView from "@/views/MaterialLibraryView.vue";
 import NewTaskView from "@/views/NewTaskView.vue";
 import OfficialDocsView from "@/views/OfficialDocsView.vue";
@@ -115,6 +116,14 @@ const router = createRouter({
           component: StageWorkflowView,
           meta: {
             title: "阶段工作流"
+          }
+        },
+        {
+          path: "material-center",
+          name: "material-center",
+          component: MaterialCenterView,
+          meta: {
+            title: "素材中心"
           }
         },
         {

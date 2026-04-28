@@ -128,7 +128,6 @@ class TaskCommandServiceTest {
 
         Map<String, Object> payload = attemptPayload.getValue();
         assertEquals("txt-model", payload.get("textAnalysisModel"));
-        assertEquals("vision-model", payload.get("visionModel"));
         assertEquals("image-model", payload.get("imageModel"));
         assertEquals("video-model", payload.get("videoModel"));
     }
@@ -155,7 +154,6 @@ class TaskCommandServiceTest {
             "",
             "",
             "",
-            "vision-model",
             "image-model",
             "video-model",
             "720*1280",
@@ -309,7 +307,6 @@ class TaskCommandServiceTest {
             " creative ",
             " 16:9 ",
             " txt-model ",
-            " vision-model ",
             " image-model ",
             " video-model ",
             "720*1280",

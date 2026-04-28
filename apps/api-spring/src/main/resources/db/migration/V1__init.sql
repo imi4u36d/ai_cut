@@ -328,7 +328,6 @@ CREATE TABLE IF NOT EXISTS `biz_stage_workflows` (
   `aspect_ratio` varchar(16) NOT NULL DEFAULT '9:16' COMMENT '画幅比例',
   `style_preset` varchar(64) NOT NULL DEFAULT 'cinematic' COMMENT '风格预设',
   `text_analysis_model` varchar(128) NOT NULL DEFAULT '' COMMENT '文本模型',
-  `vision_model` varchar(128) NOT NULL DEFAULT '' COMMENT '视觉模型',
   `image_model` varchar(128) NOT NULL DEFAULT '' COMMENT '图像模型',
   `video_model` varchar(128) NOT NULL DEFAULT '' COMMENT '视频模型',
   `video_size` varchar(64) NOT NULL DEFAULT '' COMMENT '视频尺寸',

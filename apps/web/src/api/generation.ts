@@ -133,13 +133,9 @@ function normalizeOptions(raw: unknown): GenerationOptionsResponse {
       ? (record.textAnalysisModels as GenerationOptionsResponse["textAnalysisModels"])
       : [],
     defaultTextAnalysisModel: asString(record.defaultTextAnalysisModel) || null,
-    visionModels: Array.isArray(record.visionModels)
-      ? (record.visionModels as GenerationOptionsResponse["visionModels"])
-      : [],
     imageModels: Array.isArray(record.imageModels)
       ? (record.imageModels as GenerationOptionsResponse["imageModels"])
       : [],
-    defaultVisionModel: asString(record.defaultVisionModel) || null,
     videoModels: Array.isArray(record.videoModels) ? (record.videoModels as GenerationOptionsResponse["videoModels"]) : [],
     defaultVideoModel: asString(record.defaultVideoModel) || null,
     videoSizes: Array.isArray(record.videoSizes) ? (record.videoSizes as GenerationOptionsResponse["videoSizes"]) : [],

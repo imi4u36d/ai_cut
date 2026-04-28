@@ -55,16 +55,6 @@ class GenerationRunFactoryImagePromptPassthroughTest {
             2048,
             "test"
         );
-        ModelRuntimeProfile visionProfile = new ModelRuntimeProfile(
-            "openai",
-            "gpt-vision",
-            "k",
-            "https://api.example.com/v1",
-            60,
-            0.2,
-            2048,
-            "test"
-        );
         MediaProviderProfile imageProfile = new MediaProviderProfile(
             new MediaProviderConfig(
                 "image",
@@ -97,7 +87,7 @@ class GenerationRunFactoryImagePromptPassthroughTest {
              */
             @Override
             public ModelRuntimeProfile resolveTextProfile(String requestedModel) {
-                return "gpt-vision".equals(requestedModel) ? visionProfile : textProfile;
+                return textProfile;
             }
 
             /**
@@ -234,7 +224,6 @@ class GenerationRunFactoryImagePromptPassthroughTest {
         assertTrue(String.valueOf(result.get("negativePrompt")).contains("不符合物理结构"));
         @SuppressWarnings("unchecked")
         Map<String, Object> metadata = (Map<String, Object>) result.get("metadata");
-        assertEquals(true, metadata.get("visionAnalysisSkipped"));
         assertEquals(java.util.List.of("https://example.com/reference.png"), metadata.get("referenceImageUrls"));
         assertTrue(String.valueOf(result.get("outputUrl")).startsWith("/storage/"));
     }

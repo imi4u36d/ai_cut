@@ -76,6 +76,18 @@ class DefaultGenerationApplicationServiceTest {
     }
 
     @Test
+    void createRunRoutesStoryboardAdjustmentKind() {
+        Map<String, Object> request = Map.of("kind", GenerationRunKinds.SCRIPT_ADJUST, "prompt", "hello");
+        Map<String, Object> run = new LinkedHashMap<>(Map.of("status", "queued"));
+        when(runFactory.createScriptAdjustRun(any(), eq(request))).thenReturn(run);
+
+        Map<String, Object> result = service.createRun(request);
+
+        assertSame(run, result);
+        verify(runFactory).createScriptAdjustRun(any(), eq(request));
+    }
+
+    @Test
     void createRunRejectsUnsupportedKind() {
         UnsupportedGenerationKindException ex = assertThrows(
             UnsupportedGenerationKindException.class,

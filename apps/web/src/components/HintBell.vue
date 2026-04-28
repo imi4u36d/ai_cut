@@ -48,12 +48,14 @@ const props = withDefaults(
     text?: string;
     items?: string[];
     align?: "left" | "right";
+    maxWidth?: number;
   }>(),
   {
     title: "",
     text: "",
     items: () => [],
-    align: "right"
+    align: "right",
+    maxWidth: 288
   }
 );
 
@@ -166,7 +168,8 @@ async function syncPopoverPosition() {
   }
   const rect = root.value.getBoundingClientRect();
   const viewportPadding = 12;
-  const maxWidth = Math.min(288, window.innerWidth - viewportPadding * 2);
+  const preferredWidth = Math.max(220, props.maxWidth);
+  const maxWidth = Math.min(preferredWidth, window.innerWidth - viewportPadding * 2);
   let left =
     props.align === "left"
       ? rect.left
@@ -177,6 +180,7 @@ async function syncPopoverPosition() {
   popoverStyle.value = {
     top: `${Math.round(top)}px`,
     left: `${Math.round(left)}px`,
+    width: `${Math.round(maxWidth)}px`,
     maxWidth: `${Math.round(maxWidth)}px`,
   };
 
@@ -190,6 +194,7 @@ async function syncPopoverPosition() {
     popoverStyle.value = {
       top: `${Math.round(top)}px`,
       left: `${Math.round(left)}px`,
+      width: `${Math.round(maxWidth)}px`,
       maxWidth: `${Math.round(maxWidth)}px`,
     };
   }
@@ -287,9 +292,13 @@ onBeforeUnmount(() => {
 
 .hint-text {
   margin: 0.55rem 0 0;
+  max-height: min(58vh, 32rem);
+  overflow: auto;
   font-size: 0.9rem;
   line-height: 1.6;
   color: var(--text-body);
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
 }
 
 .hint-list {

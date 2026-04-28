@@ -1,7 +1,6 @@
 package com.jiandou.api.generation.text;
 
 import com.jiandou.api.generation.runtime.ModelRuntimeProfile;
-import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -36,21 +35,7 @@ public class ChatCompletionsInvocationStrategy implements TextModelInvocationStr
      */
     @Override
     public PreparedTextModelRequest prepare(ModelRuntimeProfile profile, TextModelInvocation invocation) {
-        Map<String, Object> body = invocation.vision()
-            /**
-             * 构建视觉请求。
-             * @param profile.modelName( profile.modelName(值
-             * @param invocation 调用值
-             * @return 处理结果
-             */
-            ? buildVisionRequest(profile.modelName(), invocation)
-            /**
-             * 构建文本请求。
-             * @param profile.modelName( profile.modelName(值
-             * @param invocation 调用值
-             * @return 处理结果
-             */
-            : buildTextRequest(profile.modelName(), invocation);
+        Map<String, Object> body = buildTextRequest(profile.modelName(), invocation);
         return new PreparedTextModelRequest(
             TextModelTransportPolicy.resolveEndpoint(profile.baseUrl(), false),
             body,
@@ -76,29 +61,4 @@ public class ChatCompletionsInvocationStrategy implements TextModelInvocationStr
         return body;
     }
 
-    /**
-     * 构建视觉请求。
-     * @param modelName 模型Name值
-     * @param invocation 调用值
-     * @return 处理结果
-     */
-    private Map<String, Object> buildVisionRequest(String modelName, TextModelInvocation invocation) {
-        List<Map<String, Object>> userContent = new ArrayList<>();
-        userContent.add(Map.of("type", "text", "text", invocation.userPrompt()));
-        for (String imageUrl : invocation.imageUrls()) {
-            userContent.add(Map.of("type", "image_url", "image_url", Map.of("url", imageUrl)));
-        }
-        Map<String, Object> body = new LinkedHashMap<>();
-        body.put("model", modelName);
-        body.put("messages", List.of(
-            Map.of("role", "system", "content", invocation.systemPrompt()),
-            Map.of("role", "user", "content", userContent)
-        ));
-        body.put("temperature", invocation.temperature());
-        body.put("max_tokens", invocation.maxTokens());
-        if (invocation.seed() != null) {
-            body.put("seed", invocation.seed());
-        }
-        return body;
-    }
 }

@@ -43,7 +43,6 @@ class TaskApplicationServiceImplTest {
             "prompt",
             "9:16",
             "text-model",
-            "vision-model",
             "image-model",
             "video-model",
             "720p",
@@ -151,7 +150,6 @@ class TaskApplicationServiceImplTest {
 
         when(queryService.adminOverview()).thenReturn(overview);
         when(modelResolver.listModelsByKind(GenerationModelKinds.TEXT)).thenReturn(List.of(Map.of("name", "text")));
-        when(modelResolver.listModelsByKind(GenerationModelKinds.VISION)).thenReturn(List.of(Map.of("name", "vision")));
         when(modelResolver.listModelsByKind(GenerationModelKinds.IMAGE)).thenReturn(List.of(Map.of("name", "image")));
         when(modelResolver.listModelsByKind(GenerationModelKinds.VIDEO)).thenReturn(List.of());
 
@@ -160,7 +158,6 @@ class TaskApplicationServiceImplTest {
         assertFalse((Boolean) notReady.get("modelReady"));
         assertNull(notReady.get("primaryModel"));
         assertNull(notReady.get("textModel"));
-        assertNull(notReady.get("visionModel"));
 
         when(modelResolver.listModelsByKind(GenerationModelKinds.VIDEO)).thenReturn(List.of(Map.of("name", "video")));
 

@@ -25,7 +25,6 @@ public class AdminModelConfigService {
 
     private static final List<String> KIND_ORDER = List.of(
         GenerationModelKinds.TEXT,
-        GenerationModelKinds.VISION,
         GenerationModelKinds.IMAGE,
         GenerationModelKinds.VIDEO
     );
@@ -51,7 +50,6 @@ public class AdminModelConfigService {
     public AdminModelConfigResponse read() {
         List<AdminModelConfigResponse.ModelItem> models = new ArrayList<>();
         models.addAll(readTextModels(GenerationModelKinds.TEXT));
-        models.addAll(readTextModels(GenerationModelKinds.VISION));
         models.addAll(readMediaModels(GenerationModelKinds.IMAGE));
         models.addAll(readMediaModels(GenerationModelKinds.VIDEO));
         models.sort(Comparator
@@ -222,7 +220,6 @@ public class AdminModelConfigService {
             model.description(),
             model.supportsSeed(),
             model.supportsResponsesApi(),
-            model.prefersChatCompletionsForVision(),
             model.generationMode(),
             model.supportedSizes(),
             model.supportedDurations(),
@@ -273,7 +270,6 @@ public class AdminModelConfigService {
             models.size(),
             countReadyModels(models, null),
             countReadyModels(models, GenerationModelKinds.TEXT),
-            countReadyModels(models, GenerationModelKinds.VISION),
             countReadyModels(models, GenerationModelKinds.IMAGE),
             countReadyModels(models, GenerationModelKinds.VIDEO)
         );
@@ -301,7 +297,6 @@ public class AdminModelConfigService {
                 stringValue(item.get("description")),
                 booleanValue(item.get("supportsSeed")),
                 booleanValue(item.get("supportsResponsesApi")),
-                booleanValue(item.get("prefersChatCompletionsForVision")),
                 "",
                 List.of(),
                 List.of(),
@@ -339,7 +334,6 @@ public class AdminModelConfigService {
                 stringValue(item.get("family")),
                 stringValue(item.get("description")),
                 booleanValue(item.get("supportsSeed")),
-                false,
                 false,
                 stringValue(item.get("generationMode")),
                 stringList(item.get("supportedSizes")),
@@ -419,7 +413,7 @@ public class AdminModelConfigService {
         if (model == null) {
             return "";
         }
-        if (GenerationModelKinds.TEXT.equals(model.kind()) || GenerationModelKinds.VISION.equals(model.kind())) {
+        if (GenerationModelKinds.TEXT.equals(model.kind())) {
             return modelResolver.resolveTextProfile(model.name()).apiKey();
         }
         return modelResolver.resolveMediaProfile(model.name(), model.kind()).apiKey();
@@ -429,7 +423,7 @@ public class AdminModelConfigService {
         if (model == null) {
             return "";
         }
-        if (GenerationModelKinds.TEXT.equals(model.kind()) || GenerationModelKinds.VISION.equals(model.kind())) {
+        if (GenerationModelKinds.TEXT.equals(model.kind())) {
             return modelResolver.resolveTextProfile(model.name()).baseUrl();
         }
         return modelResolver.resolveMediaProfile(model.name(), model.kind()).baseUrl();

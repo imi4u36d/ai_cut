@@ -13,7 +13,7 @@ class ModelRuntimeProfileTest {
     void accessorsNormalizeValuesAndExposeCapabilities() {
         ModelRuntimeProfile profile = new ModelRuntimeProfile(
             new TextProviderConfig("text", "gpt-4.1", "openai", "gpt-4.1", "key", "https://api.example.com/v1", -3, 0.35, -10, "cfg"),
-            new TextProviderCapabilities(true, true, true)
+            new TextProviderCapabilities(true, true)
         );
 
         assertTrue(profile.ready());
@@ -28,7 +28,6 @@ class ModelRuntimeProfileTest {
         assertEquals("cfg", profile.source());
         assertTrue(profile.supportsSeed());
         assertTrue(profile.supportsResponsesApi());
-        assertTrue(profile.prefersChatCompletionsForVision());
         assertEquals("api.example.com", profile.endpointHost());
     }
 
@@ -48,7 +47,6 @@ class ModelRuntimeProfileTest {
         assertEquals("", profile.source());
         assertFalse(profile.supportsSeed());
         assertFalse(profile.supportsResponsesApi());
-        assertFalse(profile.prefersChatCompletionsForVision());
         assertNull(profile.endpointHost());
     }
 }

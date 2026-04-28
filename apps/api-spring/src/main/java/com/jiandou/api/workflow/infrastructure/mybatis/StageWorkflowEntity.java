@@ -23,8 +23,6 @@ public class StageWorkflowEntity {
     private String stylePreset;
     @TableField("text_analysis_model")
     private String textAnalysisModel;
-    @TableField("vision_model")
-    private String visionModel;
     @TableField("image_model")
     private String imageModel;
     @TableField("video_model")
@@ -35,6 +33,8 @@ public class StageWorkflowEntity {
     private Integer keyframeSeed;
     @TableField("video_seed")
     private Integer videoSeed;
+    @TableField("duration_mode")
+    private String durationMode;
     @TableField("task_seed")
     private Integer taskSeed;
     @TableField("min_duration_seconds")
@@ -79,8 +79,6 @@ public class StageWorkflowEntity {
     public void setStylePreset(String stylePreset) { this.stylePreset = stylePreset; }
     public String getTextAnalysisModel() { return textAnalysisModel; }
     public void setTextAnalysisModel(String textAnalysisModel) { this.textAnalysisModel = textAnalysisModel; }
-    public String getVisionModel() { return visionModel; }
-    public void setVisionModel(String visionModel) { this.visionModel = visionModel; }
     public String getImageModel() { return imageModel; }
     public void setImageModel(String imageModel) { this.imageModel = imageModel; }
     public String getVideoModel() { return videoModel; }
@@ -91,6 +89,8 @@ public class StageWorkflowEntity {
     public void setKeyframeSeed(Integer keyframeSeed) { this.keyframeSeed = keyframeSeed; }
     public Integer getVideoSeed() { return videoSeed; }
     public void setVideoSeed(Integer videoSeed) { this.videoSeed = videoSeed; }
+    public String getDurationMode() { return durationMode; }
+    public void setDurationMode(String durationMode) { this.durationMode = durationMode; }
     public Integer getTaskSeed() { return taskSeed; }
     public void setTaskSeed(Integer taskSeed) { this.taskSeed = taskSeed; }
     public Integer getMinDurationSeconds() { return minDurationSeconds; }

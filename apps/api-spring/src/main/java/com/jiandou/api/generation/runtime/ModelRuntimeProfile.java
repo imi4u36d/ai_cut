@@ -35,7 +35,7 @@ public record ModelRuntimeProfile(
     ) {
         this(
             new TextProviderConfig("", modelName, provider, modelName, apiKey, baseUrl, timeoutSeconds, temperature, maxTokens, source),
-            new TextProviderCapabilities(false, false, false)
+            new TextProviderCapabilities(false, false)
         );
     }
 
@@ -89,10 +89,6 @@ public record ModelRuntimeProfile(
 
     public boolean supportsResponsesApi() {
         return capabilities != null && capabilities.supportsResponsesApi();
-    }
-
-    public boolean prefersChatCompletionsForVision() {
-        return capabilities != null && capabilities.prefersChatCompletionsForVision();
     }
 
     /**

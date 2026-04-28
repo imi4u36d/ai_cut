@@ -98,22 +98,20 @@ function emitSection(sectionId: string) {
 <style scoped>
 .marketing-topbar {
   position: sticky;
-  top: 18px;
+  top: 16px;
   z-index: 20;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 20px;
-  min-height: 76px;
-  padding: 16px 24px;
+  min-height: 64px;
+  padding: 10px 12px 10px 18px;
   overflow: hidden;
-  border: 1px solid rgba(157, 138, 201, 0.18);
-  border-radius: 30px;
-  background: rgba(255, 255, 255, 0.72);
-  box-shadow:
-    0 18px 60px rgba(104, 83, 134, 0.08),
-    inset 0 1px 0 rgba(255, 255, 255, 0.76);
-  backdrop-filter: blur(18px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  background: rgba(12, 13, 15, 0.76);
+  box-shadow: 0 18px 70px rgba(0, 0, 0, 0.28);
+  backdrop-filter: blur(20px);
 }
 
 .marketing-brand {
@@ -123,14 +121,14 @@ function emitSection(sectionId: string) {
   font-family: "Manrope", "Inter", "PingFang SC", sans-serif;
   font-size: 0.96rem;
   font-weight: 800;
-  color: #2a2d3a;
+  color: #fff8e7;
 }
 
 .marketing-brand__logo {
   width: 28px;
   height: 28px;
   flex: 0 0 28px;
-  filter: drop-shadow(0 6px 14px rgba(112, 96, 255, 0.16));
+  filter: drop-shadow(0 8px 18px rgba(242, 211, 122, 0.12));
 }
 
 .marketing-topbar__nav,
@@ -143,7 +141,7 @@ function emitSection(sectionId: string) {
 .marketing-topbar__nav {
   gap: 20px;
   font-size: 0.9rem;
-  color: #505461;
+  color: #aaa69b;
 }
 
 .marketing-topbar__link {
@@ -160,7 +158,7 @@ function emitSection(sectionId: string) {
 
 .marketing-topbar__link:hover,
 .marketing-topbar__link-active {
-  color: #8a57e7;
+  color: #fff8e7;
 }
 
 .marketing-topbar__link-active::after {
@@ -170,8 +168,8 @@ function emitSection(sectionId: string) {
   right: 0;
   bottom: -12px;
   height: 2px;
-  border-radius: 999px;
-  background: linear-gradient(90deg, #a65cff, #5fddff);
+  border-radius: 2px;
+  background: #f2d37a;
 }
 
 .marketing-topbar__github {
@@ -180,12 +178,10 @@ function emitSection(sectionId: string) {
   justify-content: center;
   width: 42px;
   height: 42px;
-  border-radius: 14px;
-  color: #2a2d3a;
-  background: rgba(255, 255, 255, 0.86);
-  box-shadow:
-    0 12px 24px rgba(85, 90, 120, 0.1),
-    inset 0 0 0 1px rgba(157, 147, 196, 0.18);
+  border-radius: 8px;
+  color: #fff8e7;
+  background: rgba(255, 255, 255, 0.06);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
   transition:
     color 160ms ease,
     box-shadow 160ms ease,
@@ -200,10 +196,8 @@ function emitSection(sectionId: string) {
 
 .marketing-topbar__github:hover {
   transform: translateY(-1px);
-  color: #8a57e7;
-  box-shadow:
-    0 14px 28px rgba(110, 89, 255, 0.16),
-    inset 0 0 0 1px rgba(138, 87, 231, 0.18);
+  color: #f2d37a;
+  box-shadow: inset 0 0 0 1px rgba(242, 211, 122, 0.22);
 }
 
 .marketing-topbar__primary {
@@ -212,12 +206,12 @@ function emitSection(sectionId: string) {
   justify-content: center;
   min-height: 42px;
   padding: 0 20px;
-  border-radius: 999px;
+  border-radius: 8px;
   font-size: 0.88rem;
   font-weight: 800;
-  color: #fff;
-  background: linear-gradient(135deg, #ae69ff, #6e59ff 42%, #59d6ff 100%);
-  box-shadow: 0 12px 28px rgba(140, 105, 255, 0.28);
+  color: #11120f;
+  background: #f2d37a;
+  box-shadow: 0 12px 28px rgba(242, 211, 122, 0.12);
   transition:
     transform 160ms ease,
     box-shadow 160ms ease,

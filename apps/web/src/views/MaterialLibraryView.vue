@@ -19,17 +19,12 @@
 
         <label class="material-field">
           <span>类型</span>
-          <AppSelect v-model="filters.type" :options="typeFilterOptions" />
+          <AppSelect v-model="filters.assetType" :options="typeFilterOptions" />
         </label>
 
         <label class="material-field">
           <span>最低评分</span>
           <AppSelect v-model="filters.minRating" :options="ratingFilterOptions" />
-        </label>
-
-        <label class="material-field">
-          <span>标签</span>
-          <input v-model="filters.tag" class="field-input" placeholder="如 cinematic / selected" />
         </label>
 
         <label class="material-field">
@@ -69,7 +64,7 @@
       <article v-for="asset in assets" :key="asset.id" class="surface-panel material-card">
         <div class="material-card__head">
           <div class="material-card__title">
-            <p class="material-eyebrow">{{ asset.stageType }}</p>
+            <p class="material-eyebrow">{{ assetTypeLabel(asset.assetType) }} · {{ asset.stageType }}</p>
             <h3>{{ asset.title }}</h3>
           </div>
           <span class="material-card__selected" v-if="asset.selectedForNext">已选中</span>
@@ -83,10 +78,24 @@
             playsinline
             preload="metadata"
           ></video>
-          <img v-else-if="asset.mediaType === 'image'" :src="asset.previewUrl" :alt="asset.title" />
-          <div v-else class="material-card__text">
-            {{ storyboardText(asset) }}
-          </div>
+          <button
+            v-else-if="asset.mediaType === 'image'"
+            class="material-preview-trigger material-preview-trigger-image"
+            type="button"
+            @click="openImagePreview(asset)"
+          >
+            <img :src="assetPreviewUrl(asset)" :alt="asset.title" />
+            <span>查看图片</span>
+          </button>
+          <button
+            v-else
+            class="material-preview-trigger material-preview-trigger-text"
+            type="button"
+            @click="openStoryboardPreview(asset)"
+          >
+            <div class="material-card__text" v-html="storyboardPreviewHtml(asset)"></div>
+            <span>查看完整分镜</span>
+          </button>
         </div>
 
         <div class="material-card__content">
@@ -96,12 +105,6 @@
             <span class="surface-chip">版本 {{ asset.versionNo }}</span>
             <span class="surface-chip">模型 {{ asset.originModel || "-" }}</span>
             <span class="surface-chip">评分 {{ ratingLabel(asset.userRating) }}</span>
-          </div>
-
-          <div class="material-tags" :class="{ 'material-tags-empty': !asset.tags.length }">
-            <span v-for="tag in asset.tags" :key="tag.id" class="tag-chip">
-              {{ tag.tagKey }}: {{ tag.tagValue }}
-            </span>
           </div>
 
           <div class="material-rating">
@@ -128,16 +131,6 @@
             </button>
           </div>
 
-          <div class="material-tags-editor">
-            <label class="material-field">
-              <span>自定义标签</span>
-              <input v-model="tagDrafts[asset.id]" class="field-input" placeholder="用逗号分隔，例如：悬疑,高反差,雨夜" />
-            </label>
-            <button class="btn-secondary btn-sm" type="button" :disabled="busyActionKey === `tags-${asset.id}`" @click="handleSaveTags(asset.id)">
-              {{ busyActionKey === `tags-${asset.id}` ? "保存中..." : "保存标签" }}
-            </button>
-          </div>
-
           <div class="material-actions">
             <button class="btn-primary btn-sm" type="button" :disabled="busyActionKey === `reuse-${asset.id}`" @click="handleReuseAsset(asset.id)">
               {{ busyActionKey === `reuse-${asset.id}` ? "复制中..." : "复制为新工作流" }}
@@ -158,17 +151,38 @@
         </div>
       </article>
     </section>
+
+    <div v-if="previewDialog.open" class="material-preview-overlay" role="dialog" aria-modal="true" @click.self="closePreviewDialog">
+      <div class="material-preview-dialog" :class="{ 'material-preview-dialog-image': previewDialog.kind === 'image' }">
+        <div class="material-preview-dialog__head">
+          <div>
+            <p class="material-eyebrow">{{ previewDialog.kind === "image" ? "Image Preview" : "Storyboard" }}</p>
+            <h3>{{ previewDialog.title }}</h3>
+          </div>
+          <button type="button" class="btn-ghost btn-sm" @click="closePreviewDialog">关闭</button>
+        </div>
+        <img
+          v-if="previewDialog.kind === 'image'"
+          class="material-preview-dialog__image"
+          :src="previewDialog.url"
+          :alt="previewDialog.title"
+        />
+        <div v-else class="material-preview-dialog__markdown" v-html="previewDialog.html"></div>
+      </div>
+    </div>
   </section>
 </template>
 
 <script setup lang="ts">
 import { onMounted, reactive, ref } from "vue";
-import { useRouter } from "vue-router";
-import { fetchMaterialAssets, rateMaterialAsset, reuseMaterialAsset, updateMaterialAssetTags } from "@/api/material-assets";
+import { useRoute, useRouter } from "vue-router";
+import { fetchMaterialAssets, rateMaterialAsset, reuseMaterialAsset } from "@/api/material-assets";
 import AppSelect from "@/components/common/AppSelect.vue";
 import type { AppSelectOption } from "@/components/common/app-select";
-import type { MaterialAssetLibraryItem, MaterialAssetQuery } from "@/types";
+import type { MaterialAssetLibraryItem, MaterialAssetQuery, MaterialAssetType } from "@/types";
+import { renderMarkdownToHtml } from "@/utils/markdown";
 
+const route = useRoute();
 const router = useRouter();
 const loading = ref(false);
 const errorMessage = ref("");
@@ -178,10 +192,10 @@ const assets = ref<MaterialAssetLibraryItem[]>([]);
 const ratingOptions = [5, 4, 3, 2, 1];
 const typeFilterOptions: AppSelectOption[] = [
   { label: "全部", value: "" },
-  { label: "分镜", value: "storyboard" },
-  { label: "关键帧", value: "keyframe" },
-  { label: "视频", value: "video" },
-  { label: "最终 join", value: "joined" },
+  { label: "角色三视图", value: "character_sheet" },
+  { label: "场景", value: "scene" },
+  { label: "道具", value: "prop" },
+  { label: "工作流产物", value: "workflow" },
 ];
 const ratingFilterOptions: AppSelectOption[] = [
   { label: "全部", value: "" },
@@ -195,9 +209,8 @@ const aspectRatioFilterOptions: AppSelectOption[] = [
 
 const filters = reactive({
   q: "",
-  type: "",
+  assetType: "",
   minRating: "",
-  tag: "",
   model: "",
   aspectRatio: "",
   clipIndex: "",
@@ -205,18 +218,39 @@ const filters = reactive({
 
 const ratingDrafts = reactive<Record<string, string>>({});
 const ratingNotes = reactive<Record<string, string>>({});
-const tagDrafts = reactive<Record<string, string>>({});
+const previewDialog = reactive({
+  open: false,
+  kind: "storyboard" as "storyboard" | "image",
+  title: "",
+  html: "",
+  url: "",
+});
 
 function buildQuery(): MaterialAssetQuery {
   return {
     q: filters.q.trim() || undefined,
-    type: filters.type as MaterialAssetQuery["type"],
+    assetType: filters.assetType as MaterialAssetQuery["assetType"],
     minRating: filters.minRating ? Number(filters.minRating) : null,
-    tag: filters.tag.trim() || undefined,
     model: filters.model.trim() || undefined,
     aspectRatio: filters.aspectRatio || undefined,
     clipIndex: filters.clipIndex ? Number(filters.clipIndex) : null,
   };
+}
+
+function assetTypeLabel(value?: MaterialAssetType | string | null) {
+  if (value === "character_sheet") {
+    return "角色三视图";
+  }
+  if (value === "scene") {
+    return "场景";
+  }
+  if (value === "prop") {
+    return "道具";
+  }
+  if (value === "workflow") {
+    return "工作流产物";
+  }
+  return "工作流产物";
 }
 
 function ratingLabel(value?: number | null) {
@@ -228,14 +262,40 @@ function storyboardText(asset: MaterialAssetLibraryItem) {
   return scriptMarkdown || asset.title;
 }
 
+function storyboardPreviewHtml(asset: MaterialAssetLibraryItem) {
+  return renderMarkdownToHtml(storyboardText(asset));
+}
+
+function assetPreviewUrl(asset: MaterialAssetLibraryItem) {
+  return asset.previewUrl || asset.fileUrl || asset.remoteUrl || "";
+}
+
+function closePreviewDialog() {
+  previewDialog.open = false;
+  previewDialog.html = "";
+  previewDialog.url = "";
+}
+
+function openStoryboardPreview(asset: MaterialAssetLibraryItem) {
+  previewDialog.kind = "storyboard";
+  previewDialog.title = asset.title;
+  previewDialog.html = storyboardPreviewHtml(asset);
+  previewDialog.url = "";
+  previewDialog.open = true;
+}
+
+function openImagePreview(asset: MaterialAssetLibraryItem) {
+  previewDialog.kind = "image";
+  previewDialog.title = asset.title;
+  previewDialog.html = "";
+  previewDialog.url = assetPreviewUrl(asset);
+  previewDialog.open = true;
+}
+
 function syncDrafts() {
   for (const asset of assets.value) {
     ratingDrafts[asset.id] = String(asset.userRating ?? 5);
     ratingNotes[asset.id] = asset.ratingNote ?? "";
-    tagDrafts[asset.id] = asset.tags
-      .filter((tag) => tag.tagType === "custom")
-      .map((tag) => tag.tagValue)
-      .join(", ");
   }
 }
 
@@ -254,9 +314,8 @@ async function loadAssets() {
 
 function resetFilters() {
   filters.q = "";
-  filters.type = "";
+  filters.assetType = "";
   filters.minRating = "";
-  filters.tag = "";
   filters.model = "";
   filters.aspectRatio = "";
   filters.clipIndex = "";
@@ -287,14 +346,6 @@ async function handleRateAsset(assetId: string) {
   );
 }
 
-async function handleSaveTags(assetId: string) {
-  const tags = tagDrafts[assetId]
-    .split(",")
-    .map((item) => item.trim())
-    .filter(Boolean);
-  await refreshAfterMutation(() => updateMaterialAssetTags(assetId, { tags }), `tags-${assetId}`);
-}
-
 async function handleReuseAsset(assetId: string) {
   busyActionKey.value = `reuse-${assetId}`;
   errorMessage.value = "";
@@ -310,6 +361,10 @@ async function handleReuseAsset(assetId: string) {
 }
 
 onMounted(async () => {
+  const queryAssetType = typeof route.query.assetType === "string" ? route.query.assetType : "";
+  if (typeFilterOptions.some((option) => option.value === queryAssetType)) {
+    filters.assetType = queryAssetType;
+  }
   await loadAssets();
 });
 </script>
@@ -367,7 +422,6 @@ onMounted(async () => {
 
 .material-filters__actions,
 .material-meta,
-.material-tags,
 .material-actions,
 .rating-row {
   display: flex;
@@ -468,7 +522,8 @@ onMounted(async () => {
 }
 
 .material-card__preview {
-  min-height: 200px;
+  height: 276px;
+  min-height: 276px;
 }
 
 .material-card__content {
@@ -481,7 +536,8 @@ onMounted(async () => {
 .material-card__preview video,
 .material-card__preview img,
 .material-card__text {
-  min-height: 200px;
+  height: 100%;
+  min-height: 0;
 }
 
 .material-card__preview video,
@@ -493,18 +549,92 @@ onMounted(async () => {
   object-fit: cover;
 }
 
+.material-preview-trigger {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  border-radius: 18px;
+  background: transparent;
+  color: inherit;
+  overflow: hidden;
+  cursor: zoom-in;
+  text-align: left;
+}
+
+.material-preview-trigger:focus-visible {
+  outline: 2px solid rgba(255, 180, 92, 0.9);
+  outline-offset: 4px;
+}
+
+.material-preview-trigger > span {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  display: inline-flex;
+  align-items: center;
+  min-height: 30px;
+  padding: 0 12px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 999px;
+  background: rgba(10, 13, 22, 0.78);
+  color: rgba(255, 255, 255, 0.84);
+  font-size: 0.78rem;
+  font-weight: 700;
+  backdrop-filter: blur(8px);
+}
+
+.material-preview-trigger-image img {
+  transition: transform 0.18s ease;
+}
+
+.material-preview-trigger-image:hover img {
+  transform: scale(1.025);
+}
+
 .material-card__text {
+  position: relative;
   padding: 16px;
   border-radius: 18px;
   background: rgba(4, 6, 10, 0.72);
   color: rgba(255, 255, 255, 0.8);
-  white-space: pre-wrap;
   line-height: 1.6;
-  overflow: auto;
+  overflow: hidden;
 }
 
-.material-rating,
-.material-tags-editor {
+.material-card__text::after {
+  content: "";
+  position: absolute;
+  inset: auto 0 0;
+  height: 72px;
+  border-radius: 0 0 18px 18px;
+  background: linear-gradient(180deg, rgba(4, 6, 10, 0), rgba(4, 6, 10, 0.96));
+  pointer-events: none;
+}
+
+.material-card__text :deep(h1),
+.material-card__text :deep(h2),
+.material-card__text :deep(h3),
+.material-card__text :deep(p) {
+  margin: 0 0 10px;
+}
+
+.material-card__text :deep(table) {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.82rem;
+}
+
+.material-card__text :deep(th),
+.material-card__text :deep(td) {
+  padding: 6px 8px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  vertical-align: top;
+}
+
+.material-rating {
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -513,16 +643,6 @@ onMounted(async () => {
 .material-meta {
   min-height: 64px;
   align-content: flex-start;
-}
-
-.material-tags {
-  min-height: 108px;
-  align-content: flex-start;
-  overflow: hidden;
-}
-
-.material-tags-empty {
-  margin: 0;
 }
 
 .material-rating .field-textarea {
@@ -535,7 +655,6 @@ onMounted(async () => {
   padding-top: 4px;
 }
 
-.tag-chip,
 .rating-pill {
   padding: 6px 10px;
   border-radius: 999px;
@@ -548,6 +667,96 @@ onMounted(async () => {
   border-color: rgba(255, 180, 92, 0.72);
   background: rgba(255, 180, 92, 0.16);
   color: #ffe1b1;
+}
+
+.material-preview-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 32px;
+  background: rgba(8, 10, 18, 0.82);
+  backdrop-filter: blur(10px);
+}
+
+.material-preview-dialog {
+  display: flex;
+  flex-direction: column;
+  width: min(980px, calc(100vw - 48px));
+  max-height: min(86vh, 960px);
+  border: 1px solid rgba(145, 180, 255, 0.2);
+  border-radius: 22px;
+  background:
+    linear-gradient(180deg, rgba(28, 31, 44, 0.98), rgba(16, 19, 29, 0.98));
+  box-shadow: 0 28px 72px rgba(0, 0, 0, 0.48);
+  overflow: hidden;
+}
+
+.material-preview-dialog-image {
+  width: min(1280px, calc(100vw - 48px));
+}
+
+.material-preview-dialog__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 20px 22px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.material-preview-dialog__head h3 {
+  margin: 6px 0 0;
+  line-height: 1.35;
+}
+
+.material-preview-dialog__image {
+  display: block;
+  max-width: 100%;
+  max-height: calc(86vh - 96px);
+  object-fit: contain;
+  background: rgba(0, 0, 0, 0.36);
+}
+
+.material-preview-dialog__markdown {
+  padding: 24px;
+  overflow: auto;
+  color: rgba(255, 255, 255, 0.84);
+  line-height: 1.75;
+}
+
+.material-preview-dialog__markdown :deep(h1),
+.material-preview-dialog__markdown :deep(h2),
+.material-preview-dialog__markdown :deep(h3),
+.material-preview-dialog__markdown :deep(h4) {
+  margin: 0 0 14px;
+  color: rgba(255, 255, 255, 0.94);
+  line-height: 1.35;
+}
+
+.material-preview-dialog__markdown :deep(p) {
+  margin: 0 0 14px;
+}
+
+.material-preview-dialog__markdown :deep(table) {
+  width: 100%;
+  margin: 12px 0 22px;
+  border-collapse: collapse;
+  font-size: 0.92rem;
+}
+
+.material-preview-dialog__markdown :deep(th),
+.material-preview-dialog__markdown :deep(td) {
+  padding: 9px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  vertical-align: top;
+}
+
+.material-preview-dialog__markdown :deep(th) {
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.94);
 }
 
 @media (max-width: 1680px) {
@@ -577,6 +786,29 @@ onMounted(async () => {
 
   .material-field-wide {
     grid-column: span 1;
+  }
+
+  .material-card__preview {
+    height: 220px;
+    min-height: 220px;
+  }
+
+  .material-preview-overlay {
+    padding: 16px;
+  }
+
+  .material-preview-dialog {
+    width: calc(100vw - 32px);
+    max-height: calc(100vh - 32px);
+    border-radius: 18px;
+  }
+
+  .material-preview-dialog__head {
+    padding: 16px;
+  }
+
+  .material-preview-dialog__markdown {
+    padding: 18px;
   }
 }
 </style>

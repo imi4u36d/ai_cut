@@ -75,6 +75,12 @@ class TextProviderTransportTest {
         assertEquals("nested message", transport.extractText(Map.of(
             "message", Map.of("content", List.of(Map.of("type", "output_text", "text", "nested message")))
         )));
+        assertEquals("", transport.extractText(Map.of(
+            "output", List.of(Map.of(
+                "type", "reasoning",
+                "summary", List.of(Map.of("type", "summary_text", "text", "thinking only"))
+            ))
+        )));
     }
 
     @Test

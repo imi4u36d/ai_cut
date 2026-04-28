@@ -7,7 +7,6 @@ import com.jiandou.api.media.LocalMediaArtifactService;
 import com.jiandou.api.task.infrastructure.mybatis.MaterialAssetEntity;
 import com.jiandou.api.workflow.WorkflowConstants;
 import com.jiandou.api.workflow.infrastructure.WorkflowJsonSupport;
-import com.jiandou.api.workflow.infrastructure.mybatis.MaterialAssetTagEntity;
 import com.jiandou.api.workflow.infrastructure.mybatis.StageVersionEntity;
 import com.jiandou.api.workflow.infrastructure.mybatis.StageWorkflowEntity;
 import java.time.OffsetDateTime;
@@ -15,9 +14,7 @@ import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
-import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -95,7 +92,6 @@ public class WorkflowMockDataBootstrap {
             "9:16",
             "new-chinese",
             "gpt-5.1",
-            "gpt-4.1-mini",
             "flux-1.1-pro",
             "kling-v1-6",
             "720p",
@@ -316,7 +312,6 @@ public class WorkflowMockDataBootstrap {
                 )
             );
             workflowRepository.saveMaterialAsset(joinAsset);
-            saveTags(joinAsset, workflow, List.of("茶饮", "成片", "可下载"));
 
             workflow.setFinalJoinAssetId(joinAsset.getMaterialAssetId());
             workflow.setCurrentStage(WorkflowConstants.STAGE_JOINED);
@@ -356,7 +351,6 @@ public class WorkflowMockDataBootstrap {
             "16:9",
             "outdoor-commercial",
             "gpt-5.1-mini",
-            "gpt-4.1-mini",
             "flux-1.1-dev",
             "kling-v1-6",
             "720p",
@@ -721,60 +715,16 @@ public class WorkflowMockDataBootstrap {
     private void saveTextSeed(TextSeed seed, StageWorkflowEntity workflow, List<String> customTags) {
         workflowRepository.saveMaterialAsset(seed.asset());
         workflowRepository.saveStageVersion(seed.version());
-        saveTags(seed.asset(), workflow, customTags);
     }
 
     private void saveKeyframeSeed(KeyframeSeed seed, StageWorkflowEntity workflow, List<String> customTags) {
         workflowRepository.saveMaterialAsset(seed.asset());
         workflowRepository.saveStageVersion(seed.version());
-        saveTags(seed.asset(), workflow, customTags);
     }
 
     private void saveVideoSeed(VideoSeed seed, StageWorkflowEntity workflow, List<String> customTags) {
         workflowRepository.saveMaterialAsset(seed.asset());
         workflowRepository.saveStageVersion(seed.version());
-        saveTags(seed.asset(), workflow, customTags);
-    }
-
-    private void saveTags(MaterialAssetEntity asset, StageWorkflowEntity workflow, List<String> customTags) {
-        List<MaterialAssetTagEntity> tags = new ArrayList<>();
-        addSystemTag(tags, asset.getMaterialAssetId(), "stageType", asset.getStageType());
-        addSystemTag(tags, asset.getMaterialAssetId(), "mediaType", asset.getMediaType());
-        addSystemTag(tags, asset.getMaterialAssetId(), "model", asset.getOriginModel());
-        addSystemTag(tags, asset.getMaterialAssetId(), "clipIndex", String.valueOf(intValue(asset.getClipIndex(), 0)));
-        addSystemTag(tags, asset.getMaterialAssetId(), "selected", intValue(asset.getSelectedForNext(), 0) == 1 ? "selected" : "unselected");
-        if (workflow != null) {
-            addSystemTag(tags, asset.getMaterialAssetId(), "style", workflow.getStylePreset());
-            addSystemTag(tags, asset.getMaterialAssetId(), "aspectRatio", workflow.getAspectRatio());
-        }
-        if (asset.getUserRating() != null) {
-            addSystemTag(tags, asset.getMaterialAssetId(), "ratingBucket", asset.getUserRating() + "star");
-        }
-        for (String tagValue : normalizeCustomTags(customTags)) {
-            MaterialAssetTagEntity tag = new MaterialAssetTagEntity();
-            tag.setAssetTagId(randomTagId());
-            tag.setMaterialAssetId(asset.getMaterialAssetId());
-            tag.setTagType("custom");
-            tag.setTagKey("custom");
-            tag.setTagValue(tagValue);
-            tag.setIsDeleted(0);
-            tags.add(tag);
-        }
-        workflowRepository.saveMaterialAssetTags(asset.getMaterialAssetId(), tags);
-    }
-
-    private void addSystemTag(List<MaterialAssetTagEntity> tags, String assetId, String key, String value) {
-        if (value == null || value.isBlank()) {
-            return;
-        }
-        MaterialAssetTagEntity tag = new MaterialAssetTagEntity();
-        tag.setAssetTagId(randomTagId());
-        tag.setMaterialAssetId(assetId);
-        tag.setTagType("system");
-        tag.setTagKey(key);
-        tag.setTagValue(value);
-        tag.setIsDeleted(0);
-        tags.add(tag);
     }
 
     private StageWorkflowEntity workflowEntity(
@@ -786,7 +736,6 @@ public class WorkflowMockDataBootstrap {
         String aspectRatio,
         String stylePreset,
         String textAnalysisModel,
-        String visionModel,
         String imageModel,
         String videoModel,
         String videoSize,
@@ -812,7 +761,6 @@ public class WorkflowMockDataBootstrap {
         workflow.setAspectRatio(aspectRatio);
         workflow.setStylePreset(stylePreset);
         workflow.setTextAnalysisModel(textAnalysisModel);
-        workflow.setVisionModel(visionModel);
         workflow.setImageModel(imageModel);
         workflow.setVideoModel(videoModel);
         workflow.setVideoSize(videoSize);
@@ -946,20 +894,6 @@ public class WorkflowMockDataBootstrap {
         return asset;
     }
 
-    private List<String> normalizeCustomTags(List<String> values) {
-        if (values == null || values.isEmpty()) {
-            return List.of();
-        }
-        List<String> normalized = new ArrayList<>();
-        for (String value : values) {
-            String item = value == null ? "" : value.trim().toLowerCase(Locale.ROOT);
-            if (!item.isBlank() && !normalized.contains(item)) {
-                normalized.add(item);
-            }
-        }
-        return normalized;
-    }
-
     private SysUserEntity resolveSeedOwner() {
         List<SysUserEntity> users = authRepository.listUsers();
         for (SysUserEntity user : users) {
@@ -1079,10 +1013,6 @@ public class WorkflowMockDataBootstrap {
         } catch (NumberFormatException ex) {
             return defaultValue;
         }
-    }
-
-    private String randomTagId() {
-        return "atag_" + UUID.randomUUID().toString().replace("-", "");
     }
 
     private record TextSeed(MaterialAssetEntity asset, StageVersionEntity version) {

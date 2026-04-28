@@ -258,13 +258,11 @@ public class TaskApplicationServiceImpl implements TaskApplicationService {
         Map<String, Object> payload = new LinkedHashMap<>(taskQueryService.adminOverview());
         payload.put("modelReady",
             !modelResolver.listModelsByKind(com.jiandou.api.generation.GenerationModelKinds.TEXT).isEmpty()
-                && !modelResolver.listModelsByKind(com.jiandou.api.generation.GenerationModelKinds.VISION).isEmpty()
                 && !modelResolver.listModelsByKind(com.jiandou.api.generation.GenerationModelKinds.IMAGE).isEmpty()
                 && !modelResolver.listModelsByKind(com.jiandou.api.generation.GenerationModelKinds.VIDEO).isEmpty()
         );
         payload.put("primaryModel", null);
         payload.put("textModel", null);
-        payload.put("visionModel", null);
         return payload;
     }
 

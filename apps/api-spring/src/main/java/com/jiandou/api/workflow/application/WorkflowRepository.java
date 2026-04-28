@@ -8,20 +8,16 @@ import com.jiandou.api.task.infrastructure.mybatis.SystemLogMapper;
 import com.jiandou.api.task.infrastructure.mybatis.TaskModelCallEntity;
 import com.jiandou.api.task.infrastructure.mybatis.TaskModelCallMapper;
 import com.jiandou.api.workflow.infrastructure.WorkflowJsonSupport;
-import com.jiandou.api.workflow.infrastructure.mybatis.MaterialAssetTagEntity;
-import com.jiandou.api.workflow.infrastructure.mybatis.MaterialAssetTagMapper;
 import com.jiandou.api.workflow.infrastructure.mybatis.StageVersionEntity;
 import com.jiandou.api.workflow.infrastructure.mybatis.StageVersionMapper;
 import com.jiandou.api.workflow.infrastructure.mybatis.StageWorkflowEntity;
 import com.jiandou.api.workflow.infrastructure.mybatis.StageWorkflowMapper;
 import java.time.OffsetDateTime;
-import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
-import java.util.stream.Collectors;
 import org.apache.ibatis.session.SqlSession;
 import org.apache.ibatis.session.SqlSessionFactory;
 import org.springframework.stereotype.Repository;
@@ -195,54 +191,6 @@ public class WorkflowRepository {
                     .eq(ownerUserId != null, MaterialAssetEntity::getOwnerUserId, ownerUserId)
                     .eq(MaterialAssetEntity::getIsDeleted, 0)
                     .orderByDesc(MaterialAssetEntity::getCreateTime)
-            );
-        }
-    }
-
-    public void saveMaterialAssetTags(String materialAssetId, List<MaterialAssetTagEntity> tags) {
-        try (SqlSession session = sqlSessionFactory.openSession(true)) {
-            MaterialAssetTagMapper mapper = session.getMapper(MaterialAssetTagMapper.class);
-            List<MaterialAssetTagEntity> existing = mapper.selectList(
-                Wrappers.<MaterialAssetTagEntity>lambdaQuery()
-                    .eq(MaterialAssetTagEntity::getMaterialAssetId, materialAssetId)
-                    .eq(MaterialAssetTagEntity::getIsDeleted, 0)
-            );
-            for (MaterialAssetTagEntity item : existing) {
-                item.setIsDeleted(1);
-                mapper.updateById(item);
-            }
-            for (MaterialAssetTagEntity item : tags) {
-                mapper.insert(item);
-            }
-        }
-    }
-
-    public Map<String, List<MaterialAssetTagEntity>> listTagsByAssetIds(Collection<String> assetIds) {
-        if (assetIds == null || assetIds.isEmpty()) {
-            return Map.of();
-        }
-        try (SqlSession session = sqlSessionFactory.openSession()) {
-            List<MaterialAssetTagEntity> tags = session.getMapper(MaterialAssetTagMapper.class).selectList(
-                Wrappers.<MaterialAssetTagEntity>lambdaQuery()
-                    .in(MaterialAssetTagEntity::getMaterialAssetId, assetIds)
-                    .eq(MaterialAssetTagEntity::getIsDeleted, 0)
-                    .orderByAsc(MaterialAssetTagEntity::getTagType)
-                    .orderByAsc(MaterialAssetTagEntity::getTagKey)
-                    .orderByAsc(MaterialAssetTagEntity::getTagValue)
-            );
-            return tags.stream().collect(Collectors.groupingBy(MaterialAssetTagEntity::getMaterialAssetId, LinkedHashMap::new, Collectors.toList()));
-        }
-    }
-
-    public List<MaterialAssetTagEntity> listTags(String materialAssetId) {
-        try (SqlSession session = sqlSessionFactory.openSession()) {
-            return session.getMapper(MaterialAssetTagMapper.class).selectList(
-                Wrappers.<MaterialAssetTagEntity>lambdaQuery()
-                    .eq(MaterialAssetTagEntity::getMaterialAssetId, materialAssetId)
-                    .eq(MaterialAssetTagEntity::getIsDeleted, 0)
-                    .orderByAsc(MaterialAssetTagEntity::getTagType)
-                    .orderByAsc(MaterialAssetTagEntity::getTagKey)
-                    .orderByAsc(MaterialAssetTagEntity::getTagValue)
             );
         }
     }

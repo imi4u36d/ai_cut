@@ -187,6 +187,21 @@ const navItems = [
     `,
   },
   {
+    to: "/material-center",
+    label: "素材中心",
+    icon: `
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M4 6.5h16" />
+        <path d="M6.5 4v5" />
+        <path d="M17.5 4v5" />
+        <rect x="4" y="11" width="7" height="8" rx="1.6" />
+        <rect x="13" y="11" width="7" height="8" rx="1.6" />
+        <path d="m7 16 1.4-1.6 2.1 2.6" />
+        <path d="m16 16 1.1-1.2 1.9 2.2" />
+      </svg>
+    `,
+  },
+  {
     to: "/materials",
     label: "素材库",
     icon: `

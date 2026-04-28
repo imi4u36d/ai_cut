@@ -36,10 +36,7 @@ public class OpenAiCompatibleTextModelProvider implements TextModelProvider {
     @Override
     public TextModelResponse generate(ModelRuntimeProfile profile, TextModelInvocation invocation) {
         if (!profile.ready()) {
-            throw new GenerationConfigurationException((invocation.vision() ? "vision" : "text") + " model config missing api key or base url");
-        }
-        if (invocation.vision() && (invocation.imageUrls() == null || invocation.imageUrls().isEmpty())) {
-            throw new GenerationProviderException("vision model request requires at least one image url");
+            throw new GenerationConfigurationException("text model config missing api key or base url");
         }
         PreparedTextModelRequest prepared = prepare(profile, invocation);
         long startedAt = System.nanoTime();
@@ -48,7 +45,7 @@ public class OpenAiCompatibleTextModelProvider implements TextModelProvider {
             profile.apiKey(),
             prepared.body(),
             profile.timeoutSeconds(),
-            (invocation.vision() ? "vision" : "text") + " model request failed"
+            "text model request failed"
         );
         int latencyMs = (int) ((System.nanoTime() - startedAt) / 1_000_000L);
         Map<String, Object> responseMap = transport.decode(response.body());
@@ -58,8 +55,8 @@ public class OpenAiCompatibleTextModelProvider implements TextModelProvider {
         providerRequest.put("body", prepared.body());
         String text = transport.extractText(responseMap).trim();
         if (text.isBlank()) {
-            throw new GenerationProviderException(
-                (invocation.vision() ? "vision" : "text") + " model response is empty",
+            throw new com.jiandou.api.generation.exception.GenerationProviderException(
+                "text model response is empty",
                 providerRequest,
                 responseMap,
                 response.statusCode()

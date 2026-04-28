@@ -27,7 +27,7 @@ class TaskControllerTest {
         ops.setModelCallLimit(126);
         TaskController controller = new TaskController(service, ops);
 
-        CreateGenerationTaskRequest createRequest = new CreateGenerationTaskRequest("title", null, null, null, null, null, null, null, null, null, null, null, null, null, null);
+        CreateGenerationTaskRequest createRequest = new CreateGenerationTaskRequest("title", null, null, null, null, null, null, null, null, null, null, null, null, null);
         GenerateCreativePromptRequest promptRequest = new GenerateCreativePromptRequest("title", "9:16", 4, 8, "intro", "outro", "tx");
         RateTaskEffectRequest rateRequest = new RateTaskEffectRequest(5, "good");
         Map<String, Object> row = Map.of("id", "task_1");

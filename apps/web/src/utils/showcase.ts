@@ -39,7 +39,6 @@ const MODEL_NODE_DEFS: Array<{
   className: string;
 }> = [
   { key: "textAnalysisModel", badge: "文", name: "文本模型", className: "showcase-node-openai" },
-  { key: "visionModel", badge: "视", name: "视觉模型", className: "showcase-node-vision" },
   { key: "imageModel", badge: "帧", name: "关键帧模型", className: "showcase-node-frame" },
   { key: "videoModel", badge: "影", name: "视频模型", className: "showcase-node-sora" },
 ];
@@ -66,7 +65,6 @@ export function resolveShowcaseVisual(item: Pick<TaskShowcaseItem, "id" | "title
 export function selectShowcasePrimaryModel(item: TaskShowcaseItem) {
   return item.models?.videoModel
     || item.models?.imageModel
-    || item.models?.visionModel
     || item.models?.textAnalysisModel
     || "";
 }

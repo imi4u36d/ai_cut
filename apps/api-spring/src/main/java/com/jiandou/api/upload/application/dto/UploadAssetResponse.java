@@ -7,6 +7,7 @@ public record UploadAssetResponse(
     String assetId,
     String fileName,
     String fileUrl,
+    String publicUrl,
     long sizeBytes
 ) {
 }

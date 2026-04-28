@@ -39,7 +39,7 @@ class TextModelProviderRegistryTest {
                 2048,
                 "test"
             ),
-            new com.jiandou.api.generation.runtime.TextProviderCapabilities(false, true, false)
+            new com.jiandou.api.generation.runtime.TextProviderCapabilities(false, true)
         );
     }
 }

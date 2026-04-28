@@ -40,7 +40,6 @@ class TaskExecutionRuntimeSupportTest {
         TaskRecord task = new TaskRecord();
         task.setRequestSnapshot(GenerationRequestSnapshot.fromMap(Map.of(
             "textAnalysisModel", "gpt-text",
-            "visionModel", "vision-1",
             "videoModel", "video-1"
         )));
         when(modelResolver.value("catalog.defaults", "video_generate_audio", "true")).thenReturn("true");

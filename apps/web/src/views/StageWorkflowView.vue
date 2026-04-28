@@ -390,23 +390,6 @@
                       </div>
                     </div>
 
-                    <div v-else-if="currentStageField?.key === 'visionModel'" class="stage-progress-form__field">
-                      <span>选择视觉模型</span>
-                      <div class="stage-option-grid">
-                        <button
-                          v-for="item in visionModelOptions"
-                          :key="item.value"
-                          type="button"
-                          class="stage-option-card"
-                          :class="{ 'stage-option-card-active': createForm.visionModel === item.value }"
-                          @click="createForm.visionModel = item.value"
-                        >
-                          <strong>{{ item.label }}</strong>
-                          <span>{{ item.description || item.provider || item.value }}</span>
-                        </button>
-                      </div>
-                    </div>
-
                     <div v-else-if="currentStageField?.key === 'videoModel'" class="stage-progress-form__field">
                       <span>选择视频模型</span>
                       <div class="stage-option-grid">
@@ -529,6 +512,105 @@
       </div>
 
       <template v-else-if="selectedWorkflow">
+        <section class="surface-panel workflow-settings-panel">
+          <div class="workflow-settings-panel__head">
+            <div>
+              <p class="workflow-eyebrow">Workflow Settings</p>
+              <h2>工作流设置</h2>
+              <div class="workflow-summary__meta">
+                <span class="surface-chip">{{ valueOptionLabel(aspectRatioOptions, selectedWorkflow.aspectRatio, selectedWorkflow.aspectRatio || "未设置") }}</span>
+                <span class="surface-chip">{{ keyOptionLabel(stylePresetOptions, selectedWorkflow.stylePreset, selectedWorkflow.stylePreset || "未设置") }}</span>
+                <span class="surface-chip">{{ valueOptionLabel(videoSizeOptions, selectedWorkflow.videoSize, selectedWorkflow.videoSize || "未设置") }}</span>
+              </div>
+            </div>
+            <button class="btn-secondary btn-sm" type="button" @click="workflowSettingsOpen = !workflowSettingsOpen">
+              {{ workflowSettingsOpen ? "收起设置" : "编辑设置" }}
+            </button>
+          </div>
+
+          <form v-if="workflowSettingsOpen" class="workflow-settings-form" @submit.prevent="handleUpdateWorkflowSettings">
+            <label class="workflow-field workflow-settings-field-model">
+              <span>文本模型</span>
+              <select v-model="workflowSettingsDraft.textAnalysisModel" class="field-input">
+                <option v-for="item in textModelOptions" :key="item.value" :value="item.value">{{ item.label }}</option>
+              </select>
+            </label>
+            <label class="workflow-field workflow-settings-field-model">
+              <span>关键帧模型</span>
+              <select v-model="workflowSettingsDraft.imageModel" class="field-input">
+                <option v-for="item in imageModelOptions" :key="item.value" :value="item.value">{{ item.label }}</option>
+              </select>
+            </label>
+            <label class="workflow-field workflow-settings-field-model">
+              <span>视频模型</span>
+              <select v-model="workflowSettingsDraft.videoModel" class="field-input">
+                <option v-for="item in videoModelOptions" :key="item.value" :value="item.value">{{ item.label }}</option>
+              </select>
+            </label>
+            <label class="workflow-field workflow-settings-field-compact">
+              <span>视觉风格</span>
+              <select v-model="workflowSettingsDraft.stylePreset" class="field-input">
+                <option v-for="item in stylePresetOptions" :key="item.key" :value="item.key">{{ item.label }}</option>
+              </select>
+            </label>
+            <label class="workflow-field workflow-settings-field-short">
+              <span>长宽比</span>
+              <select v-model="workflowSettingsDraft.aspectRatio" class="field-input">
+                <option v-for="item in aspectRatioOptions" :key="item.value" :value="item.value">{{ item.label }}</option>
+              </select>
+            </label>
+            <label class="workflow-field workflow-settings-field-short">
+              <span>关键帧 Seed</span>
+              <input v-model="workflowSettingsDraft.keyframeSeed" class="field-input" type="number" min="0" max="999999999" placeholder="自动" />
+            </label>
+            <label class="workflow-field workflow-settings-field-compact">
+              <span>输出尺寸</span>
+              <select v-model="workflowSettingsDraft.videoSize" class="field-input">
+                <option v-for="item in videoSizeOptions" :key="item.value" :value="item.value">{{ item.label }}</option>
+              </select>
+            </label>
+            <label class="workflow-field workflow-settings-field-short">
+              <span>视频 Seed</span>
+              <input v-model="workflowSettingsDraft.videoSeed" class="field-input" type="number" min="0" max="999999999" placeholder="自动" />
+            </label>
+            <div class="workflow-field workflow-settings-field-mode">
+              <span>镜头时长模式</span>
+              <div class="stage-toggle-row">
+                <button
+                  type="button"
+                  class="stage-toggle-chip"
+                  :class="{ 'stage-toggle-chip-active': workflowSettingsDraft.durationMode === 'auto' }"
+                  @click="workflowSettingsDraft.durationMode = 'auto'"
+                >
+                  自动
+                </button>
+                <button
+                  type="button"
+                  class="stage-toggle-chip"
+                  :class="{ 'stage-toggle-chip-active': workflowSettingsDraft.durationMode === 'manual' }"
+                  @click="workflowSettingsDraft.durationMode = 'manual'"
+                >
+                  手动
+                </button>
+              </div>
+            </div>
+            <label class="workflow-field workflow-settings-field-duration">
+              <span>最小时长</span>
+              <input v-model="workflowSettingsDraft.minDurationSeconds" class="field-input" type="number" min="1" max="60" step="1" :disabled="workflowSettingsDraft.durationMode === 'auto'" />
+            </label>
+            <label class="workflow-field workflow-settings-field-duration">
+              <span>最大时长</span>
+              <input v-model="workflowSettingsDraft.maxDurationSeconds" class="field-input" type="number" min="1" max="60" step="1" :disabled="workflowSettingsDraft.durationMode === 'auto'" />
+            </label>
+            <div class="workflow-settings-form__actions">
+              <span v-if="workflowSettingsValidationMessage" class="stage-progress-form__field-error">{{ workflowSettingsValidationMessage }}</span>
+              <button class="btn-primary btn-sm" type="submit" :disabled="busyActionKey === 'workflow-settings' || Boolean(workflowSettingsValidationMessage)">
+                {{ busyActionKey === "workflow-settings" ? "保存中..." : "保存设置" }}
+              </button>
+            </div>
+          </form>
+        </section>
+
         <section v-if="activeCreateStage === 'storyboard'" class="surface-panel workflow-panel workflow-stage-panel">
           <div class="workflow-panel__head">
             <div>
@@ -555,12 +637,6 @@
                 </button>
               </div>
               <div class="workflow-summary__actions">
-                <input
-                  v-model="storyboardExtraPromptDraft"
-                  class="field-input workflow-inline-prompt__input"
-                  type="text"
-                  placeholder="补充本次分镜生成要求，提交时追加到提示词末尾"
-                />
                 <button class="btn-primary btn-sm" type="button" :disabled="busyActionKey === 'storyboard'" @click="handleGenerateStoryboard">
                   {{ busyActionKey === "storyboard" ? "生成中..." : "生成分镜版本" }}
                 </button>
@@ -594,6 +670,23 @@
                   </div>
 
                   <div class="version-card__text version-card__markdown" v-html="storyboardPreviewHtml(version)"></div>
+
+                  <div class="storyboard-adjust-row">
+                    <input
+                      v-model="storyboardAdjustmentDrafts[version.id]"
+                      class="field-input storyboard-adjust-row__input"
+                      type="text"
+                      placeholder="输入调整要求，留空则自动审查"
+                    />
+                    <button
+                      class="btn-primary btn-sm"
+                      type="button"
+                      :disabled="busyActionKey === `storyboard-adjust-${version.id}` || version.status !== 'SUCCEEDED'"
+                      @click="handleAdjustStoryboard(version.id)"
+                    >
+                      {{ busyActionKey === `storyboard-adjust-${version.id}` ? "调整中..." : "调整" }}
+                    </button>
+                  </div>
 
                   <div class="rating-row">
                     <button
@@ -701,7 +794,15 @@
                         {{ selectedCharacterSheetVersion(sheet)?.title }}
                       </span>
                       <button
-                        class="btn-secondary btn-sm"
+                        class="btn-primary btn-sm"
+                        type="button"
+                        :disabled="characterSheetClipIndex(sheet) === null"
+                        @click="openCharacterAssetPicker(sheet)"
+                      >
+                        从素材库选择
+                      </button>
+                      <button
+                        class="btn-ghost btn-sm"
                         type="button"
                         :disabled="characterSheetClipIndex(sheet) === null || busyActionKey === `keyframe-${characterSheetClipIndex(sheet)}`"
                         @click="handleGenerateKeyframe(characterSheetClipIndex(sheet) || 0)"
@@ -710,6 +811,84 @@
                       </button>
                     </div>
                   </div>
+
+                  <section v-if="isCharacterAssetPickerOpen(sheet)" class="character-asset-picker">
+                    <div class="character-asset-picker__head">
+                      <div>
+                        <p class="workflow-eyebrow">Material Library</p>
+                        <h4>选择 {{ characterSheetTitle(sheet) }} 的三视图素材</h4>
+                      </div>
+                      <button class="btn-secondary btn-sm" type="button" @click="closeCharacterAssetPicker">
+                        收起
+                      </button>
+                    </div>
+
+                    <div class="character-asset-picker__filters">
+                      <label class="workflow-field">
+                        <span>关键词</span>
+                        <input
+                          v-model="characterAssetPicker.keyword"
+                          class="field-input"
+                          type="search"
+                          placeholder="按角色名、标题搜索"
+                          @keyup.enter="loadCharacterAssetCandidates(sheet)"
+                        />
+                      </label>
+                      <label class="workflow-field">
+                        <span>模型</span>
+                        <input
+                          v-model="characterAssetPicker.model"
+                          class="field-input"
+                          type="search"
+                          placeholder="按模型筛选"
+                          @keyup.enter="loadCharacterAssetCandidates(sheet)"
+                        />
+                      </label>
+                      <button
+                        class="btn-secondary btn-sm character-asset-picker__search"
+                        type="button"
+                        :disabled="characterAssetPicker.loading"
+                        @click="loadCharacterAssetCandidates(sheet)"
+                      >
+                        {{ characterAssetPicker.loading ? "搜索中..." : "搜索素材" }}
+                      </button>
+                    </div>
+
+                    <p v-if="characterAssetPicker.error" class="workflow-error">{{ characterAssetPicker.error }}</p>
+                    <div v-else-if="characterAssetPicker.loading" class="workflow-empty workflow-empty-nested">
+                      正在加载三视图素材...
+                    </div>
+                    <div v-else-if="!characterAssetPicker.assets.length" class="workflow-empty workflow-empty-nested">
+                      没有匹配的角色三视图素材。
+                    </div>
+                    <div v-else class="character-asset-grid">
+                      <article v-for="asset in characterAssetPicker.assets" :key="asset.id" class="character-asset-card">
+                        <button
+                          type="button"
+                          class="character-asset-card__preview"
+                          :aria-label="`查看${asset.title}素材预览`"
+                          @click="openImagePreview(materialAssetPreviewUrl(asset), asset.title)"
+                        >
+                          <img :src="materialAssetPreviewUrl(asset)" :alt="asset.title" />
+                        </button>
+                        <div class="character-asset-card__body">
+                          <strong>{{ asset.title }}</strong>
+                          <div class="character-asset-card__meta">
+                            <span class="surface-chip surface-chip-quiet">{{ materialAssetModelLabel(asset) }}</span>
+                            <span class="surface-chip surface-chip-quiet">评分 {{ ratingLabel(asset.userRating) }}</span>
+                          </div>
+                        </div>
+                        <button
+                          class="btn-primary btn-sm"
+                          type="button"
+                          :disabled="busyActionKey === `character-sheet-asset-${characterSheetClipIndex(sheet)}`"
+                          @click="handleSelectCharacterSheetAsset(sheet, asset.id)"
+                        >
+                          {{ busyActionKey === `character-sheet-asset-${characterSheetClipIndex(sheet)}` ? "选择中..." : "选择此素材" }}
+                        </button>
+                      </article>
+                    </div>
+                  </section>
 
                   <div v-if="!characterSheetVersions(sheet).length" class="workflow-empty workflow-empty-nested">
                     还没有角色三视图版本。
@@ -815,29 +994,32 @@
 
             <article v-for="slot in selectedWorkflow.clipSlots" :key="slot.clipIndex" class="surface-tile clip-card">
               <div class="clip-card__head">
-                <div>
+                <div class="clip-card__main">
                   <p class="workflow-eyebrow">Clip {{ slot.clipIndex }}</p>
-                  <h3>{{ slot.shotLabel || `镜头 #${slot.clipIndex}` }}</h3>
-                  <p class="clip-card__desc">{{ slot.scene || "暂无场景描述" }}</p>
+                  <div class="clip-card__title-row">
+                    <h3>{{ slot.shotLabel || `镜头 #${slot.clipIndex}` }}</h3>
+                    <HintBell
+                      class="clip-card__bell"
+                      title="完整分镜内容"
+                      :text="clipSceneText(slot)"
+                      :max-width="560"
+                      align="left"
+                    />
+                  </div>
+                  <p class="clip-card__desc">{{ clipSceneSummary(slot) }}</p>
                   <div v-if="slot.matchedCharacters?.length" class="clip-card__meta clip-card__meta-inline">
                     <span
                       v-for="character in slot.matchedCharacters"
                       :key="`${slot.clipIndex}-${character.clipIndex}-${character.characterName}`"
-                      class="surface-chip surface-chip-quiet"
+                      class="surface-chip surface-chip-quiet clip-card__character-chip"
                     >
                       {{ character.characterName }}
                     </span>
                   </div>
                 </div>
-                <div class="clip-card__meta">
-                  <span class="surface-chip">{{ slot.durationHint || `${slot.targetDurationSeconds || 0}s` }}</span>
-                  <input
-                    v-model="keyframeExtraPromptDrafts[slot.clipIndex]"
-                    class="field-input workflow-inline-prompt__input workflow-inline-prompt__input-clip"
-                    type="text"
-                    placeholder="补充本次关键帧生成要求"
-                  />
-                  <button class="btn-secondary btn-sm" type="button" :disabled="busyActionKey === `keyframe-${slot.clipIndex}`" @click="handleGenerateKeyframe(slot.clipIndex)">
+                <div class="clip-card__meta clip-card__side-actions">
+                  <span class="surface-chip clip-card__duration-chip">{{ slot.durationHint || `${slot.targetDurationSeconds || 0}s` }}</span>
+                  <button class="btn-secondary btn-sm clip-card__action-button" type="button" :disabled="busyActionKey === `keyframe-${slot.clipIndex}`" @click="handleGenerateKeyframe(slot.clipIndex)">
                     {{ busyActionKey === `keyframe-${slot.clipIndex}` ? "生成中..." : "生成关键帧" }}
                   </button>
                 </div>
@@ -870,13 +1052,14 @@
                   </div>
 
                   <div
-                    v-if="keyframePreviewFrames(version).length"
+                    v-if="keyframePreviewFrames(version, slot).length"
                     class="keyframe-frame-grid"
                     :class="{ 'keyframe-frame-grid-landscape': isLandscapeKeyframeVersion(version) }"
                   >
-                    <article v-for="frame in keyframePreviewFrames(version)" :key="`${version.id}-${frame.role}`" class="keyframe-frame-card">
+                    <article v-for="frame in keyframePreviewFrames(version, slot)" :key="`${version.id}-${frame.role}`" class="keyframe-frame-card">
                       <div class="keyframe-frame-card__head">
                         <span class="surface-chip surface-chip-quiet">{{ frame.label }}</span>
+                        <span v-if="frame.selected" class="surface-chip">已选中</span>
                       </div>
                       <button
                         type="button"
@@ -891,6 +1074,25 @@
                           :alt="`${version.title}${frame.label}`"
                         />
                       </button>
+                      <div class="keyframe-frame-card__actions">
+                        <button
+                          class="btn-secondary btn-sm"
+                          type="button"
+                          :disabled="frame.selected || busyActionKey === `${version.id}-${frame.role}`"
+                          @click="handleSelectKeyframeFrame(slot.clipIndex, version.id, frame.role)"
+                        >
+                          {{ busyActionKey === `${version.id}-${frame.role}` ? "处理中..." : "选中此帧" }}
+                        </button>
+                        <button
+                          class="btn-ghost btn-sm"
+                          type="button"
+                          :disabled="!frame.regenerable || busyActionKey === `keyframe-${slot.clipIndex}-${frame.role}`"
+                          :title="frame.regenerable ? `单独重生${frame.label}` : '该首帧由上一镜头尾帧承接，请重生上一镜头尾帧'"
+                          @click="handleGenerateKeyframeFrame(slot.clipIndex, frame.role)"
+                        >
+                          {{ busyActionKey === `keyframe-${slot.clipIndex}-${frame.role}` ? "生成中..." : "重生此帧" }}
+                        </button>
+                      </div>
                     </article>
                   </div>
                   <div v-else class="workflow-empty workflow-empty-nested">
@@ -946,7 +1148,6 @@
               <p class="workflow-eyebrow">Stage 3 / Finalize</p>
               <h2>视频生成模块</h2>
               <div class="workflow-summary__meta">
-                <span class="surface-chip">{{ valueOptionLabel(visionModelOptions, selectedWorkflow.visionModel, selectedWorkflow.visionModel || "未设置") }}</span>
                 <span class="surface-chip">{{ valueOptionLabel(videoModelOptions, selectedWorkflow.videoModel, selectedWorkflow.videoModel || "未设置") }}</span>
                 <span class="surface-chip">{{ valueOptionLabel(videoSizeOptions, selectedWorkflow.videoSize, selectedWorkflow.videoSize || "未设置") }}</span>
                 <span class="surface-chip">视频 Seed {{ seedLabel(selectedWorkflow.videoSeed) }}</span>
@@ -1050,23 +1251,26 @@
               <div v-else class="clip-stack">
                 <article v-for="slot in selectedWorkflow.clipSlots" :key="`video-${slot.clipIndex}`" class="surface-tile clip-card">
                   <div class="clip-card__head">
-                    <div>
+                    <div class="clip-card__main">
                       <p class="workflow-eyebrow">Clip {{ slot.clipIndex }}</p>
-                      <h3>{{ slot.shotLabel || `镜头 #${slot.clipIndex}` }}</h3>
-                      <p class="clip-card__desc">{{ slot.scene || "暂无场景描述" }}</p>
+                      <div class="clip-card__title-row">
+                        <h3>{{ slot.shotLabel || `镜头 #${slot.clipIndex}` }}</h3>
+                        <HintBell
+                          class="clip-card__bell"
+                          title="完整分镜内容"
+                          :text="clipSceneText(slot)"
+                          :max-width="560"
+                          align="left"
+                        />
+                      </div>
+                      <p class="clip-card__desc">{{ clipSceneSummary(slot) }}</p>
                     </div>
-                    <div class="clip-card__meta">
-                      <span class="surface-chip">
+                    <div class="clip-card__meta clip-card__side-actions clip-card__side-actions-video">
+                      <span class="surface-chip clip-card__selection-chip">
                         {{ selectedKeyframeVersion(slot)?.title || "未选择关键帧" }}
                       </span>
-                      <input
-                        v-model="videoExtraPromptDrafts[slot.clipIndex]"
-                        class="field-input workflow-inline-prompt__input workflow-inline-prompt__input-clip"
-                        type="text"
-                        placeholder="补充本次视频生成要求"
-                      />
                       <button
-                        class="btn-primary btn-sm"
+                        class="btn-primary btn-sm clip-card__action-button"
                         type="button"
                         :disabled="!selectedKeyframeVersion(slot) || busyActionKey === `video-${slot.clipIndex}`"
                         @click="handleGenerateVideo(slot.clipIndex)"
@@ -1200,8 +1404,9 @@
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { fetchGenerationOptions } from "@/api/generation";
-import { reuseMaterialAsset } from "@/api/material-assets";
+import { fetchMaterialAssets, reuseMaterialAsset } from "@/api/material-assets";
 import {
+  adjustStoryboard,
   createWorkflow,
   deleteStageVersion,
   deleteWorkflow,
@@ -1209,19 +1414,26 @@ import {
   fetchWorkflows,
   finalizeWorkflow,
   generateKeyframe,
+  generateKeyframeFrame,
   generateStoryboard,
   generateVideo,
   rateStageVersion,
   rateWorkflow,
+  selectCharacterSheetAsset,
   selectKeyframe,
+  selectKeyframeFrame,
   selectStoryboard,
   selectVideo,
+  updateWorkflowSettings,
 } from "@/api/workflows";
+import HintBell from "@/components/HintBell.vue";
 import { renderMarkdownToHtml } from "@/utils/markdown";
 import type {
   CreateWorkflowRequest,
   GenerationOptionsResponse,
+  MaterialAssetLibraryItem,
   StageVersion,
+  UpdateWorkflowSettingsRequest,
   WorkflowCharacterSheet,
   WorkflowClipSlot,
   WorkflowDeleteResult,
@@ -1257,6 +1469,8 @@ interface PreviewFrame {
   role: string;
   label: string;
   url: string;
+  selected?: boolean;
+  regenerable?: boolean;
 }
 
 interface ImagePreviewItem {
@@ -1288,9 +1502,14 @@ const stageFieldIndexMap = reactive<Record<CreateStageKey, number>>({
 const listError = ref("");
 const detailError = ref("");
 const createError = ref("");
-const storyboardExtraPromptDraft = ref("");
-const keyframeExtraPromptDrafts = reactive<Record<number, string>>({});
-const videoExtraPromptDrafts = reactive<Record<number, string>>({});
+const characterAssetPicker = reactive({
+  openKey: "",
+  keyword: "",
+  model: "",
+  loading: false,
+  error: "",
+  assets: [] as MaterialAssetLibraryItem[],
+});
 const imagePreviewState = reactive({
   open: false,
   url: "",
@@ -1320,7 +1539,7 @@ const createStageOptions = [
     key: "video" as const,
     label: "视频生成卡片",
     shortLabel: "视频生成",
-    description: "视觉模型、视频模型、视频 Seed",
+    description: "视频模型、视频 Seed",
   },
 ];
 const detailStageKeys: CreateStageKey[] = ["storyboard", "keyframe", "video"];
@@ -1329,6 +1548,21 @@ const workflowRatingDraft = ref("5");
 const workflowRatingNoteDraft = ref("");
 const stageRatingDrafts = reactive<Record<string, string>>({});
 const stageNoteDrafts = reactive<Record<string, string>>({});
+const storyboardAdjustmentDrafts = reactive<Record<string, string>>({});
+const workflowSettingsOpen = ref(false);
+const workflowSettingsDraft = reactive({
+  aspectRatio: "9:16",
+  stylePreset: "",
+  textAnalysisModel: "",
+  imageModel: "",
+  videoModel: "",
+  videoSize: "",
+  keyframeSeed: "",
+  videoSeed: "",
+  durationMode: "auto" as "auto" | "manual",
+  minDurationSeconds: "5",
+  maxDurationSeconds: "12",
+});
 const storyboardDurationMode = ref<"auto" | "manual">("auto");
 const storyboardManualDurationSeconds = ref("8");
 const STORYBOARD_MANUAL_DURATION_MIN_SECONDS = 5;
@@ -1341,7 +1575,6 @@ const createForm = reactive({
   aspectRatio: "9:16",
   stylePreset: "",
   textAnalysisModel: "",
-  visionModel: "",
   imageModel: "",
   videoModel: "",
   videoSize: "",
@@ -1397,7 +1630,6 @@ const aspectRatioOptions = computed(() => options.value?.aspectRatios ?? [
 ]);
 const stylePresetOptions = computed(() => options.value?.stylePresets ?? []);
 const textModelOptions = computed(() => options.value?.textAnalysisModels ?? []);
-const visionModelOptions = computed(() => options.value?.visionModels ?? []);
 const imageModelOptions = computed(() => options.value?.imageModels ?? []);
 const videoModelOptions = computed(() => options.value?.videoModels ?? []);
 const videoSizeOptions = computed(() => options.value?.videoSizes ?? []);
@@ -1421,6 +1653,39 @@ const finalizeHint = computed(() => {
     return "会按当前选中的视频版本，依照分镜顺序拼接为完整视频。";
   }
   return "所有分镜都需要先有一个选中的视频版本，之后才能进行拼接。";
+});
+
+const workflowSettingsValidationMessage = computed(() => {
+  if (!workflowSettingsDraft.textAnalysisModel) {
+    return "请选择文本模型";
+  }
+  if (!workflowSettingsDraft.imageModel) {
+    return "请选择关键帧模型";
+  }
+  if (!workflowSettingsDraft.stylePreset) {
+    return "请选择视觉风格";
+  }
+  if (!workflowSettingsDraft.aspectRatio) {
+    return "请选择长宽比";
+  }
+  if (!workflowSettingsDraft.videoModel) {
+    return "请选择视频模型";
+  }
+  if (!workflowSettingsDraft.videoSize) {
+    return "请选择输出尺寸";
+  }
+  if (workflowSettingsDraft.durationMode === "auto") {
+    return "";
+  }
+  const minDuration = optionalInteger(workflowSettingsDraft.minDurationSeconds);
+  const maxDuration = optionalInteger(workflowSettingsDraft.maxDurationSeconds);
+  if (minDuration === null || maxDuration === null || minDuration < 1 || maxDuration < 1) {
+    return "请填写合法的镜头时长";
+  }
+  if (maxDuration < minDuration) {
+    return "最大时长不能小于最小时长";
+  }
+  return "";
 });
 
 const activeStageSteps = computed<StageFieldStep[]>(() => {
@@ -1471,12 +1736,6 @@ const activeStageSteps = computed<StageFieldStep[]>(() => {
       ];
     default:
       return [
-        {
-          key: "visionModel",
-          label: "视觉模型",
-          description: "选择负责理解关键帧与文本上下文的视觉模型。",
-          valueLabel: valueOptionLabel(visionModelOptions.value, createForm.visionModel, "未设置"),
-        },
         {
           key: "videoModel",
           label: "视频模型",
@@ -1608,13 +1867,6 @@ const createReviewSections = computed<CreateReviewSection[]>(() => [
     title: "视频生成",
     items: [
       {
-        key: "visionModel",
-        label: "视觉模型",
-        valueLabel: valueOptionLabel(visionModelOptions.value, createForm.visionModel, "未设置"),
-        configured: Boolean(createForm.visionModel),
-        required: true,
-      },
-      {
         key: "videoModel",
         label: "视频模型",
         valueLabel: valueOptionLabel(videoModelOptions.value, createForm.videoModel, "未设置"),
@@ -1692,6 +1944,14 @@ function seedLabel(value?: number | string | null) {
   return Number.isFinite(numericValue) ? String(numericValue) : "自动";
 }
 
+function optionalInteger(value?: string | number | null) {
+  if (value === undefined || value === null || value === "") {
+    return null;
+  }
+  const numericValue = Number(value);
+  return Number.isFinite(numericValue) && Number.isInteger(numericValue) ? numericValue : null;
+}
+
 function versionSeed(version: StageVersion) {
   const inputSummary = version.inputSummary ?? {};
   const seed = inputSummary.seed;
@@ -1704,6 +1964,15 @@ function versionSeed(version: StageVersion) {
 
 function durationLabel(value?: number | null) {
   return typeof value === "number" && Number.isFinite(value) && value > 0 ? `${value.toFixed(1)}s` : "-";
+}
+
+function clipSceneText(slot: WorkflowClipSlot) {
+  return (slot.scene?.trim() || "暂无场景描述");
+}
+
+function clipSceneSummary(slot: WorkflowClipSlot) {
+  const text = clipSceneText(slot);
+  return text.length > 120 ? `${text.slice(0, 120)}...` : text;
 }
 
 function formatDateTime(value?: string | null) {
@@ -1778,17 +2047,21 @@ function isLandscapeKeyframeVersion(version: StageVersion) {
   return aspectRatio.trim().startsWith("16:");
 }
 
-function keyframePreviewFrames(version: StageVersion): PreviewFrame[] {
+function keyframePreviewFrames(version: StageVersion, slot?: WorkflowClipSlot): PreviewFrame[] {
   const outputSummary = version.outputSummary ?? {};
   const firstFrameUrl = summaryUrlValue(outputSummary, "startFrameUrl", "firstFrameUrl");
   const lastFrameUrl = summaryUrlValue(outputSummary, "endFrameUrl", "lastFrameUrl", "fileUrl")
     || (typeof version.previewUrl === "string" ? version.previewUrl : "");
+  const hasExplicitFirstSelection = slot ? slot.keyframeVersions.some((item) => Boolean(item.outputSummary?.selectedFirstFrame)) : false;
+  const hasExplicitLastSelection = slot ? slot.keyframeVersions.some((item) => Boolean(item.outputSummary?.selectedLastFrame)) : false;
   const frames: PreviewFrame[] = [];
   if (firstFrameUrl) {
     frames.push({
       role: "first",
       label: "首帧",
       url: firstFrameUrl,
+      selected: Boolean(outputSummary.selectedFirstFrame || (!hasExplicitFirstSelection && version.selected)),
+      regenerable: version.clipIndex <= 1,
     });
   }
   if (lastFrameUrl && (!firstFrameUrl || lastFrameUrl !== firstFrameUrl || version.clipIndex === 1)) {
@@ -1796,6 +2069,8 @@ function keyframePreviewFrames(version: StageVersion): PreviewFrame[] {
       role: "last",
       label: "尾帧",
       url: lastFrameUrl,
+      selected: Boolean(outputSummary.selectedLastFrame || (!hasExplicitLastSelection && version.selected)),
+      regenerable: true,
     });
   }
   return frames;
@@ -1867,6 +2142,56 @@ function characterSheetPreviewFrames(version: StageVersion): PreviewFrame[] {
 
 function selectedCharacterSheetVersion(sheet: WorkflowCharacterSheet) {
   return characterSheetVersions(sheet).find((version) => version.selected) ?? null;
+}
+
+function isCharacterAssetPickerOpen(sheet: WorkflowCharacterSheet) {
+  return characterAssetPicker.openKey === characterSheetKey(sheet);
+}
+
+async function openCharacterAssetPicker(sheet: WorkflowCharacterSheet) {
+  characterAssetPicker.openKey = characterSheetKey(sheet);
+  characterAssetPicker.keyword = characterSheetTitle(sheet);
+  characterAssetPicker.model = "";
+  await loadCharacterAssetCandidates(sheet);
+}
+
+function closeCharacterAssetPicker() {
+  characterAssetPicker.openKey = "";
+  characterAssetPicker.error = "";
+  characterAssetPicker.assets = [];
+}
+
+function materialAssetPreviewUrl(asset: MaterialAssetLibraryItem) {
+  return asset.previewUrl || asset.fileUrl || asset.remoteUrl || "";
+}
+
+function materialAssetModelLabel(asset: MaterialAssetLibraryItem) {
+  return asset.originModel || asset.originProvider || "未记录模型";
+}
+
+async function loadCharacterAssetCandidates(sheet: WorkflowCharacterSheet) {
+  const expectedKey = characterSheetKey(sheet);
+  characterAssetPicker.openKey = expectedKey;
+  characterAssetPicker.loading = true;
+  characterAssetPicker.error = "";
+  try {
+    const assets = await fetchMaterialAssets({
+      q: characterAssetPicker.keyword.trim() || characterSheetTitle(sheet),
+      assetType: "character_sheet",
+      model: characterAssetPicker.model.trim() || undefined,
+    });
+    if (characterAssetPicker.openKey !== expectedKey) {
+      return;
+    }
+    characterAssetPicker.assets = assets.filter((asset) => asset.mediaType === "image" || Boolean(materialAssetPreviewUrl(asset)));
+  } catch (error) {
+    characterAssetPicker.error = error instanceof Error ? error.message : "角色三视图素材加载失败";
+    characterAssetPicker.assets = [];
+  } finally {
+    if (characterAssetPicker.openKey === expectedKey) {
+      characterAssetPicker.loading = false;
+    }
+  }
 }
 
 function applyImagePreviewItem(item: ImagePreviewItem, index: number) {
@@ -1945,9 +2270,24 @@ function selectedKeyframeVersion(slot: WorkflowClipSlot) {
   return slot.keyframeVersions.find((version) => version.selected) ?? null;
 }
 
+function selectedKeyframeFrameVersion(slot: WorkflowClipSlot, frameRole: string) {
+  const selectionKey = frameRole === "first" ? "selectedFirstFrame" : "selectedLastFrame";
+  return slot.keyframeVersions.find((version) => Boolean(version.outputSummary?.[selectionKey])) ?? selectedKeyframeVersion(slot);
+}
+
 function selectedKeyframePreviewFrames(slot: WorkflowClipSlot) {
-  const version = selectedKeyframeVersion(slot);
-  return version ? keyframePreviewFrames(version) : [];
+  const frames: PreviewFrame[] = [];
+  const firstVersion = selectedKeyframeFrameVersion(slot, "first");
+  const firstFrame = firstVersion ? keyframePreviewFrames(firstVersion, slot).find((frame) => frame.role === "first") : null;
+  if (firstFrame) {
+    frames.push(firstFrame);
+  }
+  const lastVersion = selectedKeyframeFrameVersion(slot, "last");
+  const lastFrame = lastVersion ? keyframePreviewFrames(lastVersion, slot).find((frame) => frame.role === "last") : null;
+  if (lastFrame && (!firstFrame || lastFrame.url !== firstFrame.url || slot.clipIndex === 1)) {
+    frames.push(lastFrame);
+  }
+  return frames;
 }
 
 const normalizedStoryboardManualDurationSeconds = computed(() => parseStoryboardDurationSeconds(storyboardManualDurationSeconds.value));
@@ -2023,17 +2363,41 @@ function startCreateWorkflow() {
   createReviewFlipped.value = true;
 }
 
+function syncWorkflowSettingsDraft(workflow: WorkflowDetail) {
+  const minDurationSeconds = workflow.minDurationSeconds === null || workflow.minDurationSeconds === undefined
+    ? STORYBOARD_MANUAL_DURATION_MIN_SECONDS
+    : workflow.minDurationSeconds;
+  const maxDurationSeconds = workflow.maxDurationSeconds === null || workflow.maxDurationSeconds === undefined
+    ? STORYBOARD_MANUAL_DURATION_MAX_SECONDS
+    : workflow.maxDurationSeconds;
+  const durationMode = workflow.durationMode === "manual" ? "manual" : "auto";
+  workflowSettingsDraft.aspectRatio = workflow.aspectRatio || "9:16";
+  workflowSettingsDraft.stylePreset = workflow.stylePreset || "";
+  workflowSettingsDraft.textAnalysisModel = workflow.textAnalysisModel || "";
+  workflowSettingsDraft.imageModel = workflow.imageModel || "";
+  workflowSettingsDraft.videoModel = workflow.videoModel || "";
+  workflowSettingsDraft.videoSize = workflow.videoSize || "";
+  workflowSettingsDraft.keyframeSeed = workflow.keyframeSeed === null || workflow.keyframeSeed === undefined ? "" : String(workflow.keyframeSeed);
+  workflowSettingsDraft.videoSeed = workflow.videoSeed === null || workflow.videoSeed === undefined ? "" : String(workflow.videoSeed);
+  workflowSettingsDraft.durationMode = durationMode;
+  workflowSettingsDraft.minDurationSeconds = String(minDurationSeconds);
+  workflowSettingsDraft.maxDurationSeconds = String(maxDurationSeconds);
+}
+
 function applyWorkflowDrafts(workflow: WorkflowDetail | null) {
   if (!workflow) {
     workflowRatingDraft.value = "5";
     workflowRatingNoteDraft.value = "";
+    workflowSettingsOpen.value = false;
     return;
   }
+  syncWorkflowSettingsDraft(workflow);
   workflowRatingDraft.value = String(workflow.effectRating ?? 5);
   workflowRatingNoteDraft.value = workflow.effectRatingNote ?? "";
   for (const version of workflow.storyboardVersions) {
     stageRatingDrafts[version.id] = String(version.rating ?? 5);
     stageNoteDrafts[version.id] = version.ratingNote ?? "";
+    storyboardAdjustmentDrafts[version.id] ??= "";
   }
   for (const sheet of workflow.characterSheets ?? []) {
     for (const version of characterSheetVersions(sheet)) {
@@ -2091,9 +2455,6 @@ async function loadOptions() {
     }
     if (!createForm.textAnalysisModel) {
       createForm.textAnalysisModel = result.defaultTextAnalysisModel || result.textAnalysisModels?.[0]?.value || "";
-    }
-    if (!createForm.visionModel) {
-      createForm.visionModel = result.defaultVisionModel || result.visionModels?.[0]?.value || "";
     }
     if (!createForm.imageModel) {
       createForm.imageModel = result.imageModels?.[0]?.value || "";
@@ -2166,14 +2527,30 @@ function buildCreatePayload(): CreateWorkflowRequest {
     aspectRatio: createForm.aspectRatio as "9:16" | "16:9",
     stylePreset: createForm.stylePreset || null,
     textAnalysisModel: createForm.textAnalysisModel,
-    visionModel: createForm.visionModel,
     imageModel: createForm.imageModel,
     videoModel: createForm.videoModel,
     videoSize: createForm.videoSize || null,
     keyframeSeed: createForm.keyframeSeed === "" ? null : Number(createForm.keyframeSeed),
     videoSeed: createForm.videoSeed === "" ? null : Number(createForm.videoSeed),
+    durationMode: storyboardDurationMode.value,
     minDurationSeconds: fixedDurationSeconds,
     maxDurationSeconds: fixedDurationSeconds,
+  };
+}
+
+function buildWorkflowSettingsPayload(): UpdateWorkflowSettingsRequest {
+  return {
+    aspectRatio: workflowSettingsDraft.aspectRatio,
+    stylePreset: workflowSettingsDraft.stylePreset,
+    textAnalysisModel: workflowSettingsDraft.textAnalysisModel,
+    imageModel: workflowSettingsDraft.imageModel,
+    videoModel: workflowSettingsDraft.videoModel,
+    videoSize: workflowSettingsDraft.videoSize,
+    keyframeSeed: optionalInteger(workflowSettingsDraft.keyframeSeed),
+    videoSeed: optionalInteger(workflowSettingsDraft.videoSeed),
+    durationMode: workflowSettingsDraft.durationMode,
+    minDurationSeconds: workflowSettingsDraft.durationMode === "auto" ? null : optionalInteger(workflowSettingsDraft.minDurationSeconds),
+    maxDurationSeconds: workflowSettingsDraft.durationMode === "auto" ? null : optionalInteger(workflowSettingsDraft.maxDurationSeconds),
   };
 }
 
@@ -2206,14 +2583,9 @@ async function handleCreateWorkflow() {
   }
 }
 
-function resetGenerationExtraPrompts() {
-  storyboardExtraPromptDraft.value = "";
-  for (const key of Object.keys(keyframeExtraPromptDrafts)) {
-    delete keyframeExtraPromptDrafts[Number(key)];
-  }
-  for (const key of Object.keys(videoExtraPromptDrafts)) {
-    delete videoExtraPromptDrafts[Number(key)];
-  }
+function resetTransientStageState() {
+  closeCharacterAssetPicker();
+  workflowSettingsOpen.value = false;
 }
 
 async function runAndRefresh(actionKey: string, runner: () => Promise<WorkflowDetail>) {
@@ -2232,14 +2604,31 @@ async function runAndRefresh(actionKey: string, runner: () => Promise<WorkflowDe
   }
 }
 
+async function handleUpdateWorkflowSettings() {
+  if (!selectedWorkflowId.value || workflowSettingsValidationMessage.value) {
+    return;
+  }
+  const succeeded = await runAndRefresh("workflow-settings", () => updateWorkflowSettings(selectedWorkflowId.value, buildWorkflowSettingsPayload()));
+  if (succeeded) {
+    workflowSettingsOpen.value = false;
+  }
+}
+
 async function handleGenerateStoryboard() {
   if (!selectedWorkflowId.value) {
     return;
   }
-  const extraPrompt = storyboardExtraPromptDraft.value.trim();
-  const succeeded = await runAndRefresh("storyboard", () => generateStoryboard(selectedWorkflowId.value, extraPrompt));
+  await runAndRefresh("storyboard", () => generateStoryboard(selectedWorkflowId.value));
+}
+
+async function handleAdjustStoryboard(versionId: string) {
+  if (!selectedWorkflowId.value) {
+    return;
+  }
+  const prompt = (storyboardAdjustmentDrafts[versionId] || "").trim();
+  const succeeded = await runAndRefresh(`storyboard-adjust-${versionId}`, () => adjustStoryboard(selectedWorkflowId.value, versionId, prompt));
   if (succeeded) {
-    storyboardExtraPromptDraft.value = "";
+    storyboardAdjustmentDrafts[versionId] = "";
   }
 }
 
@@ -2254,11 +2643,14 @@ async function handleGenerateKeyframe(clipIndex: number) {
   if (!selectedWorkflowId.value) {
     return;
   }
-  const extraPrompt = (keyframeExtraPromptDrafts[clipIndex] || "").trim();
-  const succeeded = await runAndRefresh(`keyframe-${clipIndex}`, () => generateKeyframe(selectedWorkflowId.value, clipIndex, extraPrompt));
-  if (succeeded) {
-    keyframeExtraPromptDrafts[clipIndex] = "";
+  await runAndRefresh(`keyframe-${clipIndex}`, () => generateKeyframe(selectedWorkflowId.value, clipIndex));
+}
+
+async function handleGenerateKeyframeFrame(clipIndex: number, frameRole: string) {
+  if (!selectedWorkflowId.value) {
+    return;
   }
+  await runAndRefresh(`keyframe-${clipIndex}-${frameRole}`, () => generateKeyframeFrame(selectedWorkflowId.value, clipIndex, frameRole));
 }
 
 async function handleSelectKeyframe(clipIndex: number, versionId: string) {
@@ -2268,15 +2660,36 @@ async function handleSelectKeyframe(clipIndex: number, versionId: string) {
   await runAndRefresh(versionId, () => selectKeyframe(selectedWorkflowId.value, clipIndex, versionId));
 }
 
+async function handleSelectKeyframeFrame(clipIndex: number, versionId: string, frameRole: string) {
+  if (!selectedWorkflowId.value) {
+    return;
+  }
+  await runAndRefresh(`${versionId}-${frameRole}`, () => selectKeyframeFrame(selectedWorkflowId.value, clipIndex, versionId, frameRole));
+}
+
+async function handleSelectCharacterSheetAsset(sheet: WorkflowCharacterSheet, assetId: string) {
+  const clipIndex = characterSheetClipIndex(sheet);
+  if (!selectedWorkflowId.value || clipIndex === null) {
+    return;
+  }
+  busyActionKey.value = `character-sheet-asset-${clipIndex}`;
+  detailError.value = "";
+  try {
+    await selectCharacterSheetAsset(selectedWorkflowId.value, clipIndex, assetId);
+    closeCharacterAssetPicker();
+    await reloadCurrentWorkflow();
+  } catch (error) {
+    detailError.value = error instanceof Error ? error.message : "角色三视图素材选择失败";
+  } finally {
+    busyActionKey.value = "";
+  }
+}
+
 async function handleGenerateVideo(clipIndex: number) {
   if (!selectedWorkflowId.value) {
     return;
   }
-  const extraPrompt = (videoExtraPromptDrafts[clipIndex] || "").trim();
-  const succeeded = await runAndRefresh(`video-${clipIndex}`, () => generateVideo(selectedWorkflowId.value, clipIndex, extraPrompt));
-  if (succeeded) {
-    videoExtraPromptDrafts[clipIndex] = "";
-  }
+  await runAndRefresh(`video-${clipIndex}`, () => generateVideo(selectedWorkflowId.value, clipIndex));
 }
 
 async function handleSelectVideo(clipIndex: number, versionId: string) {
@@ -2423,10 +2836,10 @@ watch(
   (workflowId) => {
     if (!workflowId) {
       selectedWorkflow.value = null;
-      resetGenerationExtraPrompts();
+      resetTransientStageState();
       return;
     }
-    resetGenerationExtraPrompts();
+    resetTransientStageState();
     void loadWorkflowDetail(workflowId);
   },
   { immediate: true }
@@ -3119,6 +3532,59 @@ onBeforeUnmount(() => {
   gap: 10px;
 }
 
+.workflow-settings-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.workflow-settings-panel__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.workflow-settings-panel__head h2 {
+  margin: 6px 0 0;
+  font-size: 1.1rem;
+}
+
+.workflow-settings-form {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: 14px 18px;
+  align-items: end;
+}
+
+.workflow-settings-field-model {
+  grid-column: span 3;
+}
+
+.workflow-settings-field-compact {
+  grid-column: span 3;
+}
+
+.workflow-settings-field-short,
+.workflow-settings-field-mode,
+.workflow-settings-field-duration {
+  grid-column: span 2;
+}
+
+.workflow-settings-form__actions {
+  grid-column: span 6;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  min-height: 42px;
+  align-self: end;
+}
+
+.workflow-settings-form__actions .btn-primary {
+  min-width: 132px;
+}
+
 .workflow-eyebrow {
   margin: 0;
   font-size: 0.72rem;
@@ -3219,19 +3685,20 @@ onBeforeUnmount(() => {
   justify-content: flex-end;
 }
 
-.workflow-inline-prompt__input {
-  min-width: min(360px, 100%);
-  flex: 1 1 280px;
-}
-
-.workflow-inline-prompt__input-clip {
-  min-width: 220px;
-}
-
 .workflow-list__meta,
 .clip-card__desc {
   color: rgba(255, 255, 255, 0.68);
   font-size: 0.88rem;
+}
+
+.clip-card__desc {
+  display: -webkit-box;
+  min-height: 3.1em;
+  max-width: 100%;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 
 .workflow-finalize-box {
@@ -3424,6 +3891,17 @@ onBeforeUnmount(() => {
   width: 100%;
 }
 
+.storyboard-adjust-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+}
+
+.storyboard-adjust-row__input {
+  min-width: 0;
+}
+
 .version-card {
   display: flex;
   flex-direction: column;
@@ -3592,6 +4070,96 @@ onBeforeUnmount(() => {
   background: rgba(255, 255, 255, 0.03);
 }
 
+.character-asset-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px;
+  border-radius: 18px;
+  border: 1px solid rgba(255, 180, 92, 0.22);
+  background: rgba(255, 180, 92, 0.06);
+}
+
+.character-asset-picker__head,
+.character-asset-picker__filters {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.character-asset-picker__head {
+  align-items: flex-start;
+}
+
+.character-asset-picker__head h4 {
+  margin: 4px 0 0;
+  font-size: 1rem;
+}
+
+.character-asset-picker__filters {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) auto;
+}
+
+.character-asset-picker__search {
+  align-self: end;
+  min-height: 40px;
+}
+
+.character-asset-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.character-asset-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+  padding: 12px;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(6, 8, 12, 0.36);
+}
+
+.character-asset-card__preview {
+  width: 100%;
+  padding: 0;
+  border: 0;
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.22);
+  cursor: zoom-in;
+  overflow: hidden;
+}
+
+.character-asset-card__preview img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  object-fit: contain;
+}
+
+.character-asset-card__body {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.character-asset-card__body strong {
+  overflow-wrap: anywhere;
+  line-height: 1.35;
+}
+
+.character-asset-card__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
 .character-sheet-frame-grid {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
@@ -3633,6 +4201,12 @@ onBeforeUnmount(() => {
 .keyframe-frame-card__image-landscape {
   aspect-ratio: 16 / 9;
   object-fit: contain;
+}
+
+.keyframe-frame-card__actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
 }
 
 .character-sheet-frame-card__image {
@@ -3745,9 +4319,79 @@ onBeforeUnmount(() => {
 }
 
 .clip-card__head {
-  display: flex;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
   gap: 18px;
+}
+
+.clip-card__main {
+  min-width: 0;
+}
+
+.clip-card__title-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.clip-card__title-row h3 {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.clip-card__bell {
+  flex: 0 0 auto;
+}
+
+.clip-card__side-actions {
+  display: grid;
+  grid-template-columns: 76px 144px;
+  align-items: center;
+  gap: 12px;
+  flex: 0 0 auto;
+}
+
+.clip-card__side-actions-video {
+  grid-template-columns: 144px 144px;
+}
+
+.clip-card__duration-chip,
+.clip-card__selection-chip {
+  justify-content: center;
+  min-height: 44px;
+  padding: 0 10px;
+  letter-spacing: 0;
+  white-space: nowrap;
+}
+
+.clip-card__duration-chip {
+  width: 76px;
+}
+
+.clip-card__selection-chip {
+  width: 144px;
+  max-width: 144px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.clip-card__action-button {
+  width: 144px;
+  min-width: 144px;
+  min-height: 44px;
+  white-space: nowrap;
+  word-break: keep-all;
+}
+
+.clip-card__character-chip {
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .clip-card__selected-keyframes {
@@ -3936,6 +4580,14 @@ onBeforeUnmount(() => {
     justify-content: flex-start;
   }
 
+  .workflow-settings-form {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+  }
+
+  .workflow-settings-form__actions {
+    grid-column: span 6;
+  }
+
   .keyframe-frame-grid,
   .character-sheet-frame-grid,
   .keyframe-frame-grid-compact {
@@ -3954,14 +4606,47 @@ onBeforeUnmount(() => {
   .workflow-stage-panel__actions,
   .workflow-review-item,
   .workflow-review-actions,
+  .workflow-settings-panel__head,
+  .workflow-settings-form__actions,
   .workflow-panel__head,
   .clip-card__head {
     flex-direction: column;
     align-items: stretch;
   }
 
+  .workflow-settings-form {
+    grid-template-columns: 1fr;
+  }
+
+  .workflow-settings-field-model,
+  .workflow-settings-field-compact,
+  .workflow-settings-field-short,
+  .workflow-settings-field-mode,
+  .workflow-settings-field-duration,
+  .workflow-settings-form__actions {
+    grid-column: 1 / -1;
+  }
+
   .workflow-field-span-2 {
     grid-column: span 1;
+  }
+
+  .clip-card__head {
+    grid-template-columns: 1fr;
+  }
+
+  .clip-card__side-actions {
+    grid-template-columns: 76px minmax(144px, 1fr);
+    justify-content: start;
+  }
+
+  .clip-card__side-actions-video {
+    grid-template-columns: minmax(144px, 1fr) 144px;
+  }
+
+  .clip-card__action-button {
+    width: 144px;
+    min-width: 144px;
   }
 }
 </style>

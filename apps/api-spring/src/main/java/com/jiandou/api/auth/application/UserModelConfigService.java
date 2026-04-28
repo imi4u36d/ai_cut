@@ -26,7 +26,6 @@ public class UserModelConfigService {
 
     private static final List<String> KIND_ORDER = List.of(
         GenerationModelKinds.TEXT,
-        GenerationModelKinds.VISION,
         GenerationModelKinds.IMAGE,
         GenerationModelKinds.VIDEO
     );
@@ -52,7 +51,6 @@ public class UserModelConfigService {
         Map<String, String> apiKeys = userModelCredentialRepository.findApiKeysByUserId(userId);
         List<AdminModelConfigResponse.ModelItem> models = new ArrayList<>();
         models.addAll(readTextModels(GenerationModelKinds.TEXT, userId));
-        models.addAll(readTextModels(GenerationModelKinds.VISION, userId));
         models.addAll(readMediaModels(GenerationModelKinds.IMAGE, userId));
         models.addAll(readMediaModels(GenerationModelKinds.VIDEO, userId));
         models.sort(Comparator
@@ -135,7 +133,6 @@ public class UserModelConfigService {
                 stringValue(item.get("description")),
                 booleanValue(item.get("supportsSeed")),
                 booleanValue(item.get("supportsResponsesApi")),
-                booleanValue(item.get("prefersChatCompletionsForVision")),
                 "",
                 List.of(),
                 List.of(),
@@ -173,7 +170,6 @@ public class UserModelConfigService {
                 stringValue(item.get("family")),
                 stringValue(item.get("description")),
                 booleanValue(item.get("supportsSeed")),
-                false,
                 false,
                 stringValue(item.get("generationMode")),
                 stringList(item.get("supportedSizes")),
@@ -230,7 +226,7 @@ public class UserModelConfigService {
 
     private String resolveProviderBaseUrl(List<AdminModelConfigResponse.ModelItem> providerModels, Long userId) {
         for (AdminModelConfigResponse.ModelItem model : providerModels) {
-            if (GenerationModelKinds.TEXT.equals(model.kind()) || GenerationModelKinds.VISION.equals(model.kind())) {
+            if (GenerationModelKinds.TEXT.equals(model.kind())) {
                 String baseUrl = modelResolver.resolveTextProfile(model.name(), userId).baseUrl();
                 if (!baseUrl.isBlank()) {
                     return baseUrl;
@@ -381,7 +377,6 @@ public class UserModelConfigService {
             model.description(),
             model.supportsSeed(),
             model.supportsResponsesApi(),
-            model.prefersChatCompletionsForVision(),
             model.generationMode(),
             model.supportedSizes(),
             model.supportedDurations(),
@@ -404,7 +399,7 @@ public class UserModelConfigService {
         if (containsApiKey(apiKeys, model.vendor()) || containsApiKey(apiKeys, model.provider())) {
             return true;
         }
-        if (GenerationModelKinds.TEXT.equals(model.kind()) || GenerationModelKinds.VISION.equals(model.kind())) {
+        if (GenerationModelKinds.TEXT.equals(model.kind())) {
             return !modelResolver.resolveTextProfile(model.name(), userId).apiKey().isBlank();
         }
         return !modelResolver.resolveMediaProfile(model.name(), model.kind(), userId).apiKey().isBlank();
@@ -462,7 +457,6 @@ public class UserModelConfigService {
             models.size(),
             countReadyModels(models, null),
             countReadyModels(models, GenerationModelKinds.TEXT),
-            countReadyModels(models, GenerationModelKinds.VISION),
             countReadyModels(models, GenerationModelKinds.IMAGE),
             countReadyModels(models, GenerationModelKinds.VIDEO)
         );

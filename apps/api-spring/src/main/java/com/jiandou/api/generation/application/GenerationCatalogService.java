@@ -51,7 +51,6 @@ public class GenerationCatalogService {
         );
         String defaultImageSize = modelResolver.value("catalog.defaults", "image_size", "1024x1024");
         List<Map<String, Object>> textModels = modelResolver.listModelsByKind(GenerationModelKinds.TEXT);
-        List<Map<String, Object>> visionModels = modelResolver.listModelsByKind(GenerationModelKinds.VISION);
         List<Map<String, Object>> imageModels = modelResolver.listModelsByKind(GenerationModelKinds.IMAGE);
         List<Map<String, Object>> videoModels = modelResolver.listModelsByKind(GenerationModelKinds.VIDEO);
         List<String> videoModelNames = videoModels.stream()
@@ -65,8 +64,6 @@ public class GenerationCatalogService {
         payload.put("imageSizes", imageSizeOptions());
         payload.put("textAnalysisModels", textModels);
         payload.put("defaultTextAnalysisModel", null);
-        payload.put("visionModels", visionModels);
-        payload.put("defaultVisionModel", null);
         payload.put("imageModels", imageModels);
         payload.put("videoModels", videoModels);
         payload.put("defaultVideoModel", null);

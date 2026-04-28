@@ -13,6 +13,7 @@ public class JiandouStorageProperties {
     private String rootDir = "../../storage";
     private String uploadsDir = "uploads";
     private String generationRunsDir = "gen/_runs";
+    private String publicBaseUrl = "";
 
     public String getRootDir() {
         return rootDir;
@@ -38,6 +39,14 @@ public class JiandouStorageProperties {
         this.generationRunsDir = generationRunsDir == null ? "gen/_runs" : generationRunsDir.trim();
     }
 
+    public String getPublicBaseUrl() {
+        return publicBaseUrl;
+    }
+
+    public void setPublicBaseUrl(String publicBaseUrl) {
+        this.publicBaseUrl = publicBaseUrl == null ? "" : publicBaseUrl.trim();
+    }
+
     public Path resolveRootDir() {
         return Paths.get(rootDir).toAbsolutePath().normalize();
     }
@@ -58,8 +67,36 @@ public class JiandouStorageProperties {
         return normalized.isBlank() ? ApiPathConstants.STORAGE : ApiPathConstants.STORAGE + "/" + normalized;
     }
 
+    public String buildExternallyAccessibleUrl(String relativePath) {
+        String rawPath = relativePath == null ? "" : relativePath.trim().replace('\\', '/');
+        String storageUrl = rawPath.equals(ApiPathConstants.STORAGE) || rawPath.startsWith(ApiPathConstants.STORAGE + "/")
+            ? rawPath
+            : buildPublicUrl(rawPath);
+        if (publicBaseUrl == null || publicBaseUrl.isBlank()) {
+            return "";
+        }
+        String normalizedBase = publicBaseUrl.trim().replaceAll("/+$", "");
+        String normalizedStoragePrefix = ApiPathConstants.STORAGE.replaceAll("^/+", "");
+        String normalizedPath = storageUrl.replace('\\', '/').replaceAll("^/+", "");
+        if (!normalizedStoragePrefix.isBlank() && normalizedPath.equals(normalizedStoragePrefix)) {
+            return normalizedBase;
+        }
+        if (!normalizedStoragePrefix.isBlank() && normalizedPath.startsWith(normalizedStoragePrefix + "/")) {
+            normalizedPath = normalizedPath.substring(normalizedStoragePrefix.length() + 1);
+        }
+        return normalizedPath.isBlank() ? normalizedBase : normalizedBase + "/" + normalizedPath;
+    }
+
     public Path resolvePublicUrl(String publicUrl) {
         String normalized = publicUrl == null ? "" : publicUrl.trim().replace('\\', '/');
+        if (publicBaseUrl != null && !publicBaseUrl.isBlank()) {
+            String normalizedBase = publicBaseUrl.trim().replaceAll("/+$", "");
+            if (normalized.equals(normalizedBase)) {
+                normalized = ApiPathConstants.STORAGE;
+            } else if (normalized.startsWith(normalizedBase + "/")) {
+                normalized = ApiPathConstants.STORAGE + "/" + normalized.substring(normalizedBase.length() + 1);
+            }
+        }
         if (ApiPathConstants.STORAGE.equals(normalized)) {
             return resolveRootDir();
         }

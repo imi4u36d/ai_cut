@@ -40,9 +40,6 @@ class AdminModelConfigServiceTest {
                 "supportsResponsesApi", true
             )
         ));
-        when(resolver.listModelsByKind(GenerationModelKinds.VISION)).thenReturn(List.of(
-            Map.of("value", "gpt-4.1-vision", "provider", "openai", "vendor", "openai")
-        ));
         when(resolver.listModelsByKind(GenerationModelKinds.IMAGE)).thenReturn(List.of());
         when(resolver.listModelsByKind(GenerationModelKinds.VIDEO)).thenReturn(List.of(
             Map.of(
@@ -57,11 +54,7 @@ class AdminModelConfigServiceTest {
         ));
         when(resolver.resolveTextProfile("gpt-4.1")).thenReturn(new ModelRuntimeProfile(
             new TextProviderConfig("text", "gpt-4.1", "openai", "gpt-4.1", "key", "https://api.openai.com/v1", 30, 0.2, 2000, "cfg"),
-            new TextProviderCapabilities(true, true, false)
-        ));
-        when(resolver.resolveTextProfile("gpt-4.1-vision")).thenReturn(new ModelRuntimeProfile(
-            new TextProviderConfig("vision", "gpt-4.1-vision", "openai", "gpt-4.1-vision", "", "", 30, 0.2, 2000, "cfg"),
-            new TextProviderCapabilities(false, false, true)
+            new TextProviderCapabilities(true, true)
         ));
         when(resolver.resolveMediaProfile("seedance", GenerationModelKinds.VIDEO)).thenReturn(new MediaProviderProfile(
             new MediaProviderConfig("video", "seedance", "volcengine", "seedance", "key", "https://video.example.com", "https://task.example.com", 30, "cfg"),
@@ -83,22 +76,20 @@ class AdminModelConfigServiceTest {
         assertEquals("dir:/workspace/config", response.configSource());
         assertEquals(2, response.summary().providerCount());
         assertEquals(2, response.summary().vendorCount());
-        assertEquals(3, response.summary().modelCount());
+        assertEquals(2, response.summary().modelCount());
         assertEquals(2, response.summary().readyModelCount());
         assertEquals(1, response.summary().readyTextModelCount());
-        assertEquals(0, response.summary().readyVisionModelCount());
         assertEquals(0, response.summary().readyImageModelCount());
         assertEquals(1, response.summary().readyVideoModelCount());
         assertEquals(0.25, response.defaults().temperature());
         assertEquals(4096, response.defaults().maxTokens());
-        assertEquals(List.of("gpt-4.1", "gpt-4.1-vision", "seedance"), response.models().stream().map(AdminModelConfigResponse.ModelItem::name).toList());
+        assertEquals(List.of("gpt-4.1", "seedance"), response.models().stream().map(AdminModelConfigResponse.ModelItem::name).toList());
         assertEquals("openai", response.models().get(0).vendor());
-        assertEquals("volcengine", response.models().get(2).vendor());
+        assertEquals("volcengine", response.models().get(1).vendor());
         assertTrue(response.models().get(0).ready());
-        assertFalse(response.models().get(1).ready());
-        assertEquals(List.of("缺少 api_key", "缺少 base_url"), response.models().get(1).issues());
-        assertEquals(List.of("720*1280", "1080*1920"), response.models().get(2).supportedSizes());
-        assertEquals(List.of(4, 8), response.models().get(2).supportedDurations());
+        assertTrue(response.models().get(1).ready());
+        assertEquals(List.of("720*1280", "1080*1920"), response.models().get(1).supportedSizes());
+        assertEquals(List.of(4, 8), response.models().get(1).supportedDurations());
         assertEquals("api.openai.com", response.providers().get(0).endpointHost());
         assertEquals("openai", response.providers().get(0).vendor());
         assertEquals("volcengine", response.providers().get(1).key());
@@ -115,12 +106,11 @@ class AdminModelConfigServiceTest {
         when(resolver.listModelsByKind(GenerationModelKinds.TEXT)).thenReturn(List.of(
             Map.of("value", "qwen-plus", "label", "Qwen Plus", "provider", "qwen", "vendor", "aliyun")
         ));
-        when(resolver.listModelsByKind(GenerationModelKinds.VISION)).thenReturn(List.of());
         when(resolver.listModelsByKind(GenerationModelKinds.IMAGE)).thenReturn(List.of());
         when(resolver.listModelsByKind(GenerationModelKinds.VIDEO)).thenReturn(List.of());
         when(resolver.resolveTextProfile("qwen-plus")).thenReturn(new ModelRuntimeProfile(
             new TextProviderConfig("text", "qwen-plus", "qwen", "qwen-plus", "", "https://dashscope.aliyuncs.com/compatible-mode/v1", 30, 0.2, 2000, "cfg"),
-            new TextProviderCapabilities(false, true, false)
+            new TextProviderCapabilities(false, true)
         ));
         when(resolver.listSections("model.providers")).thenReturn(List.of(
             new ModelRuntimePropertiesResolver.ConfigSection("qwen", Map.of("provider", "qwen", "vendor", "aliyun", "base_url", "https://dashscope.aliyuncs.com/compatible-mode/v1"))
@@ -151,12 +141,11 @@ class AdminModelConfigServiceTest {
         when(resolver.listModelsByKind(GenerationModelKinds.TEXT)).thenReturn(List.of(
             Map.of("value", "qwen-plus", "label", "Qwen Plus", "provider", "qwen", "vendor", "aliyun")
         ));
-        when(resolver.listModelsByKind(GenerationModelKinds.VISION)).thenReturn(List.of());
         when(resolver.listModelsByKind(GenerationModelKinds.IMAGE)).thenReturn(List.of());
         when(resolver.listModelsByKind(GenerationModelKinds.VIDEO)).thenReturn(List.of());
         when(resolver.resolveTextProfile("qwen-plus")).thenReturn(new ModelRuntimeProfile(
             new TextProviderConfig("text", "qwen-plus", "qwen", "qwen-plus", "", "https://dashscope.aliyuncs.com/compatible-mode/v1", 30, 0.2, 2000, "cfg"),
-            new TextProviderCapabilities(false, true, false)
+            new TextProviderCapabilities(false, true)
         ));
         when(resolver.listSections("model.providers")).thenReturn(List.of(
             new ModelRuntimePropertiesResolver.ConfigSection("qwen", Map.of("provider", "qwen", "vendor", "aliyun", "base_url", "https://dashscope.aliyuncs.com/compatible-mode/v1"))

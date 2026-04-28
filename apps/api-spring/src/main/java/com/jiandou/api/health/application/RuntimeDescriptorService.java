@@ -44,21 +44,17 @@ public class RuntimeDescriptorService {
      */
     public RuntimeDescriptorResponse describeRuntime() {
         List<ModelCatalogItem> textModels = toCatalogItems(modelResolver.listModelsByKind(com.jiandou.api.generation.GenerationModelKinds.TEXT));
-        List<ModelCatalogItem> visionModels = toCatalogItems(modelResolver.listModelsByKind(com.jiandou.api.generation.GenerationModelKinds.VISION));
         List<ModelCatalogItem> imageModels = toCatalogItems(modelResolver.listModelsByKind(com.jiandou.api.generation.GenerationModelKinds.IMAGE));
         List<ModelCatalogItem> videoModels = toCatalogItems(modelResolver.listModelsByKind(com.jiandou.api.generation.GenerationModelKinds.VIDEO));
         List<String> configErrors = new ArrayList<>();
         appendCatalogErrors(configErrors, textModels, "文本");
-        appendCatalogErrors(configErrors, visionModels, "视觉");
         appendCatalogErrors(configErrors, imageModels, "关键帧");
         appendCatalogErrors(configErrors, videoModels, "视频");
         boolean hasReadyTextModel = hasReadyTextModel(textModels, configErrors);
-        boolean hasReadyVisionModel = hasReadyTextModel(visionModels, configErrors);
         boolean hasReadyImageModel = hasReadyImageModel(imageModels, configErrors);
         boolean hasReadyVideoModel = hasReadyVideoModel(videoModels, configErrors);
         boolean ready = configErrors.isEmpty()
             && hasReadyTextModel
-            && hasReadyVisionModel
             && hasReadyImageModel
             && hasReadyVideoModel;
 
@@ -68,8 +64,7 @@ public class RuntimeDescriptorService {
             "",
             "",
             "",
-            "",
-            hasReadyTextModel || hasReadyVisionModel || hasReadyImageModel || hasReadyVideoModel,
+            hasReadyTextModel || hasReadyImageModel || hasReadyVideoModel,
             ready,
             doubleValue(modelResolver.value("model", "temperature", "0.15"), 0.15),
             intValue(modelResolver.value("model", "max_tokens", "2000"), 2000),
@@ -113,7 +108,7 @@ public class RuntimeDescriptorService {
     }
 
     /**
-     * 文本和视觉模型都走文本配置解析，因此共用这套就绪校验逻辑。
+     * 文本模型就绪校验逻辑。
      */
     private boolean hasReadyTextModel(List<ModelCatalogItem> textModels, List<String> errors) {
         boolean ready = false;

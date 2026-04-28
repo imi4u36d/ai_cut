@@ -39,7 +39,6 @@ public class TaskRequestSnapshotFactory {
                 "cinematic"
             ),
             trimmed(request.textAnalysisModel(), ""),
-            trimmed(request.visionModel(), ""),
             trimmed(request.imageModel(), ""),
             trimmed(request.videoModel(), ""),
             trimmed(

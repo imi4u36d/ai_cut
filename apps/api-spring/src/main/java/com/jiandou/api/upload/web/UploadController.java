@@ -48,6 +48,16 @@ public class UploadController {
     }
 
     /**
+     * 上传图片。
+     * @param file 待上传的文件
+     * @return 处理结果
+     */
+    @PostMapping("/images")
+    public UploadAssetResponse uploadImage(@RequestParam("file") MultipartFile file) {
+        return saveImage(file);
+    }
+
+    /**
      * 保存save。
      * @param file 待上传的文件
      * @param textUpload 文本上传值
@@ -58,5 +68,12 @@ public class UploadController {
             throw new EmptyUploadFileException();
         }
         return textUpload ? uploadService.uploadText(file) : uploadService.uploadVideo(file);
+    }
+
+    private UploadAssetResponse saveImage(MultipartFile file) {
+        if (file.isEmpty()) {
+            throw new EmptyUploadFileException();
+        }
+        return uploadService.uploadImage(file);
     }
 }

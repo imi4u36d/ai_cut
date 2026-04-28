@@ -41,10 +41,6 @@
                   <td class="text-slate-900">{{ health.runtime.model.text_analysis_model || "未配置" }}</td>
                 </tr>
                 <tr class="border-b border-slate-200">
-                  <td class="bg-slate-50 text-xs font-medium text-slate-500">视觉模型</td>
-                  <td class="text-slate-900">{{ health.runtime.model.vision_model || "未配置" }}</td>
-                </tr>
-                <tr class="border-b border-slate-200">
                   <td class="bg-slate-50 text-xs font-medium text-slate-500">Endpoint Host</td>
                   <td class="break-all text-slate-900">{{ health.runtime.model.endpoint_host || "未配置" }}</td>
                 </tr>

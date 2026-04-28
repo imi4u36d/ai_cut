@@ -21,4 +21,11 @@ public interface UploadApplicationService {
      * @return 处理结果
      */
     UploadAssetResponse uploadVideo(MultipartFile file);
+
+    /**
+     * 上传图片。
+     * @param file 待上传的文件
+     * @return 处理结果
+     */
+    UploadAssetResponse uploadImage(MultipartFile file);
 }

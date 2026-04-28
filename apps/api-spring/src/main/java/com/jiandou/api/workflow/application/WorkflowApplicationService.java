@@ -3,6 +3,9 @@ package com.jiandou.api.workflow.application;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.jiandou.api.auth.security.SecurityCurrentUser;
 import com.jiandou.api.common.exception.ApiException;
+import com.jiandou.api.config.ApiPathConstants;
+import com.jiandou.api.config.JiandouStorageProperties;
+import com.jiandou.api.generation.GenerationRunKinds;
 import com.jiandou.api.generation.GenerationRunStatuses;
 import com.jiandou.api.generation.application.GenerationApplicationService;
 import com.jiandou.api.generation.exception.GenerationProviderException;
@@ -11,15 +14,16 @@ import com.jiandou.api.task.application.TaskStoryboardPlanner;
 import com.jiandou.api.task.infrastructure.mybatis.MaterialAssetEntity;
 import com.jiandou.api.workflow.WorkflowConstants;
 import com.jiandou.api.workflow.infrastructure.WorkflowJsonSupport;
-import com.jiandou.api.workflow.infrastructure.mybatis.MaterialAssetTagEntity;
 import com.jiandou.api.workflow.infrastructure.mybatis.StageVersionEntity;
 import com.jiandou.api.workflow.infrastructure.mybatis.StageWorkflowEntity;
+import com.jiandou.api.workflow.web.dto.CreateMaterialGenerationRequest;
 import com.jiandou.api.workflow.web.dto.CreateWorkflowRequest;
 import com.jiandou.api.workflow.web.dto.RateStageVersionRequest;
 import com.jiandou.api.workflow.web.dto.RateWorkflowRequest;
 import com.jiandou.api.workflow.web.dto.ReuseMaterialRequest;
+import com.jiandou.api.workflow.web.dto.SelectCharacterSheetAssetRequest;
 import com.jiandou.api.workflow.web.dto.UpdateMaterialAssetRatingRequest;
-import com.jiandou.api.workflow.web.dto.UpdateMaterialAssetTagsRequest;
+import com.jiandou.api.workflow.web.dto.UpdateWorkflowSettingsRequest;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -45,23 +49,28 @@ public class WorkflowApplicationService {
     private static final long VIDEO_RUN_POLL_INTERVAL_MILLIS = 1000L;
     private static final int VIDEO_RUN_MAX_POLLS = 240;
     private static final int CHARACTER_SHEET_CLIP_INDEX_BASE = 1000;
+    private static final int DEFAULT_WORKFLOW_MIN_DURATION_SECONDS = 5;
+    private static final int DEFAULT_WORKFLOW_MAX_DURATION_SECONDS = 12;
     private static final String VARIANT_KIND_CHARACTER_SHEET = "character_sheet";
 
     private final WorkflowRepository workflowRepository;
     private final GenerationApplicationService generationApplicationService;
     private final TaskStoryboardPlanner storyboardPlanner;
     private final LocalMediaArtifactService localMediaArtifactService;
+    private final JiandouStorageProperties storageProperties;
 
     public WorkflowApplicationService(
         WorkflowRepository workflowRepository,
         GenerationApplicationService generationApplicationService,
         TaskStoryboardPlanner storyboardPlanner,
-        LocalMediaArtifactService localMediaArtifactService
+        LocalMediaArtifactService localMediaArtifactService,
+        JiandouStorageProperties storageProperties
     ) {
         this.workflowRepository = workflowRepository;
         this.generationApplicationService = generationApplicationService;
         this.storyboardPlanner = storyboardPlanner;
         this.localMediaArtifactService = localMediaArtifactService;
+        this.storageProperties = storageProperties;
     }
 
     public Map<String, Object> createWorkflow(CreateWorkflowRequest request) {
@@ -76,7 +85,6 @@ public class WorkflowApplicationService {
         workflow.setAspectRatio(trimmed(request.aspectRatio(), "9:16"));
         workflow.setStylePreset(trimmed(request.stylePreset(), "cinematic"));
         workflow.setTextAnalysisModel(trimmed(request.textAnalysisModel(), ""));
-        workflow.setVisionModel(trimmed(request.visionModel(), ""));
         workflow.setImageModel(trimmed(request.imageModel(), ""));
         workflow.setVideoModel(trimmed(request.videoModel(), ""));
         workflow.setVideoSize(trimmed(request.videoSize(), defaultVideoSize(workflow.getAspectRatio())));
@@ -85,8 +93,12 @@ public class WorkflowApplicationService {
         workflow.setTaskSeed(resolvedSharedSeed(keyframeSeed, videoSeed, request.seed()));
         workflow.setKeyframeSeed(keyframeSeed);
         workflow.setVideoSeed(videoSeed);
-        workflow.setMinDurationSeconds(request.minDurationSeconds() == null ? 5 : request.minDurationSeconds());
-        workflow.setMaxDurationSeconds(request.maxDurationSeconds() == null ? Math.max(5, workflow.getMinDurationSeconds()) : Math.max(request.maxDurationSeconds(), request.minDurationSeconds() == null ? 5 : request.minDurationSeconds()));
+        String durationMode = normalizeDurationMode(request.durationMode(), request.minDurationSeconds(), request.maxDurationSeconds());
+        workflow.setDurationMode(durationMode);
+        int minDurationSeconds = "auto".equals(durationMode) ? DEFAULT_WORKFLOW_MIN_DURATION_SECONDS : Math.max(1, request.minDurationSeconds());
+        int maxDurationSeconds = "auto".equals(durationMode) ? DEFAULT_WORKFLOW_MAX_DURATION_SECONDS : Math.max(request.maxDurationSeconds(), minDurationSeconds);
+        workflow.setMinDurationSeconds(minDurationSeconds);
+        workflow.setMaxDurationSeconds(maxDurationSeconds);
         workflow.setStatus(WorkflowConstants.STATUS_DRAFT);
         workflow.setCurrentStage(WorkflowConstants.STAGE_STORYBOARD);
         workflow.setSelectedStoryboardVersionId("");
@@ -114,8 +126,7 @@ public class WorkflowApplicationService {
         StageWorkflowEntity workflow = requireWorkflow(workflowId);
         List<StageVersionEntity> versions = workflowRepository.listStageVersions(workflowId);
         Map<String, MaterialAssetEntity> assetMap = loadAssetMap(versions, workflow.getFinalJoinAssetId(), workflow.getOwnerUserId());
-        Map<String, List<MaterialAssetTagEntity>> tagMap = workflowRepository.listTagsByAssetIds(assetMap.keySet());
-        return toWorkflowDetail(workflow, versions, assetMap, tagMap);
+        return toWorkflowDetail(workflow, versions, assetMap);
     }
 
     public Map<String, Object> deleteWorkflow(String workflowId) {
@@ -141,6 +152,54 @@ public class WorkflowApplicationService {
             "workflowId", workflowId,
             "deleted", true
         );
+    }
+
+    public Map<String, Object> updateWorkflowSettings(String workflowId, UpdateWorkflowSettingsRequest request) {
+        if (request == null) {
+            throw badRequest("workflow_settings_request_invalid", "工作流设置请求不能为空");
+        }
+        validateWorkflowSettingsRequest(request);
+        StageWorkflowEntity workflow = requireWorkflow(workflowId);
+        workflow.setAspectRatio(trimmed(request.aspectRatio(), "9:16"));
+        workflow.setStylePreset(trimmed(request.stylePreset(), "cinematic"));
+        workflow.setTextAnalysisModel(trimmed(request.textAnalysisModel(), ""));
+        workflow.setImageModel(trimmed(request.imageModel(), ""));
+        workflow.setVideoModel(trimmed(request.videoModel(), ""));
+        workflow.setVideoSize(trimmed(request.videoSize(), defaultVideoSize(workflow.getAspectRatio())));
+        workflow.setKeyframeSeed(request.keyframeSeed());
+        workflow.setVideoSeed(request.videoSeed());
+        workflow.setTaskSeed(resolvedSharedSeed(request.keyframeSeed(), request.videoSeed(), null));
+        String durationMode = normalizeDurationMode(request.durationMode(), request.minDurationSeconds(), request.maxDurationSeconds());
+        workflow.setDurationMode(durationMode);
+        int minDurationSeconds = "auto".equals(durationMode) ? DEFAULT_WORKFLOW_MIN_DURATION_SECONDS : Math.max(1, request.minDurationSeconds());
+        int maxDurationSeconds = "auto".equals(durationMode) ? DEFAULT_WORKFLOW_MAX_DURATION_SECONDS : Math.max(request.maxDurationSeconds(), minDurationSeconds);
+        workflow.setMinDurationSeconds(minDurationSeconds);
+        workflow.setMaxDurationSeconds(maxDurationSeconds);
+        workflow.setUpdateTime(OffsetDateTime.now(ZoneOffset.UTC));
+        workflowRepository.saveWorkflow(workflow);
+        Map<String, Object> settingsLogPayload = new LinkedHashMap<>();
+        settingsLogPayload.put("workflowId", workflowId);
+        settingsLogPayload.put("aspectRatio", workflow.getAspectRatio());
+        settingsLogPayload.put("stylePreset", workflow.getStylePreset());
+        settingsLogPayload.put("textAnalysisModel", workflow.getTextAnalysisModel());
+        settingsLogPayload.put("imageModel", workflow.getImageModel());
+        settingsLogPayload.put("videoModel", workflow.getVideoModel());
+        settingsLogPayload.put("videoSize", workflow.getVideoSize());
+        settingsLogPayload.put("keyframeSeed", workflow.getKeyframeSeed() == null ? "" : workflow.getKeyframeSeed());
+        settingsLogPayload.put("videoSeed", workflow.getVideoSeed() == null ? "" : workflow.getVideoSeed());
+        settingsLogPayload.put("durationMode", workflow.getDurationMode());
+        settingsLogPayload.put("minDurationSeconds", workflow.getMinDurationSeconds());
+        settingsLogPayload.put("maxDurationSeconds", workflow.getMaxDurationSeconds());
+        workflowRepository.saveSystemLog(
+            workflowId,
+            "workflow",
+            "settings",
+            "workflow.settings.updated",
+            "INFO",
+            "工作流设置已更新",
+            settingsLogPayload
+        );
+        return getWorkflow(workflowId);
     }
 
     public Map<String, Object> deleteStageVersion(String workflowId, String versionId) {
@@ -193,14 +252,9 @@ public class WorkflowApplicationService {
     }
 
     public Map<String, Object> generateStoryboard(String workflowId) {
-        return generateStoryboard(workflowId, "");
-    }
-
-    public Map<String, Object> generateStoryboard(String workflowId, String extraPrompt) {
         StageWorkflowEntity workflow = requireWorkflow(workflowId);
         int versionNo = workflowRepository.nextStageVersionNo(workflowId, WorkflowConstants.STAGE_STORYBOARD, 0);
-        String normalizedExtraPrompt = trimmed(extraPrompt, "");
-        Map<String, Object> storyboardRequest = buildStoryboardRunRequest(workflow, versionNo, normalizedExtraPrompt);
+        Map<String, Object> storyboardRequest = buildStoryboardRunRequest(workflow, versionNo);
         Map<String, Object> run = createLoggedGenerationRun(
             workflow,
             WorkflowConstants.STAGE_STORYBOARD,
@@ -257,8 +311,7 @@ public class WorkflowApplicationService {
         version.setInputSummaryJson(WorkflowJsonSupport.write(Map.of(
             "title", workflow.getTitle(),
             "transcriptLength", safeLength(workflow.getTranscriptText()),
-            "globalPrompt", workflow.getGlobalPrompt(),
-            "extraPrompt", normalizedExtraPrompt
+            "globalPrompt", workflow.getGlobalPrompt()
         )));
         version.setOutputSummaryJson(WorkflowJsonSupport.write(Map.of(
             "scriptMarkdown", scriptMarkdown,
@@ -279,7 +332,113 @@ public class WorkflowApplicationService {
             workflowRepository.saveWorkflow(workflow);
         }
         syncMaterialAssetSelection(asset.getMaterialAssetId(), version.getSelected() == 1);
-        syncAssetTags(asset, version, workflow, List.of());
+        return getWorkflow(workflowId);
+    }
+
+    public Map<String, Object> adjustStoryboard(String workflowId, String versionId, String prompt) {
+        StageWorkflowEntity workflow = requireWorkflow(workflowId);
+        StageVersionEntity sourceVersion = requireStageVersion(workflowId, versionId, WorkflowConstants.STAGE_STORYBOARD);
+        Map<String, Object> sourceOutputSummary = stageOutputSummary(sourceVersion);
+        String sourceScriptMarkdown = stringValue(sourceOutputSummary.get("scriptMarkdown"));
+        if (sourceScriptMarkdown.isBlank()) {
+            throw badRequest("workflow_storyboard_source_empty", "原分镜脚本为空，无法调整");
+        }
+        int versionNo = workflowRepository.nextStageVersionNo(workflowId, WorkflowConstants.STAGE_STORYBOARD, 0);
+        String adjustmentPrompt = trimmed(prompt, "");
+        Map<String, Object> storyboardRequest = buildStoryboardAdjustRunRequest(workflow, sourceScriptMarkdown, adjustmentPrompt, versionNo);
+        Map<String, Object> context = new LinkedHashMap<>();
+        context.put("versionNo", versionNo);
+        context.put("sourceVersionId", sourceVersion.getStageVersionId());
+        context.put("adjustmentMode", adjustmentPrompt.isBlank() ? "self_review" : "user_prompt");
+        if (!adjustmentPrompt.isBlank()) {
+            context.put("adjustmentPrompt", adjustmentPrompt);
+        }
+        Map<String, Object> run = createLoggedGenerationRun(
+            workflow,
+            WorkflowConstants.STAGE_STORYBOARD,
+            "workflow.storyboard.adjust",
+            storyboardRequest,
+            context
+        );
+        Map<String, Object> result = mapValue(run.get("result"));
+        String scriptMarkdown = stringValue(result.get("scriptMarkdown"));
+        if (scriptMarkdown.isBlank()) {
+            throw badRequest("workflow_storyboard_adjust_empty", "分镜脚本调整结果为空");
+        }
+        List<Map<String, Object>> clips = buildStoryboardClipPayload(workflow, scriptMarkdown);
+        String fileUrl = stringValue(result.get("markdownUrl"));
+        MaterialAssetEntity asset = createMaterialAsset(
+            workflow,
+            WorkflowConstants.STAGE_STORYBOARD,
+            0,
+            versionNo,
+            "text",
+            workflow.getTitle() + " 分镜脚本 V" + versionNo + " 调整",
+            fileUrl,
+            fileUrl,
+            "text/markdown",
+            0.0,
+            0,
+            0,
+            false,
+            "",
+            "",
+            Map.of(
+                "scriptMarkdown", scriptMarkdown,
+                "clipCount", clips.size(),
+                "sourceVersionId", sourceVersion.getStageVersionId(),
+                "adjustmentMode", adjustmentPrompt.isBlank() ? "self_review" : "user_prompt"
+            )
+        );
+        workflowRepository.saveMaterialAsset(asset);
+        StageVersionEntity version = new StageVersionEntity();
+        version.setStageVersionId("sv_" + randomId());
+        version.setWorkflowId(workflowId);
+        version.setOwnerUserId(workflow.getOwnerUserId());
+        version.setStageType(WorkflowConstants.STAGE_STORYBOARD);
+        version.setClipIndex(0);
+        version.setVersionNo(versionNo);
+        version.setTitle("分镜脚本 V" + versionNo + " 调整");
+        version.setStatus("SUCCEEDED");
+        version.setSelected(hasNoSelectedVersion(workflowId, WorkflowConstants.STAGE_STORYBOARD, 0) ? 1 : 0);
+        version.setRating(null);
+        version.setRatingNote("");
+        version.setParentVersionId(sourceVersion.getStageVersionId());
+        version.setSourceMaterialAssetId(sourceVersion.getMaterialAssetId());
+        version.setMaterialAssetId(asset.getMaterialAssetId());
+        version.setPreviewUrl(fileUrl);
+        version.setDownloadUrl(fileUrl);
+        Map<String, Object> inputSummary = new LinkedHashMap<>();
+        inputSummary.put("title", workflow.getTitle());
+        inputSummary.put("sourceVersionId", sourceVersion.getStageVersionId());
+        inputSummary.put("adjustmentPrompt", adjustmentPrompt);
+        inputSummary.put("adjustmentMode", adjustmentPrompt.isBlank() ? "self_review" : "user_prompt");
+        inputSummary.put("transcriptLength", safeLength(workflow.getTranscriptText()));
+        inputSummary.put("globalPrompt", workflow.getGlobalPrompt());
+        version.setInputSummaryJson(WorkflowJsonSupport.write(inputSummary));
+        Map<String, Object> outputSummary = new LinkedHashMap<>();
+        outputSummary.put("scriptMarkdown", scriptMarkdown);
+        outputSummary.put("clips", clips);
+        outputSummary.put("clipCount", clips.size());
+        outputSummary.put("previewText", truncate(scriptMarkdown, 220));
+        outputSummary.put("sourceVersionId", sourceVersion.getStageVersionId());
+        outputSummary.put("adjustmentPrompt", adjustmentPrompt);
+        outputSummary.put("adjustmentMode", adjustmentPrompt.isBlank() ? "self_review" : "user_prompt");
+        version.setOutputSummaryJson(WorkflowJsonSupport.write(outputSummary));
+        version.setModelCallSummaryJson(WorkflowJsonSupport.write(Map.of(
+            "runId", stringValue(run.get("id")),
+            "modelInfo", mapValue(result.get("modelInfo")),
+            "sourceVersionId", sourceVersion.getStageVersionId()
+        )));
+        version.setIsDeleted(0);
+        workflowRepository.saveStageVersion(version);
+        if (version.getSelected() == 1) {
+            workflow.setSelectedStoryboardVersionId(version.getStageVersionId());
+            workflow.setCurrentStage(WorkflowConstants.STAGE_KEYFRAME);
+            workflow.setStatus(WorkflowConstants.STATUS_READY);
+            workflowRepository.saveWorkflow(workflow);
+        }
+        syncMaterialAssetSelection(asset.getMaterialAssetId(), version.getSelected() == 1);
         return getWorkflow(workflowId);
     }
 
@@ -299,13 +458,8 @@ public class WorkflowApplicationService {
     }
 
     public Map<String, Object> generateKeyframe(String workflowId, int clipIndex) {
-        return generateKeyframe(workflowId, clipIndex, "");
-    }
-
-    public Map<String, Object> generateKeyframe(String workflowId, int clipIndex, String extraPrompt) {
         StageWorkflowEntity workflow = requireWorkflow(workflowId);
         StageVersionEntity storyboardVersion = requireSelectedStoryboard(workflow);
-        String normalizedExtraPrompt = trimmed(extraPrompt, "");
         CharacterSheetSlot characterSheetSlot = resolveCharacterSheetSlot(storyboardVersion, clipIndex);
         if (characterSheetSlot != null) {
             generateCharacterSheetVersion(workflow, storyboardVersion, characterSheetSlot);
@@ -335,8 +489,7 @@ public class WorkflowApplicationService {
                 List.of(),
                 characterReferenceImageUrls,
                 "first",
-                "clip" + clipIndex + "-first-v" + versionNo,
-                normalizedExtraPrompt
+                "clip" + clipIndex + "-first-v" + versionNo
             );
             startFrameRun = createLoggedGenerationRun(
                 workflow,
@@ -368,8 +521,7 @@ public class WorkflowApplicationService {
             firstNonBlank(startFrameRemoteUrl, startFrameUrl).isBlank() ? List.of() : List.of(firstNonBlank(startFrameRemoteUrl, startFrameUrl)),
             characterReferenceImageUrls,
             "last",
-            "clip" + clipIndex + "-last-v" + versionNo,
-            normalizedExtraPrompt
+            "clip" + clipIndex + "-last-v" + versionNo
         );
         Map<String, Object> run = createLoggedGenerationRun(
             workflow,
@@ -433,7 +585,6 @@ public class WorkflowApplicationService {
         keyframeInputSummary.put("motion", stringValue(clip.get("motion")));
         keyframeInputSummary.put("cameraMovement", stringValue(clip.get("cameraMovement")));
         keyframeInputSummary.put("continuityHint", stringValue(clip.get("continuityHint")));
-        keyframeInputSummary.put("extraPrompt", normalizedExtraPrompt);
         keyframeInputSummary.put("matchedCharacters", matchedCharacterSlots.stream().map(this::toCharacterMatchRow).toList());
         keyframeInputSummary.put("characterReferenceImageUrls", characterReferenceImageUrls);
         keyframeInputSummary.put("startFrameUrl", startFrameUrl);
@@ -485,7 +636,174 @@ public class WorkflowApplicationService {
             workflowRepository.saveWorkflow(workflow);
         }
         syncMaterialAssetSelection(asset.getMaterialAssetId(), version.getSelected() == 1);
-        syncAssetTags(asset, version, workflow, List.of());
+        return getWorkflow(workflowId);
+    }
+
+    public Map<String, Object> generateKeyframeFrame(String workflowId, int clipIndex, String requestedFrameRole) {
+        StageWorkflowEntity workflow = requireWorkflow(workflowId);
+        StageVersionEntity storyboardVersion = requireSelectedStoryboard(workflow);
+        if (resolveCharacterSheetSlot(storyboardVersion, clipIndex) != null) {
+            throw badRequest("keyframe_frame_role_invalid", "角色三视图不支持单独重生首尾帧");
+        }
+        String frameRole = normalizeFrameRole(requestedFrameRole);
+        if (!Set.of("first", "last").contains(frameRole)) {
+            throw badRequest("keyframe_frame_role_invalid", "请选择首帧或尾帧");
+        }
+        if ("first".equals(frameRole) && clipIndex > 1) {
+            throw badRequest("keyframe_first_frame_inherited", "第二个镜头开始的首帧由上一镜头尾帧承接，请重生上一镜头尾帧");
+        }
+        Map<String, Object> clip = requireStoryboardClip(storyboardVersion, clipIndex);
+        List<CharacterSheetSlot> matchedCharacterSlots = matchedCharacterSheetSlots(storyboardVersion, clip);
+        List<String> characterReferenceImageUrls = resolveCharacterReferenceImageUrls(workflowId, storyboardVersion, matchedCharacterSlots);
+        String characterConstraintPrompt = buildCharacterConsistencyPrompt(matchedCharacterSlots, !characterReferenceImageUrls.isEmpty());
+        int versionNo = workflowRepository.nextStageVersionNo(workflowId, WorkflowConstants.STAGE_KEYFRAME, clipIndex);
+        StageVersionEntity selectedVersion = selectedKeyframeFrameVersion(workflowId, clipIndex, frameRole);
+        String inheritedStartFrameUrl = firstNonBlank(
+            resolveSelectedKeyframeFrameUrl(workflowId, clipIndex, "first", false),
+            selectedVersion == null ? "" : resolveKeyframeFrameUrl(selectedVersion, "first", false)
+        );
+        String inheritedStartFrameRemoteUrl = firstNonBlank(
+            resolveSelectedKeyframeFrameUrl(workflowId, clipIndex, "first", true),
+            selectedVersion == null ? "" : resolveKeyframeFrameUrl(selectedVersion, "first", true)
+        );
+        String inheritedEndFrameUrl = firstNonBlank(
+            resolveSelectedKeyframeFrameUrl(workflowId, clipIndex, "last", false),
+            selectedVersion == null ? "" : resolveKeyframeFrameUrl(selectedVersion, "last", false)
+        );
+        String inheritedEndFrameRemoteUrl = firstNonBlank(
+            resolveSelectedKeyframeFrameUrl(workflowId, clipIndex, "last", true),
+            selectedVersion == null ? "" : resolveKeyframeFrameUrl(selectedVersion, "last", true)
+        );
+        List<String> continuityReferences = "last".equals(frameRole) && !firstNonBlank(inheritedStartFrameRemoteUrl, inheritedStartFrameUrl).isBlank()
+            ? List.of(firstNonBlank(inheritedStartFrameRemoteUrl, inheritedStartFrameUrl))
+            : List.of();
+        String prompt = "first".equals(frameRole)
+            ? firstNonBlank(stringValue(clip.get("startFrame")), stringValue(clip.get("firstFramePrompt")))
+            : firstNonBlank(stringValue(clip.get("endFrame")), stringValue(clip.get("lastFramePrompt")));
+        Map<String, Object> keyframeRequest = buildKeyframeRunRequest(
+            workflow,
+            clip,
+            clipIndex,
+            versionNo,
+            prompt,
+            characterConstraintPrompt,
+            continuityReferences,
+            characterReferenceImageUrls,
+            frameRole,
+            "clip" + clipIndex + "-" + frameRole + "-v" + versionNo
+        );
+        Map<String, Object> run = createLoggedGenerationRun(
+            workflow,
+            WorkflowConstants.STAGE_KEYFRAME,
+            "workflow.keyframe.generate",
+            keyframeRequest,
+            Map.of("clipIndex", clipIndex, "versionNo", versionNo, "frameRole", frameRole, "generationMode", "single_frame")
+        );
+        Map<String, Object> result = mapValue(run.get("result"));
+        String generatedUrl = extractGenerationFileUrl(result);
+        if (generatedUrl.isBlank()) {
+            throw badRequest("workflow_keyframe_empty", ("first".equals(frameRole) ? "首帧" : "尾帧") + "关键帧生成结果为空");
+        }
+        String generatedRemoteUrl = resolveGeneratedMediaRemoteUrl(result);
+        String startFrameUrl = "first".equals(frameRole) ? generatedUrl : inheritedStartFrameUrl;
+        String startFrameRemoteUrl = "first".equals(frameRole) ? generatedRemoteUrl : inheritedStartFrameRemoteUrl;
+        String endFrameUrl = "last".equals(frameRole) ? generatedUrl : inheritedEndFrameUrl;
+        String endFrameRemoteUrl = "last".equals(frameRole) ? generatedRemoteUrl : inheritedEndFrameRemoteUrl;
+        if (startFrameUrl.isBlank() || endFrameUrl.isBlank()) {
+            throw badRequest("keyframe_pair_incomplete", "单帧重生需要已有另一张首尾帧作为继承来源");
+        }
+        MaterialAssetEntity asset = createMaterialAsset(
+            workflow,
+            WorkflowConstants.STAGE_KEYFRAME,
+            clipIndex,
+            versionNo,
+            "image",
+            workflow.getTitle() + " 关键帧 #" + clipIndex + " V" + versionNo,
+            endFrameUrl,
+            endFrameUrl,
+            stringValue(result.getOrDefault("mimeType", "image/png")),
+            0.0,
+            intValue(result.get("width"), 0),
+            intValue(result.get("height"), 0),
+            false,
+            stringValue(mapValue(result.get("metadata")).get("taskId")),
+            endFrameRemoteUrl,
+            keyframeAssetMetadata(clip, "last".equals(frameRole) ? run : Map.of(), "first".equals(frameRole) ? run : Map.of(), startFrameUrl, startFrameRemoteUrl, endFrameUrl, endFrameRemoteUrl, "single_frame")
+        );
+        workflowRepository.saveMaterialAsset(asset);
+        StageVersionEntity version = new StageVersionEntity();
+        version.setStageVersionId("sv_" + randomId());
+        version.setWorkflowId(workflowId);
+        version.setOwnerUserId(workflow.getOwnerUserId());
+        version.setStageType(WorkflowConstants.STAGE_KEYFRAME);
+        version.setClipIndex(clipIndex);
+        version.setVersionNo(versionNo);
+        version.setTitle("关键帧 #" + clipIndex + " V" + versionNo);
+        version.setStatus("SUCCEEDED");
+        version.setSelected(selectedVersion == null ? 1 : 0);
+        version.setRating(null);
+        version.setRatingNote("");
+        version.setParentVersionId(storyboardVersion.getStageVersionId());
+        version.setSourceMaterialAssetId("");
+        version.setMaterialAssetId(asset.getMaterialAssetId());
+        version.setPreviewUrl(endFrameUrl);
+        version.setDownloadUrl(endFrameUrl);
+        Map<String, Object> inputSummary = new LinkedHashMap<>();
+        inputSummary.put("clipIndex", clipIndex);
+        inputSummary.put("generationMode", "single_" + frameRole);
+        inputSummary.put("frameRole", frameRole);
+        inputSummary.put("startFrameUrl", startFrameUrl);
+        inputSummary.put("firstFrameUrl", startFrameUrl);
+        inputSummary.put("endFrameUrl", endFrameUrl);
+        inputSummary.put("lastFrameUrl", endFrameUrl);
+        inputSummary.put("inheritedVersionId", selectedVersion == null ? "" : selectedVersion.getStageVersionId());
+        Integer keyframeSeed = resolvedKeyframeSeed(workflow, clipIndex);
+        if (keyframeSeed != null) {
+            inputSummary.put("seed", keyframeSeed);
+        }
+        version.setInputSummaryJson(WorkflowJsonSupport.write(inputSummary));
+        Map<String, Object> outputSummary = new LinkedHashMap<>();
+        outputSummary.put("clip", clip);
+        outputSummary.put("fileUrl", endFrameUrl);
+        outputSummary.put("startFrameUrl", startFrameUrl);
+        outputSummary.put("firstFrameUrl", startFrameUrl);
+        outputSummary.put("startFrameRemoteUrl", startFrameRemoteUrl);
+        outputSummary.put("firstFrameRemoteUrl", startFrameRemoteUrl);
+        outputSummary.put("endFrameUrl", endFrameUrl);
+        outputSummary.put("lastFrameUrl", endFrameUrl);
+        outputSummary.put("endFrameRemoteUrl", endFrameRemoteUrl);
+        outputSummary.put("lastFrameRemoteUrl", endFrameRemoteUrl);
+        outputSummary.put("generatedFrames", generatedKeyframeFrames(
+            "first".equals(frameRole) ? run : Map.of(),
+            "first".equals(frameRole) ? result : Map.of(),
+            "last".equals(frameRole) ? run : Map.of(),
+            "last".equals(frameRole) ? result : Map.of(),
+            startFrameUrl,
+            startFrameRemoteUrl,
+            endFrameUrl,
+            endFrameRemoteUrl
+        ));
+        outputSummary.put(selectionKey(frameRole), true);
+        version.setOutputSummaryJson(WorkflowJsonSupport.write(outputSummary));
+        version.setModelCallSummaryJson(WorkflowJsonSupport.write(Map.of(
+            "runId", stringValue(run.get("id")),
+            "frameRole", frameRole,
+            "modelInfo", mapValue(result.get("modelInfo"))
+        )));
+        version.setIsDeleted(0);
+        workflowRepository.saveStageVersion(version);
+        markSelectedKeyframeFrame(workflowId, clipIndex, version.getStageVersionId(), frameRole);
+        if (version.getSelected() == 1) {
+            syncWorkflowStageAssetSelection(workflowId, WorkflowConstants.STAGE_KEYFRAME, clipIndex, version.getStageVersionId());
+        }
+        workflowRepository.clearSelectedStageVersions(workflowId, WorkflowConstants.STAGE_VIDEO, clipIndex);
+        if ("last".equals(frameRole)) {
+            workflowRepository.clearSelectedStageVersions(workflowId, WorkflowConstants.STAGE_VIDEO, clipIndex + 1);
+        }
+        workflow.setCurrentStage(WorkflowConstants.STAGE_VIDEO);
+        workflow.setStatus(WorkflowConstants.STATUS_READY);
+        workflowRepository.saveWorkflow(workflow);
+        syncAllWorkflowAssetSelection(workflowId);
         return getWorkflow(workflowId);
     }
 
@@ -497,6 +815,8 @@ public class WorkflowApplicationService {
             throw badRequest("stage_version_clip_mismatch", "阶段版本与镜头不匹配");
         }
         workflowRepository.markSelectedStageVersion(workflowId, WorkflowConstants.STAGE_KEYFRAME, clipIndex, versionId);
+        markSelectedKeyframeFrame(workflowId, clipIndex, versionId, "first");
+        markSelectedKeyframeFrame(workflowId, clipIndex, versionId, "last");
         syncWorkflowStageAssetSelection(workflowId, WorkflowConstants.STAGE_KEYFRAME, clipIndex, versionId);
         if (isCharacterSheetClipIndex(clipIndex)) {
             workflow.setCurrentStage(WorkflowConstants.STAGE_KEYFRAME);
@@ -512,11 +832,101 @@ public class WorkflowApplicationService {
         return getWorkflow(workflowId);
     }
 
-    public Map<String, Object> generateVideo(String workflowId, int clipIndex) {
-        return generateVideo(workflowId, clipIndex, "");
+    public Map<String, Object> selectKeyframeFrame(String workflowId, int clipIndex, String versionId, String requestedFrameRole) {
+        StageWorkflowEntity workflow = requireWorkflow(workflowId);
+        requireSelectedStoryboard(workflow);
+        String frameRole = normalizeFrameRole(requestedFrameRole);
+        if (!Set.of("first", "last").contains(frameRole)) {
+            throw badRequest("keyframe_frame_role_invalid", "请选择首帧或尾帧");
+        }
+        StageVersionEntity version = requireStageVersion(workflowId, versionId, WorkflowConstants.STAGE_KEYFRAME);
+        if (intValue(version.getClipIndex(), 0) != clipIndex) {
+            throw badRequest("stage_version_clip_mismatch", "阶段版本与镜头不匹配");
+        }
+        if (resolveKeyframeFrameUrlForView(version, frameRole, false).isBlank()) {
+            throw badRequest("keyframe_frame_missing", "当前版本没有可选的" + ("first".equals(frameRole) ? "首帧" : "尾帧"));
+        }
+        markSelectedKeyframeFrame(workflowId, clipIndex, versionId, frameRole);
+        workflowRepository.clearSelectedStageVersions(workflowId, WorkflowConstants.STAGE_VIDEO, clipIndex);
+        if ("last".equals(frameRole)) {
+            workflowRepository.clearSelectedStageVersions(workflowId, WorkflowConstants.STAGE_VIDEO, clipIndex + 1);
+        }
+        workflow.setCurrentStage(WorkflowConstants.STAGE_VIDEO);
+        workflow.setStatus(WorkflowConstants.STATUS_READY);
+        workflowRepository.saveWorkflow(workflow);
+        syncAllWorkflowAssetSelection(workflowId);
+        return getWorkflow(workflowId);
     }
 
-    public Map<String, Object> generateVideo(String workflowId, int clipIndex, String extraPrompt) {
+    public Map<String, Object> selectCharacterSheetAsset(String workflowId, int clipIndex, SelectCharacterSheetAssetRequest request) {
+        StageWorkflowEntity workflow = requireWorkflow(workflowId);
+        StageVersionEntity storyboardVersion = requireSelectedStoryboard(workflow);
+        CharacterSheetSlot slot = resolveCharacterSheetSlot(storyboardVersion, clipIndex);
+        String assetId = trimmed(request == null ? "" : request.assetId(), "");
+        if (assetId.isBlank()) {
+            throw badRequest("material_asset_required", "请选择素材");
+        }
+        MaterialAssetEntity sourceAsset = requireMaterialAsset(assetId);
+        if (!"image".equalsIgnoreCase(trimmed(sourceAsset.getMediaType(), ""))) {
+            throw badRequest("material_asset_type_mismatch", "角色三视图只能选择图片素材");
+        }
+        int versionNo = workflowRepository.nextStageVersionNo(workflowId, WorkflowConstants.STAGE_KEYFRAME, clipIndex);
+        MaterialAssetEntity boundAsset = bindMaterialAssetToWorkflow(sourceAsset, workflow, WorkflowConstants.STAGE_KEYFRAME, clipIndex, versionNo, VARIANT_KIND_CHARACTER_SHEET);
+        StageVersionEntity version = new StageVersionEntity();
+        version.setStageVersionId("sv_" + randomId());
+        version.setWorkflowId(workflowId);
+        version.setOwnerUserId(workflow.getOwnerUserId());
+        version.setStageType(WorkflowConstants.STAGE_KEYFRAME);
+        version.setClipIndex(clipIndex);
+        version.setVersionNo(versionNo);
+        version.setTitle(slot.characterName() + " 三视图 V" + versionNo);
+        version.setStatus("SUCCEEDED");
+        version.setSelected(1);
+        version.setRating(sourceAsset.getUserRating());
+        version.setRatingNote(trimmed(sourceAsset.getRatingNote(), ""));
+        version.setParentVersionId(storyboardVersion.getStageVersionId());
+        version.setSourceMaterialAssetId(sourceAsset.getMaterialAssetId());
+        version.setMaterialAssetId(boundAsset.getMaterialAssetId());
+        version.setPreviewUrl(boundAsset.getPublicUrl());
+        version.setDownloadUrl(boundAsset.getPublicUrl());
+        version.setInputSummaryJson(WorkflowJsonSupport.write(Map.of(
+            "variantKind", VARIANT_KIND_CHARACTER_SHEET,
+            "clipIndex", clipIndex,
+            "characterName", slot.characterName(),
+            "characterDefinition", slot.characterDefinition(),
+            "characterAppearance", slot.characterAppearance(),
+            "sourceMaterialAssetId", sourceAsset.getMaterialAssetId(),
+            "selectionMode", "material_center"
+        )));
+        Map<String, Object> outputSummary = new LinkedHashMap<>();
+        outputSummary.put("variantKind", VARIANT_KIND_CHARACTER_SHEET);
+        outputSummary.put("clipIndex", clipIndex);
+        outputSummary.put("characterName", slot.characterName());
+        outputSummary.put("characterDefinition", slot.characterDefinition());
+        outputSummary.put("characterAppearance", slot.characterAppearance());
+        outputSummary.put("fileUrl", boundAsset.getPublicUrl());
+        outputSummary.put("sheetUrl", boundAsset.getPublicUrl());
+        outputSummary.put("previewUrl", boundAsset.getPublicUrl());
+        outputSummary.put("sourceMaterialAssetId", sourceAsset.getMaterialAssetId());
+        outputSummary.put("width", intValue(boundAsset.getWidth(), 0));
+        outputSummary.put("height", intValue(boundAsset.getHeight(), 0));
+        version.setOutputSummaryJson(WorkflowJsonSupport.write(outputSummary));
+        version.setModelCallSummaryJson(WorkflowJsonSupport.write(Map.of(
+            "source", "material_center",
+            "sourceMaterialAssetId", sourceAsset.getMaterialAssetId()
+        )));
+        version.setIsDeleted(0);
+        workflowRepository.saveStageVersion(version);
+        workflowRepository.markSelectedStageVersion(workflowId, WorkflowConstants.STAGE_KEYFRAME, clipIndex, version.getStageVersionId());
+        syncWorkflowStageAssetSelection(workflowId, WorkflowConstants.STAGE_KEYFRAME, clipIndex, version.getStageVersionId());
+        workflow.setCurrentStage(WorkflowConstants.STAGE_KEYFRAME);
+        workflow.setStatus(WorkflowConstants.STATUS_READY);
+        workflowRepository.saveWorkflow(workflow);
+        syncAllWorkflowAssetSelection(workflowId);
+        return getWorkflow(workflowId);
+    }
+
+    public Map<String, Object> generateVideo(String workflowId, int clipIndex) {
         StageWorkflowEntity workflow = requireWorkflow(workflowId);
         StageVersionEntity storyboardVersion = requireSelectedStoryboard(workflow);
         StageVersionEntity keyframeVersion = requireSelectedStageVersion(workflowId, WorkflowConstants.STAGE_KEYFRAME, clipIndex);
@@ -524,8 +934,7 @@ public class WorkflowApplicationService {
         int versionNo = workflowRepository.nextStageVersionNo(workflowId, WorkflowConstants.STAGE_VIDEO, clipIndex);
         String firstFrameUrl = resolveWorkflowVideoFirstFrameUrl(workflowId, clipIndex, keyframeVersion);
         String lastFrameUrl = resolveWorkflowVideoLastFrameUrl(keyframeVersion);
-        String normalizedExtraPrompt = trimmed(extraPrompt, "");
-        Map<String, Object> videoRequest = buildVideoRunRequest(workflow, clip, clipIndex, versionNo, firstFrameUrl, lastFrameUrl, normalizedExtraPrompt);
+        Map<String, Object> videoRequest = buildVideoRunRequest(workflow, clip, clipIndex, versionNo, firstFrameUrl, lastFrameUrl);
         Map<String, Object> run = createLoggedGenerationRun(
             workflow,
             WorkflowConstants.STAGE_VIDEO,
@@ -583,7 +992,6 @@ public class WorkflowApplicationService {
         videoInputSummary.put("keyframeAssetId", keyframeVersion.getMaterialAssetId());
         videoInputSummary.put("firstFrameUrl", firstFrameUrl);
         videoInputSummary.put("requestedLastFrameUrl", lastFrameUrl);
-        videoInputSummary.put("extraPrompt", normalizedExtraPrompt);
         Integer videoSeed = resolvedVideoSeed(workflow);
         if (videoSeed != null) {
             videoInputSummary.put("seed", videoSeed);
@@ -611,7 +1019,6 @@ public class WorkflowApplicationService {
             workflowRepository.saveWorkflow(workflow);
         }
         syncMaterialAssetSelection(asset.getMaterialAssetId(), version.getSelected() == 1);
-        syncAssetTags(asset, version, workflow, List.of());
         return getWorkflow(workflowId);
     }
 
@@ -680,7 +1087,6 @@ public class WorkflowApplicationService {
         workflow.setCurrentStage(WorkflowConstants.STAGE_JOINED);
         workflow.setStatus(WorkflowConstants.STATUS_COMPLETED);
         workflowRepository.saveWorkflow(workflow);
-        syncAssetTags(asset, null, workflow, List.of());
         return getWorkflow(workflowId);
     }
 
@@ -704,7 +1110,6 @@ public class WorkflowApplicationService {
             asset.setUserRating(version.getRating());
             asset.setRatingNote(version.getRatingNote());
             workflowRepository.saveMaterialAsset(asset);
-            syncAssetTags(asset, version, requireWorkflow(workflowId), customTagValues(asset.getMaterialAssetId()));
         }
         return getWorkflow(workflowId);
     }
@@ -712,26 +1117,92 @@ public class WorkflowApplicationService {
     public List<Map<String, Object>> listMaterialAssets(
         String q,
         String type,
-        String tag,
         Integer minRating,
         String model,
         String aspectRatio,
-        Integer clipIndex
+        Integer clipIndex,
+        String assetType
     ) {
         Long ownerUserId = requiredUserId();
         List<MaterialAssetEntity> assets = workflowRepository.listMaterialAssets(ownerUserId);
-        Map<String, List<MaterialAssetTagEntity>> tagMap = workflowRepository.listTagsByAssetIds(
-            assets.stream().map(MaterialAssetEntity::getMaterialAssetId).collect(Collectors.toCollection(LinkedHashSet::new))
-        );
         return assets.stream()
-            .filter(item -> matchesMaterialFilters(item, tagMap.getOrDefault(item.getMaterialAssetId(), List.of()), q, type, tag, minRating, model, aspectRatio, clipIndex))
-            .map(item -> toMaterialAssetRow(item, tagMap.getOrDefault(item.getMaterialAssetId(), List.of())))
+            .filter(item -> matchesMaterialFilters(item, q, type, minRating, model, aspectRatio, clipIndex, assetType))
+            .map(this::toMaterialAssetRow)
             .toList();
+    }
+
+    public Map<String, Object> createMaterialGeneration(CreateMaterialGenerationRequest request) {
+        Long ownerUserId = requiredUserId();
+        String assetType = normalizeMaterialAssetType(request == null ? "" : request.assetType());
+        String title = trimmed(request == null ? "" : request.title(), defaultMaterialTitle(assetType));
+        String description = trimmed(request == null ? "" : request.description(), "");
+        List<String> styleKeywords = normalizeStringList(request == null ? null : request.styleKeywords());
+        List<String> referenceAssetIds = normalizeStringList(request == null ? null : request.referenceAssetIds());
+        List<String> referenceImageUrls = new ArrayList<>(normalizeStringList(request == null ? null : request.referenceImageUrls()));
+        for (MaterialAssetEntity referenceAsset : workflowRepository.findMaterialAssetsByIds(new LinkedHashSet<>(referenceAssetIds), ownerUserId).values()) {
+            String referenceUrl = firstNonBlank(trimmed(referenceAsset.getRemoteUrl(), ""), trimmed(referenceAsset.getPublicUrl(), ""));
+            if (!referenceUrl.isBlank() && !referenceImageUrls.contains(referenceUrl)) {
+                referenceImageUrls.add(referenceUrl);
+            }
+        }
+        referenceImageUrls = externallyAccessibleReferenceImageUrls(referenceImageUrls);
+        String aspectRatio = trimmed(request == null ? "" : request.aspectRatio(), "9:16");
+        String textAnalysisModel = trimmed(request == null ? "" : request.textAnalysisModel(), "");
+        String imageModel = trimmed(request == null ? "" : request.imageModel(), "");
+        requireNonBlank(textAnalysisModel, "textAnalysisModel", "文本模型");
+        requireNonBlank(imageModel, "imageModel", "图片模型");
+        requireNonBlank(description, "description", "素材描述");
+        int[] dimensions = dimensionsFromAspectRatio(aspectRatio);
+        Map<String, Object> runRequest = buildMaterialGenerationRunRequest(
+            ownerUserId,
+            assetType,
+            title,
+            description,
+            styleKeywords,
+            referenceImageUrls,
+            aspectRatio,
+            textAnalysisModel,
+            imageModel,
+            request == null ? null : request.seed(),
+            dimensions
+        );
+        Map<String, Object> run = generationApplicationService.createRun(runRequest);
+        Map<String, Object> result = mapValue(run.get("result"));
+        String fileUrl = extractGenerationFileUrl(result);
+        if (fileUrl.isBlank()) {
+            throw badRequest("material_generation_empty", "素材生成结果为空");
+        }
+        String remoteUrl = resolveGeneratedMediaRemoteUrl(result);
+        StageWorkflowEntity materialContext = materialCenterContext(ownerUserId, aspectRatio, styleKeywords, textAnalysisModel, imageModel);
+        MaterialAssetEntity asset = createMaterialAsset(
+            materialContext,
+            "material_center",
+            0,
+            1,
+            "image",
+            title,
+            fileUrl,
+            fileUrl,
+            stringValue(result.getOrDefault("mimeType", "image/png")),
+            0.0,
+            intValue(result.get("width"), dimensions[0]),
+            intValue(result.get("height"), dimensions[1]),
+            false,
+            stringValue(mapValue(result.get("metadata")).get("taskId")),
+            remoteUrl,
+            materialGenerationMetadata(assetType, title, description, styleKeywords, referenceAssetIds, referenceImageUrls, aspectRatio, run, remoteUrl)
+        );
+        asset.setWorkflowId("");
+        asset.setAssetRole(materialAssetRole(assetType));
+        asset.setOriginProvider("image-model");
+        asset.setOriginModel(imageModel);
+        workflowRepository.saveMaterialAsset(asset);
+        return getMaterialAsset(asset.getMaterialAssetId());
     }
 
     public Map<String, Object> getMaterialAsset(String assetId) {
         MaterialAssetEntity asset = requireMaterialAsset(assetId);
-        return toMaterialAssetRow(asset, workflowRepository.listTags(assetId));
+        return toMaterialAssetRow(asset);
     }
 
     public Map<String, Object> rateMaterialAsset(String assetId, UpdateMaterialAssetRatingRequest request) {
@@ -746,15 +1217,6 @@ public class WorkflowApplicationService {
             version.setRatedAt(OffsetDateTime.now(ZoneOffset.UTC));
             workflowRepository.saveStageVersion(version);
         }
-        syncAssetTags(asset, version, asset.getWorkflowId().isBlank() ? null : requireWorkflow(asset.getWorkflowId()), customTagValues(assetId));
-        return getMaterialAsset(assetId);
-    }
-
-    public Map<String, Object> updateMaterialAssetTags(String assetId, UpdateMaterialAssetTagsRequest request) {
-        MaterialAssetEntity asset = requireMaterialAsset(assetId);
-        StageVersionEntity version = workflowRepository.findStageVersionByMaterialAssetId(assetId);
-        StageWorkflowEntity workflow = asset.getWorkflowId() == null || asset.getWorkflowId().isBlank() ? null : requireWorkflow(asset.getWorkflowId());
-        syncAssetTags(asset, version, workflow, normalizeCustomTags(request.tags()));
         return getMaterialAsset(assetId);
     }
 
@@ -771,13 +1233,13 @@ public class WorkflowApplicationService {
             sourceWorkflow.getAspectRatio(),
             sourceWorkflow.getStylePreset(),
             sourceWorkflow.getTextAnalysisModel(),
-            sourceWorkflow.getVisionModel(),
             sourceWorkflow.getImageModel(),
             sourceWorkflow.getVideoModel(),
             sourceWorkflow.getVideoSize(),
             sourceWorkflow.getKeyframeSeed(),
             sourceWorkflow.getVideoSeed(),
             sourceWorkflow.getTaskSeed(),
+            workflowDurationMode(sourceWorkflow),
             sourceWorkflow.getMinDurationSeconds(),
             sourceWorkflow.getMaxDurationSeconds()
         );
@@ -851,7 +1313,6 @@ public class WorkflowApplicationService {
         cloned.setModelCallSummaryJson(sourceVersion.getModelCallSummaryJson());
         cloned.setIsDeleted(0);
         workflowRepository.saveStageVersion(cloned);
-        syncAssetTags(clonedAsset, cloned, targetWorkflow, customTagValues(sourceAsset.getMaterialAssetId()));
         return cloned;
     }
 
@@ -885,18 +1346,55 @@ public class WorkflowApplicationService {
         return cloned;
     }
 
+    private MaterialAssetEntity bindMaterialAssetToWorkflow(
+        MaterialAssetEntity sourceAsset,
+        StageWorkflowEntity targetWorkflow,
+        String stageType,
+        int clipIndex,
+        int versionNo,
+        String variantKind
+    ) {
+        String fileUrl = firstNonBlank(trimmed(sourceAsset.getPublicUrl(), ""), trimmed(sourceAsset.getRemoteUrl(), ""));
+        MaterialAssetEntity bound = createMaterialAsset(
+            targetWorkflow,
+            stageType,
+            clipIndex,
+            versionNo,
+            trimmed(sourceAsset.getMediaType(), "image"),
+            trimmed(sourceAsset.getTitle(), targetWorkflow.getTitle()),
+            fileUrl,
+            fileUrl,
+            trimmed(sourceAsset.getMimeType(), "image/png"),
+            sourceAsset.getDurationSeconds() == null ? 0.0 : sourceAsset.getDurationSeconds(),
+            sourceAsset.getWidth() == null ? 0 : sourceAsset.getWidth(),
+            sourceAsset.getHeight() == null ? 0 : sourceAsset.getHeight(),
+            sourceAsset.getHasAudio() != null && sourceAsset.getHasAudio() == 1,
+            trimmed(sourceAsset.getRemoteTaskId(), ""),
+            firstNonBlank(trimmed(sourceAsset.getRemoteUrl(), ""), trimmed(sourceAsset.getThirdPartyUrl(), "")),
+            boundMaterialMetadata(sourceAsset, variantKind)
+        );
+        bound.setAssetRole(variantKind);
+        bound.setSourceMaterialId(sourceAsset.getMaterialAssetId());
+        bound.setOriginProvider(trimmed(sourceAsset.getOriginProvider(), resolveOriginProvider(stageType, targetWorkflow)));
+        bound.setOriginModel(trimmed(sourceAsset.getOriginModel(), resolveOriginModel(stageType, targetWorkflow)));
+        workflowRepository.saveMaterialAsset(bound);
+        return bound;
+    }
+
     private boolean matchesMaterialFilters(
         MaterialAssetEntity asset,
-        List<MaterialAssetTagEntity> tags,
         String q,
         String type,
-        String tag,
         Integer minRating,
         String model,
         String aspectRatio,
-        Integer clipIndex
+        Integer clipIndex,
+        String assetType
     ) {
         if (!typeValue(type).isBlank() && !typeValue(type).equalsIgnoreCase(trimmed(asset.getStageType(), ""))) {
+            return false;
+        }
+        if (!typeValue(assetType).isBlank() && !materialAssetType(asset).equalsIgnoreCase(typeValue(assetType))) {
             return false;
         }
         if (minRating != null && (asset.getUserRating() == null || asset.getUserRating() < minRating)) {
@@ -905,13 +1403,11 @@ public class WorkflowApplicationService {
         if (!typeValue(model).isBlank() && !trimmed(asset.getOriginModel(), "").toLowerCase(Locale.ROOT).contains(typeValue(model).toLowerCase(Locale.ROOT))) {
             return false;
         }
-        if (!typeValue(aspectRatio).isBlank() && tags.stream().noneMatch(item -> "aspectRatio".equals(item.getTagKey()) && typeValue(aspectRatio).equalsIgnoreCase(item.getTagValue()))) {
+        Map<String, Object> metadata = WorkflowJsonSupport.readMap(asset.getMetadataJson());
+        if (!typeValue(aspectRatio).isBlank() && !typeValue(aspectRatio).equalsIgnoreCase(stringValue(metadata.get("aspectRatio")))) {
             return false;
         }
         if (clipIndex != null && intValue(asset.getClipIndex(), 0) != clipIndex) {
-            return false;
-        }
-        if (!typeValue(tag).isBlank() && tags.stream().noneMatch(item -> item.getTagValue() != null && item.getTagValue().toLowerCase(Locale.ROOT).contains(typeValue(tag).toLowerCase(Locale.ROOT)))) {
             return false;
         }
         String keyword = typeValue(q).toLowerCase(Locale.ROOT);
@@ -919,8 +1415,10 @@ public class WorkflowApplicationService {
             String haystack = String.join(" ",
                 trimmed(asset.getTitle(), ""),
                 trimmed(asset.getStageType(), ""),
+                trimmed(asset.getAssetRole(), ""),
                 trimmed(asset.getOriginModel(), ""),
-                trimmed(asset.getWorkflowId(), "")
+                trimmed(asset.getWorkflowId(), ""),
+                metadata.values().stream().map(this::stringValue).collect(Collectors.joining(" "))
             ).toLowerCase(Locale.ROOT);
             if (!haystack.contains(keyword)) {
                 return false;
@@ -948,8 +1446,7 @@ public class WorkflowApplicationService {
     private Map<String, Object> toWorkflowDetail(
         StageWorkflowEntity workflow,
         List<StageVersionEntity> versions,
-        Map<String, MaterialAssetEntity> assetMap,
-        Map<String, List<MaterialAssetTagEntity>> tagMap
+        Map<String, MaterialAssetEntity> assetMap
     ) {
         Map<String, Object> row = new LinkedHashMap<>();
         row.put("id", workflow.getWorkflowId());
@@ -959,13 +1456,13 @@ public class WorkflowApplicationService {
         row.put("aspectRatio", workflow.getAspectRatio());
         row.put("stylePreset", workflow.getStylePreset());
         row.put("textAnalysisModel", workflow.getTextAnalysisModel());
-        row.put("visionModel", workflow.getVisionModel());
         row.put("imageModel", workflow.getImageModel());
         row.put("videoModel", workflow.getVideoModel());
         row.put("videoSize", workflow.getVideoSize());
         row.put("keyframeSeed", resolvedKeyframeSeed(workflow));
         row.put("videoSeed", resolvedVideoSeed(workflow));
         row.put("seed", resolvedSharedSeed(workflow));
+        row.put("durationMode", workflowDurationMode(workflow));
         row.put("minDurationSeconds", workflow.getMinDurationSeconds());
         row.put("maxDurationSeconds", workflow.getMaxDurationSeconds());
         row.put("status", workflow.getStatus());
@@ -981,13 +1478,13 @@ public class WorkflowApplicationService {
             .sorted(Comparator.comparing(StageVersionEntity::getVersionNo).reversed())
             .toList();
         List<Map<String, Object>> storyboardRows = storyboardVersions.stream()
-            .map(item -> toStageVersionRow(item, assetMap.get(item.getMaterialAssetId()), tagMap.getOrDefault(item.getMaterialAssetId(), List.of())))
+            .map(item -> toStageVersionRow(item, assetMap.get(item.getMaterialAssetId())))
             .toList();
         row.put("storyboardVersions", storyboardRows);
         StageVersionEntity selectedStoryboard = storyboardVersions.stream().filter(item -> intValue(item.getSelected(), 0) == 1).findFirst().orElse(null);
         row.put(
             "characterSheets",
-            selectedStoryboard == null ? List.of() : buildCharacterSheetRows(selectedStoryboard, versions, assetMap, tagMap)
+            selectedStoryboard == null ? List.of() : buildCharacterSheetRows(selectedStoryboard, versions, assetMap)
         );
         List<Map<String, Object>> clips = selectedStoryboard == null ? List.of() : readClips(selectedStoryboard);
         List<Map<String, Object>> clipSlots = new ArrayList<>();
@@ -1025,20 +1522,19 @@ public class WorkflowApplicationService {
             slot.put("durationHint", stringValue(clip.get("durationHint")));
             slot.put("targetDurationSeconds", intValue(clip.get("targetDurationSeconds"), 0));
             slot.put("matchedCharacters", matchedCharacterSlots.stream().map(this::toCharacterMatchRow).toList());
-            slot.put("keyframeVersions", keyframeVersions.stream().map(item -> toStageVersionRow(item, assetMap.get(item.getMaterialAssetId()), tagMap.getOrDefault(item.getMaterialAssetId(), List.of()))).toList());
-            slot.put("videoVersions", videoVersions.stream().map(item -> toStageVersionRow(item, assetMap.get(item.getMaterialAssetId()), tagMap.getOrDefault(item.getMaterialAssetId(), List.of()))).toList());
+            slot.put("keyframeVersions", keyframeVersions.stream().map(item -> toStageVersionRow(item, assetMap.get(item.getMaterialAssetId()))).toList());
+            slot.put("videoVersions", videoVersions.stream().map(item -> toStageVersionRow(item, assetMap.get(item.getMaterialAssetId()))).toList());
             clipSlots.add(slot);
         }
         row.put("clipSlots", clipSlots);
-        row.put("finalResult", isBlank(workflow.getFinalJoinAssetId()) ? null : toMaterialAssetRow(assetMap.get(workflow.getFinalJoinAssetId()), tagMap.getOrDefault(workflow.getFinalJoinAssetId(), List.of())));
+        row.put("finalResult", isBlank(workflow.getFinalJoinAssetId()) ? null : toMaterialAssetRow(assetMap.get(workflow.getFinalJoinAssetId())));
         return row;
     }
 
     private List<Map<String, Object>> buildCharacterSheetRows(
         StageVersionEntity storyboardVersion,
         List<StageVersionEntity> versions,
-        Map<String, MaterialAssetEntity> assetMap,
-        Map<String, List<MaterialAssetTagEntity>> tagMap
+        Map<String, MaterialAssetEntity> assetMap
     ) {
         List<Map<String, Object>> rows = new ArrayList<>();
         for (CharacterSheetSlot slot : characterSheetSlots(storyboardVersion)) {
@@ -1060,7 +1556,7 @@ public class WorkflowApplicationService {
             row.put(
                 "versions",
                 characterSheetVersions.stream()
-                    .map(item -> toStageVersionRow(item, assetMap.get(item.getMaterialAssetId()), tagMap.getOrDefault(item.getMaterialAssetId(), List.of())))
+                    .map(item -> toStageVersionRow(item, assetMap.get(item.getMaterialAssetId())))
                     .toList()
             );
             rows.add(row);
@@ -1068,7 +1564,7 @@ public class WorkflowApplicationService {
         return rows;
     }
 
-    private Map<String, Object> toStageVersionRow(StageVersionEntity version, MaterialAssetEntity asset, List<MaterialAssetTagEntity> tags) {
+    private Map<String, Object> toStageVersionRow(StageVersionEntity version, MaterialAssetEntity asset) {
         Map<String, Object> inputSummary = stageInputSummary(version);
         Map<String, Object> outputSummary = stageOutputSummaryForView(version);
         Map<String, Object> row = new LinkedHashMap<>();
@@ -1092,15 +1588,20 @@ public class WorkflowApplicationService {
         row.put("modelCallSummary", WorkflowJsonSupport.readMap(version.getModelCallSummaryJson()));
         row.put("createdAt", format(version.getCreateTime()));
         row.put("updatedAt", format(version.getUpdateTime()));
-        row.put("asset", asset == null ? null : toMaterialAssetRow(asset, tags));
+        row.put("asset", asset == null ? null : toMaterialAssetRow(asset));
         return row;
     }
 
-    private Map<String, Object> toMaterialAssetRow(MaterialAssetEntity asset, List<MaterialAssetTagEntity> tags) {
+    private Map<String, Object> toMaterialAssetRow(MaterialAssetEntity asset) {
+        if (asset == null) {
+            return null;
+        }
         Map<String, Object> row = new LinkedHashMap<>();
         row.put("id", asset.getMaterialAssetId());
         row.put("workflowId", asset.getWorkflowId());
         row.put("stageType", asset.getStageType());
+        row.put("assetType", materialAssetType(asset));
+        row.put("assetRole", asset.getAssetRole());
         row.put("clipIndex", intValue(asset.getClipIndex(), 0));
         row.put("versionNo", intValue(asset.getVersionNo(), 0));
         row.put("selectedForNext", intValue(asset.getSelectedForNext(), 0) == 1);
@@ -1121,17 +1622,7 @@ public class WorkflowApplicationService {
         row.put("metadata", WorkflowJsonSupport.readMap(asset.getMetadataJson()));
         row.put("createdAt", format(asset.getCreateTime()));
         row.put("updatedAt", format(asset.getUpdateTime()));
-        row.put("tags", tags.stream().map(this::toTagRow).toList());
         return row;
-    }
-
-    private Map<String, Object> toTagRow(MaterialAssetTagEntity tag) {
-        return Map.of(
-            "id", tag.getAssetTagId(),
-            "tagType", tag.getTagType(),
-            "tagKey", tag.getTagKey(),
-            "tagValue", tag.getTagValue()
-        );
     }
 
     private void syncWorkflowStageAssetSelection(String workflowId, String stageType, int clipIndex, String selectedVersionId) {
@@ -1217,7 +1708,6 @@ public class WorkflowApplicationService {
         asset.setIsDeleted(1);
         asset.setUpdateTime(OffsetDateTime.now(ZoneOffset.UTC));
         workflowRepository.saveMaterialAsset(asset);
-        workflowRepository.saveMaterialAssetTags(assetId, List.of());
     }
 
     private void applyStoryboardSelection(StageWorkflowEntity workflow, StageVersionEntity selectedStoryboard) {
@@ -1361,65 +1851,33 @@ public class WorkflowApplicationService {
         workflow.setStatus(isBlank(workflow.getFinalJoinAssetId()) ? WorkflowConstants.STATUS_READY : WorkflowConstants.STATUS_COMPLETED);
     }
 
-    private void syncAssetTags(MaterialAssetEntity asset, StageVersionEntity version, StageWorkflowEntity workflow, List<String> customTags) {
-        if (asset == null) {
-            return;
-        }
-        List<MaterialAssetTagEntity> tags = new ArrayList<>();
-        addSystemTag(tags, asset, "stageType", trimmed(asset.getStageType(), ""));
-        addSystemTag(tags, asset, "mediaType", trimmed(asset.getMediaType(), ""));
-        addSystemTag(tags, asset, "model", trimmed(asset.getOriginModel(), ""));
-        addSystemTag(tags, asset, "clipIndex", String.valueOf(intValue(asset.getClipIndex(), 0)));
-        addSystemTag(tags, asset, "selected", intValue(asset.getSelectedForNext(), 0) == 1 ? "selected" : "unselected");
-        if (workflow != null) {
-            addSystemTag(tags, asset, "style", trimmed(workflow.getStylePreset(), ""));
-            addSystemTag(tags, asset, "aspectRatio", trimmed(workflow.getAspectRatio(), ""));
-        }
-        if (asset.getUserRating() != null) {
-            addSystemTag(tags, asset, "ratingBucket", asset.getUserRating() + "star");
-        }
-        for (String value : normalizeCustomTags(customTags)) {
-            MaterialAssetTagEntity tag = new MaterialAssetTagEntity();
-            tag.setAssetTagId("atag_" + randomId());
-            tag.setMaterialAssetId(asset.getMaterialAssetId());
-            tag.setTagType("custom");
-            tag.setTagKey("custom");
-            tag.setTagValue(value);
-            tag.setIsDeleted(0);
-            tags.add(tag);
-        }
-        workflowRepository.saveMaterialAssetTags(asset.getMaterialAssetId(), tags);
-    }
-
-    private void addSystemTag(List<MaterialAssetTagEntity> tags, MaterialAssetEntity asset, String key, String value) {
-        if (value == null || value.isBlank()) {
-            return;
-        }
-        MaterialAssetTagEntity tag = new MaterialAssetTagEntity();
-        tag.setAssetTagId("atag_" + randomId());
-        tag.setMaterialAssetId(asset.getMaterialAssetId());
-        tag.setTagType("system");
-        tag.setTagKey(key);
-        tag.setTagValue(value);
-        tag.setIsDeleted(0);
-        tags.add(tag);
-    }
-
-    private List<String> customTagValues(String assetId) {
-        return workflowRepository.listTags(assetId).stream()
-            .filter(item -> "custom".equals(item.getTagType()))
-            .map(MaterialAssetTagEntity::getTagValue)
-            .toList();
-    }
-
-    private Map<String, Object> buildStoryboardRunRequest(StageWorkflowEntity workflow, int versionNo, String extraPrompt) {
+    private Map<String, Object> buildStoryboardRunRequest(StageWorkflowEntity workflow, int versionNo) {
         Map<String, Object> request = new LinkedHashMap<>();
         Map<String, Object> input = new LinkedHashMap<>();
         input.put("text", !trimmed(workflow.getTranscriptText(), "").isBlank() ? workflow.getTranscriptText() : firstNonBlank(workflow.getGlobalPrompt(), workflow.getTitle()));
-        if (!trimmed(extraPrompt, "").isBlank()) {
-            input.put("extraPrompt", trimmed(extraPrompt, ""));
-        }
-        request.put("kind", "script");
+        request.put("kind", GenerationRunKinds.SCRIPT);
+        request.put("auth", Map.of("userId", workflow.getOwnerUserId()));
+        request.put("input", input);
+        request.put("model", Map.of(
+            "textAnalysisModel", workflow.getTextAnalysisModel()
+        ));
+        request.put("options", Map.of(
+            "visualStyle", firstNonBlank(workflow.getStylePreset(), "cinematic")
+        ));
+        request.put("storage", Map.of(
+            "relativeDir", workflowRelativeDir(workflow.getWorkflowId()) + "/storyboards",
+            "fileName", "storyboard-v" + versionNo + ".md"
+        ));
+        return request;
+    }
+
+    private Map<String, Object> buildStoryboardAdjustRunRequest(StageWorkflowEntity workflow, String sourceScriptMarkdown, String adjustmentPrompt, int versionNo) {
+        Map<String, Object> request = new LinkedHashMap<>();
+        Map<String, Object> input = new LinkedHashMap<>();
+        input.put("text", !trimmed(workflow.getTranscriptText(), "").isBlank() ? workflow.getTranscriptText() : firstNonBlank(workflow.getGlobalPrompt(), workflow.getTitle()));
+        input.put("scriptMarkdown", sourceScriptMarkdown);
+        input.put("adjustmentPrompt", adjustmentPrompt);
+        request.put("kind", GenerationRunKinds.SCRIPT_ADJUST);
         request.put("auth", Map.of("userId", workflow.getOwnerUserId()));
         request.put("input", input);
         request.put("model", Map.of(
@@ -1689,6 +2147,7 @@ public class WorkflowApplicationService {
             stringValue(mapValue(result.get("metadata")).get("remoteSourceUrl")),
             characterSheetAssetMetadata(slot, run, fileUrl)
         );
+        asset.setAssetRole(VARIANT_KIND_CHARACTER_SHEET);
         workflowRepository.saveMaterialAsset(asset);
 
         StageVersionEntity version = new StageVersionEntity();
@@ -1716,7 +2175,7 @@ public class WorkflowApplicationService {
         inputSummary.put("characterAppearance", slot.characterAppearance());
         inputSummary.put("storyboardVersionId", storyboardVersion.getStageVersionId());
         inputSummary.put("imagePrompt", prompt);
-        Integer keyframeSeed = resolvedKeyframeSeed(workflow);
+        Integer keyframeSeed = resolvedKeyframeSeed(workflow, clipIndex);
         if (keyframeSeed != null) {
             inputSummary.put("seed", keyframeSeed);
         }
@@ -1743,7 +2202,6 @@ public class WorkflowApplicationService {
             syncWorkflowStageAssetSelection(workflow.getWorkflowId(), WorkflowConstants.STAGE_KEYFRAME, clipIndex, version.getStageVersionId());
         }
         syncMaterialAssetSelection(asset.getMaterialAssetId(), version.getSelected() == 1);
-        syncAssetTags(asset, version, workflow, List.of());
     }
 
     private String buildCharacterSheetPrompt(StageWorkflowEntity workflow, CharacterSheetSlot slot) {
@@ -1757,8 +2215,12 @@ public class WorkflowApplicationService {
             "生成要求：",
             "- 只出现这一个角色，不要出现其他人物、宠物或路人。",
             "- 输出同一角色的三视图设定图：正面、侧面、背面，放在同一张图中。",
-            "- 三个视图都必须是完整的从头到脚全身像，头顶与脚底完整入镜，不能裁切脸部、头发、手臂、腿部或脚部。",
+            "- 三个视图都必须是完整的从头到脚全身像，头顶与脚底完整入镜；人物整体缩小并居中放置，头顶、双手、脚底四周保留清晰留白。",
+            "- 禁止半身像、胸像、近景特写、肖像照或过度放大构图，不能裁切脸部、头发、手臂、腿部、鞋子或脚部。",
+            "- 三个视图横向等距排列在同一张画布内，每个视图都必须完整落在画面边界内，不得超出图片外。",
             "- 三个视图必须保持同一张脸、同一发型、同一服装、同一年龄、同一体型、同一配饰。",
+            "- 使用标准中性站姿：身体直立、双脚自然站稳、双臂自然下垂或微微离身、双手空置，不做跑、跳、挥手、持物、战斗、表演或剧情动作。",
+            "- 只保留角色身上的稳定穿戴配饰；禁止手拿、背负、牵引、互动或携带任何剧情道具、武器、包袋、手机、文件、杯子、伞、花束等物体。",
             "- 画面内不得出现任何文字、标题、标签、箭头、说明、字幕、水印、logo 或排版标注。",
             "- 背景必须是纯白色背景，画面中不得出现灰底、渐变、阴影布景、场景元素或任何其他背景装饰。",
             "- 使用中性站姿、角色设定图、turnaround sheet、model sheet 风格。",
@@ -1780,7 +2242,7 @@ public class WorkflowApplicationService {
         input.put("width", dimensions[0]);
         input.put("height", dimensions[1]);
         input.put("frameRole", VARIANT_KIND_CHARACTER_SHEET);
-        Integer keyframeSeed = resolvedKeyframeSeed(workflow);
+        Integer keyframeSeed = resolvedKeyframeSeed(workflow, slot.syntheticClipIndex());
         if (keyframeSeed != null) {
             input.put("seed", keyframeSeed);
         }
@@ -1809,8 +2271,7 @@ public class WorkflowApplicationService {
         List<String> continuityReferenceImageUrls,
         List<String> characterReferenceImageUrls,
         String frameRole,
-        String fileStem,
-        String extraPrompt
+        String fileStem
     ) {
         Map<String, Object> request = new LinkedHashMap<>();
         Map<String, Object> input = new LinkedHashMap<>();
@@ -1818,8 +2279,7 @@ public class WorkflowApplicationService {
         String continuityReferenceImageUrl = referenceImageUrls.isEmpty() ? "" : referenceImageUrls.get(0);
         input.put("prompt", composeVisualPrompt(workflow, joinPromptSections(
             characterConstraintPrompt,
-            buildKeyframeContinuityPrompt(clip, prompt, continuityReferenceImageUrl, frameRole),
-            userExtraPromptBlock(extraPrompt)
+            buildKeyframeContinuityPrompt(clip, prompt, continuityReferenceImageUrl, frameRole)
         )));
         int[] dimensions = dimensionsFromAspectRatio(workflow.getAspectRatio());
         input.put("width", dimensions[0]);
@@ -1906,14 +2366,12 @@ public class WorkflowApplicationService {
         int clipIndex,
         int versionNo,
         String firstFrameUrl,
-        String lastFrameUrl,
-        String extraPrompt
+        String lastFrameUrl
     ) {
         Map<String, Object> request = new LinkedHashMap<>();
         Map<String, Object> input = new LinkedHashMap<>();
         input.put("prompt", composeVisualPrompt(workflow, joinPromptSections(
-            stringValue(clip.get("videoPrompt")),
-            userExtraPromptBlock(extraPrompt)
+            stringValue(clip.get("videoPrompt"))
         )));
         input.put("videoSize", workflow.getVideoSize());
         input.put("durationSeconds", intValue(clip.get("targetDurationSeconds"), workflow.getMaxDurationSeconds()));
@@ -1934,7 +2392,6 @@ public class WorkflowApplicationService {
         request.put("input", input);
         request.put("model", Map.of(
             "textAnalysisModel", workflow.getTextAnalysisModel(),
-            "visionModel", workflow.getVisionModel(),
             "providerModel", workflow.getVideoModel()
         ));
         request.put("options", Map.of("stylePreset", workflow.getStylePreset()));
@@ -2191,29 +2648,20 @@ public class WorkflowApplicationService {
         if (!continuityFrameUrl.isBlank()) {
             return continuityFrameUrl;
         }
-        Map<String, Object> outputSummary = stageOutputSummary(keyframeVersion);
         return firstNonBlank(
-            stringValue(outputSummary.get("startFrameRemoteUrl")),
-            stringValue(outputSummary.get("firstFrameRemoteUrl")),
-            resolveGeneratedFrameRemoteUrl(keyframeVersion, "first"),
-            stringValue(outputSummary.get("startFrameUrl")),
-            stringValue(outputSummary.get("firstFrameUrl")),
-            stringValue(outputSummary.get("fileUrl")),
-            keyframeVersion.getDownloadUrl()
+            resolveSelectedKeyframeFrameUrl(workflowId, clipIndex, "first", true),
+            resolveKeyframeFrameUrl(keyframeVersion, "first", true),
+            resolveSelectedKeyframeFrameUrl(workflowId, clipIndex, "first", false),
+            resolveKeyframeFrameUrl(keyframeVersion, "first", false)
         );
     }
 
     private String resolveWorkflowVideoLastFrameUrl(StageVersionEntity keyframeVersion) {
-        Map<String, Object> outputSummary = stageOutputSummary(keyframeVersion);
         return firstNonBlank(
-            stringValue(outputSummary.get("endFrameRemoteUrl")),
-            stringValue(outputSummary.get("lastFrameRemoteUrl")),
-            resolveGeneratedFrameRemoteUrl(keyframeVersion, "last"),
-            resolveStageAssetRemoteUrl(keyframeVersion),
-            stringValue(outputSummary.get("endFrameUrl")),
-            stringValue(outputSummary.get("lastFrameUrl")),
-            stringValue(outputSummary.get("fileUrl")),
-            keyframeVersion.getDownloadUrl()
+            resolveSelectedKeyframeFrameUrl(keyframeVersion.getWorkflowId(), intValue(keyframeVersion.getClipIndex(), 0), "last", true),
+            resolveKeyframeFrameUrl(keyframeVersion, "last", true),
+            resolveSelectedKeyframeFrameUrl(keyframeVersion.getWorkflowId(), intValue(keyframeVersion.getClipIndex(), 0), "last", false),
+            resolveKeyframeFrameUrl(keyframeVersion, "last", false)
         );
     }
 
@@ -2240,28 +2688,109 @@ public class WorkflowApplicationService {
     }
 
     private String resolveSelectedKeyframeEndFrameUrl(String workflowId, int clipIndex) {
-        return workflowRepository.listStageVersions(workflowId).stream()
-            .filter(item -> WorkflowConstants.STAGE_KEYFRAME.equals(item.getStageType())
-                && intValue(item.getClipIndex(), 0) == clipIndex
-                && intValue(item.getSelected(), 0) == 1)
-            .findFirst()
-            .map(this::resolveWorkflowVideoLastFrameUrl)
-            .orElse("");
+        return resolveSelectedKeyframeFrameUrl(workflowId, clipIndex, "last", false);
     }
 
     private String resolveSelectedKeyframeEndFrameRemoteUrl(String workflowId, int clipIndex) {
-        return workflowRepository.listStageVersions(workflowId).stream()
+        return resolveSelectedKeyframeFrameUrl(workflowId, clipIndex, "last", true);
+    }
+
+    private String resolveSelectedKeyframeFrameUrl(String workflowId, int clipIndex, String frameRole, boolean preferRemote) {
+        StageVersionEntity version = selectedKeyframeFrameVersion(workflowId, clipIndex, frameRole);
+        return version == null ? "" : resolveKeyframeFrameUrl(version, frameRole, preferRemote);
+    }
+
+    private StageVersionEntity selectedKeyframeFrameVersion(String workflowId, int clipIndex, String frameRole) {
+        String key = selectionKey(frameRole);
+        List<StageVersionEntity> versions = workflowRepository.listStageVersions(workflowId).stream()
             .filter(item -> WorkflowConstants.STAGE_KEYFRAME.equals(item.getStageType())
                 && intValue(item.getClipIndex(), 0) == clipIndex
-                && intValue(item.getSelected(), 0) == 1)
+                && !VARIANT_KIND_CHARACTER_SHEET.equals(stageVariantKind(item)))
+            .toList();
+        return versions.stream()
+            .filter(item -> boolValue(stageOutputSummary(item).get(key)))
             .findFirst()
-            .map(version -> firstNonBlank(
-                stringValue(stageOutputSummary(version).get("endFrameRemoteUrl")),
-                stringValue(stageOutputSummary(version).get("lastFrameRemoteUrl")),
+            .or(() -> versions.stream().filter(item -> intValue(item.getSelected(), 0) == 1).findFirst())
+            .orElse(null);
+    }
+
+    private String resolveKeyframeFrameUrl(StageVersionEntity version, String frameRole, boolean preferRemote) {
+        if (version == null) {
+            return "";
+        }
+        Map<String, Object> outputSummary = stageOutputSummary(version);
+        if ("first".equals(normalizeFrameRole(frameRole))) {
+            return preferRemote
+                ? firstNonBlank(
+                    stringValue(outputSummary.get("startFrameRemoteUrl")),
+                    stringValue(outputSummary.get("firstFrameRemoteUrl")),
+                    resolveGeneratedFrameRemoteUrl(version, "first"),
+                    stringValue(outputSummary.get("startFrameUrl")),
+                    stringValue(outputSummary.get("firstFrameUrl")),
+                    stringValue(outputSummary.get("fileUrl")),
+                    version.getDownloadUrl()
+                )
+                : firstNonBlank(
+                    stringValue(outputSummary.get("startFrameUrl")),
+                    stringValue(outputSummary.get("firstFrameUrl")),
+                    stringValue(outputSummary.get("fileUrl")),
+                    version.getDownloadUrl()
+                );
+        }
+        return preferRemote
+            ? firstNonBlank(
+                stringValue(outputSummary.get("endFrameRemoteUrl")),
+                stringValue(outputSummary.get("lastFrameRemoteUrl")),
                 resolveGeneratedFrameRemoteUrl(version, "last"),
-                resolveStageAssetRemoteUrl(version)
-            ))
-            .orElse("");
+                resolveStageAssetRemoteUrl(version),
+                stringValue(outputSummary.get("endFrameUrl")),
+                stringValue(outputSummary.get("lastFrameUrl")),
+                stringValue(outputSummary.get("fileUrl")),
+                version.getDownloadUrl()
+            )
+            : firstNonBlank(
+                stringValue(outputSummary.get("endFrameUrl")),
+                stringValue(outputSummary.get("lastFrameUrl")),
+                stringValue(outputSummary.get("fileUrl")),
+                version.getDownloadUrl()
+            );
+    }
+
+    private String resolveKeyframeFrameUrlForView(StageVersionEntity version, String frameRole, boolean preferRemote) {
+        if (version == null) {
+            return "";
+        }
+        Map<String, Object> outputSummary = stageOutputSummaryForView(version);
+        if ("first".equals(normalizeFrameRole(frameRole))) {
+            return preferRemote
+                ? firstNonBlank(stringValue(outputSummary.get("startFrameRemoteUrl")), stringValue(outputSummary.get("firstFrameRemoteUrl")), stringValue(outputSummary.get("startFrameUrl")), stringValue(outputSummary.get("firstFrameUrl")))
+                : firstNonBlank(stringValue(outputSummary.get("startFrameUrl")), stringValue(outputSummary.get("firstFrameUrl")));
+        }
+        return preferRemote
+            ? firstNonBlank(stringValue(outputSummary.get("endFrameRemoteUrl")), stringValue(outputSummary.get("lastFrameRemoteUrl")), stringValue(outputSummary.get("endFrameUrl")), stringValue(outputSummary.get("lastFrameUrl")), stringValue(outputSummary.get("fileUrl")))
+            : firstNonBlank(stringValue(outputSummary.get("endFrameUrl")), stringValue(outputSummary.get("lastFrameUrl")), stringValue(outputSummary.get("fileUrl")));
+    }
+
+    private void markSelectedKeyframeFrame(String workflowId, int clipIndex, String versionId, String frameRole) {
+        String key = selectionKey(frameRole);
+        for (StageVersionEntity item : workflowRepository.listStageVersions(workflowId)) {
+            if (!WorkflowConstants.STAGE_KEYFRAME.equals(item.getStageType())
+                || intValue(item.getClipIndex(), 0) != clipIndex
+                || VARIANT_KIND_CHARACTER_SHEET.equals(stageVariantKind(item))) {
+                continue;
+            }
+            Map<String, Object> outputSummary = new LinkedHashMap<>(stageOutputSummary(item));
+            outputSummary.remove(key);
+            if (item.getStageVersionId().equals(versionId)) {
+                outputSummary.put(key, true);
+            }
+            item.setOutputSummaryJson(WorkflowJsonSupport.write(outputSummary));
+            workflowRepository.saveStageVersion(item);
+        }
+    }
+
+    private String selectionKey(String frameRole) {
+        return "first".equals(normalizeFrameRole(frameRole)) ? "selectedFirstFrame" : "selectedLastFrame";
     }
 
     private String resolveGeneratedFrameRemoteUrl(StageVersionEntity version, String frameRole) {
@@ -2469,6 +2998,7 @@ public class WorkflowApplicationService {
         Map<String, Object> metadata = new LinkedHashMap<>();
         Map<String, Object> result = mapValue(run.get("result"));
         String remoteSourceUrl = resolveGeneratedMediaRemoteUrl(result);
+        metadata.put("assetType", VARIANT_KIND_CHARACTER_SHEET);
         metadata.put("variantKind", VARIANT_KIND_CHARACTER_SHEET);
         metadata.put("characterName", slot.characterName());
         metadata.put("characterAppearance", slot.characterAppearance());
@@ -2758,9 +3288,48 @@ public class WorkflowApplicationService {
             throw badRequest("workflow_request_invalid", "工作流请求不能为空");
         }
         requireNonBlank(request.textAnalysisModel(), "textAnalysisModel", "文本模型");
-        requireNonBlank(request.visionModel(), "visionModel", "视觉模型");
         requireNonBlank(request.imageModel(), "imageModel", "关键帧模型");
         requireNonBlank(request.videoModel(), "videoModel", "视频模型");
+        validateDurationMode(request.durationMode(), request.minDurationSeconds(), request.maxDurationSeconds());
+    }
+
+    private void validateWorkflowSettingsRequest(UpdateWorkflowSettingsRequest request) {
+        requireNonBlank(request.aspectRatio(), "aspectRatio", "画幅比例");
+        requireNonBlank(request.stylePreset(), "stylePreset", "风格预设");
+        requireNonBlank(request.textAnalysisModel(), "textAnalysisModel", "文本模型");
+        requireNonBlank(request.imageModel(), "imageModel", "关键帧模型");
+        requireNonBlank(request.videoModel(), "videoModel", "视频模型");
+        requireNonBlank(request.videoSize(), "videoSize", "视频尺寸");
+        validateDurationMode(request.durationMode(), request.minDurationSeconds(), request.maxDurationSeconds());
+    }
+
+    private void validateDurationMode(String durationMode, Integer minDurationSeconds, Integer maxDurationSeconds) {
+        String normalized = trimmed(durationMode, "auto").toLowerCase(Locale.ROOT);
+        if (!"auto".equals(normalized) && !"manual".equals(normalized)) {
+            throw badRequest("workflow_duration_mode_invalid", "镜头时长模式必须是 auto 或 manual");
+        }
+        if ("manual".equals(normalized) && (minDurationSeconds == null || maxDurationSeconds == null)) {
+            throw badRequest("workflow_duration_required", "手动时长模式必须填写最小时长和最大时长");
+        }
+    }
+
+    private String normalizeDurationMode(String durationMode, Integer minDurationSeconds, Integer maxDurationSeconds) {
+        String normalized = trimmed(durationMode, "").toLowerCase(Locale.ROOT);
+        if ("manual".equals(normalized)) {
+            return "manual";
+        }
+        if ("auto".equals(normalized)) {
+            return "auto";
+        }
+        return minDurationSeconds == null && maxDurationSeconds == null ? "auto" : "manual";
+    }
+
+    private String workflowDurationMode(StageWorkflowEntity workflow) {
+        String normalized = trimmed(workflow == null ? "" : workflow.getDurationMode(), "").toLowerCase(Locale.ROOT);
+        if ("manual".equals(normalized) || "auto".equals(normalized)) {
+            return normalized;
+        }
+        return "auto";
     }
 
     private void requireNonBlank(String value, String field, String label) {
@@ -2848,11 +3417,249 @@ public class WorkflowApplicationService {
         };
     }
 
+    private String normalizeMaterialAssetType(String value) {
+        String normalized = trimmed(value, "").toLowerCase(Locale.ROOT);
+        return switch (normalized) {
+            case "character_sheet", "character_three_view" -> VARIANT_KIND_CHARACTER_SHEET;
+            case "scene" -> "scene";
+            case "prop" -> "prop";
+            default -> throw badRequest("material_asset_type_invalid", "素材类型不支持");
+        };
+    }
+
+    private String materialAssetType(MaterialAssetEntity asset) {
+        Map<String, Object> metadata = WorkflowJsonSupport.readMap(asset.getMetadataJson());
+        String metadataType = trimmed(stringValue(metadata.get("assetType")), "");
+        if (!metadataType.isBlank()) {
+            return normalizeMaterialAssetTypeOrWorkflow(metadataType);
+        }
+        String variantKind = trimmed(stringValue(metadata.get("variantKind")), "");
+        if (!variantKind.isBlank()) {
+            return normalizeMaterialAssetTypeOrWorkflow(variantKind);
+        }
+        String role = trimmed(asset.getAssetRole(), "");
+        if (!role.isBlank()) {
+            return normalizeMaterialAssetTypeOrWorkflow(role);
+        }
+        return "workflow";
+    }
+
+    private String normalizeMaterialAssetTypeOrWorkflow(String value) {
+        String normalized = trimmed(value, "").toLowerCase(Locale.ROOT);
+        return switch (normalized) {
+            case "character_sheet", "character_three_view" -> VARIANT_KIND_CHARACTER_SHEET;
+            case "scene" -> "scene";
+            case "prop" -> "prop";
+            default -> "workflow";
+        };
+    }
+
+    private String materialAssetRole(String assetType) {
+        return normalizeMaterialAssetType(assetType);
+    }
+
+    private String defaultMaterialTitle(String assetType) {
+        return switch (normalizeMaterialAssetType(assetType)) {
+            case VARIANT_KIND_CHARACTER_SHEET -> "角色三视图素材";
+            case "scene" -> "场景素材";
+            case "prop" -> "道具素材";
+            default -> "素材";
+        };
+    }
+
+    private StageWorkflowEntity materialCenterContext(
+        Long ownerUserId,
+        String aspectRatio,
+        List<String> styleKeywords,
+        String textAnalysisModel,
+        String imageModel
+    ) {
+        StageWorkflowEntity context = new StageWorkflowEntity();
+        context.setWorkflowId("");
+        context.setOwnerUserId(ownerUserId);
+        context.setTitle("素材中心");
+        context.setAspectRatio(trimmed(aspectRatio, "9:16"));
+        context.setStylePreset(styleKeywords == null || styleKeywords.isEmpty() ? "material-center" : String.join(", ", styleKeywords));
+        context.setGlobalPrompt("");
+        context.setTextAnalysisModel(trimmed(textAnalysisModel, ""));
+        context.setImageModel(trimmed(imageModel, ""));
+        context.setVideoModel("");
+        return context;
+    }
+
+    private List<String> externallyAccessibleReferenceImageUrls(List<String> referenceImageUrls) {
+        if (referenceImageUrls == null || referenceImageUrls.isEmpty()) {
+            return List.of();
+        }
+        List<String> urls = new ArrayList<>();
+        for (String referenceImageUrl : referenceImageUrls) {
+            String url = trimmed(referenceImageUrl, "");
+            if (url.isBlank()) {
+                continue;
+            }
+            String mappedUrl = url.startsWith(ApiPathConstants.STORAGE)
+                ? storageProperties.buildExternallyAccessibleUrl(url)
+                : "";
+            String normalizedUrl = firstNonBlank(mappedUrl, url);
+            if (!urls.contains(normalizedUrl)) {
+                urls.add(normalizedUrl);
+            }
+        }
+        return urls;
+    }
+
+    private Map<String, Object> buildMaterialGenerationRunRequest(
+        Long ownerUserId,
+        String assetType,
+        String title,
+        String description,
+        List<String> styleKeywords,
+        List<String> referenceImageUrls,
+        String aspectRatio,
+        String textAnalysisModel,
+        String imageModel,
+        Integer seed,
+        int[] dimensions
+    ) {
+        Map<String, Object> input = new LinkedHashMap<>();
+        input.put("prompt", buildMaterialGenerationPrompt(assetType, title, description, styleKeywords, !referenceImageUrls.isEmpty()));
+        input.put("width", dimensions[0]);
+        input.put("height", dimensions[1]);
+        input.put("frameRole", assetType);
+        if (!referenceImageUrls.isEmpty()) {
+            input.put("referenceImageUrl", referenceImageUrls.get(0));
+            input.put("referenceImageUrls", referenceImageUrls);
+        }
+        if (seed != null) {
+            input.put("seed", seed);
+        }
+        Map<String, Object> request = new LinkedHashMap<>();
+        request.put("kind", "image");
+        request.put("auth", Map.of("userId", ownerUserId));
+        request.put("input", input);
+        request.put("model", Map.of(
+            "textAnalysisModel", textAnalysisModel,
+            "providerModel", imageModel
+        ));
+        request.put("options", Map.of("stylePreset", styleKeywords == null || styleKeywords.isEmpty() ? "material-center" : String.join(", ", styleKeywords)));
+        request.put("storage", Map.of(
+            "relativeDir", "gen/material-center/" + assetType,
+            "fileStem", assetType + "-" + randomId()
+        ));
+        request.put("metadata", Map.of(
+            "assetType", assetType,
+            "title", title,
+            "aspectRatio", aspectRatio
+        ));
+        return request;
+    }
+
+    private String buildMaterialGenerationPrompt(
+        String assetType,
+        String title,
+        String description,
+        List<String> styleKeywords,
+        boolean hasReferences
+    ) {
+        List<String> parts = new ArrayList<>();
+        parts.add("素材标题：" + title);
+        parts.add("素材描述：" + description);
+        if (styleKeywords != null && !styleKeywords.isEmpty()) {
+            parts.add("画风关键词：" + String.join(", ", styleKeywords));
+        }
+        if (hasReferences) {
+            parts.add("参考图要求：严格沿用参考图中的主体结构、外观锚点、材质和关键比例，不要重新设计核心主体。");
+        }
+        switch (normalizeMaterialAssetType(assetType)) {
+            case VARIANT_KIND_CHARACTER_SHEET -> {
+                parts.add("生成类型：角色三视图设定图。");
+                parts.add("必须输出同一角色的正面、侧面、背面三视图，放在同一张图中。");
+                parts.add("三个视图都必须是完整从头到脚全身像，人物整体缩小并居中，头顶、双手、鞋子、脚底四周保留清晰留白，不得裁切或超出图片外。");
+                parts.add("禁止半身像、胸像、近景特写、肖像照或过度放大构图；三个视图横向等距排列在同一张画布内。");
+                parts.add("使用标准中性站姿，身体直立，双臂自然下垂或微微离身，双手空置，不做动作戏、剧情动作、表演动作或复杂姿势。");
+                parts.add("只保留稳定穿戴配饰；禁止手拿、背负、牵引、互动或携带任何道具、武器、包袋、手机、文件、杯子、伞、花束等物体。");
+                parts.add("脸、发型、服装、体型、年龄感和配饰保持一致。");
+                parts.add("背景使用纯净浅色或纯白背景，不出现文字、箭头、水印、logo、说明标签或复杂场景。");
+            }
+            case "scene" -> {
+                parts.add("生成类型：场景概念图。");
+                parts.add("重点呈现空间布局、场景锚点、光线、材质、可供后续镜头复用的环境关系。");
+                parts.add("避免出现无关人物，不添加文字、水印或说明标签。");
+            }
+            case "prop" -> {
+                parts.add("生成类型：道具设定图。");
+                parts.add("重点呈现道具主体、材质、比例、细节、可识别轮廓和干净背景。");
+                parts.add("只突出一个主要道具，不添加文字、水印或说明标签。");
+            }
+            default -> { }
+        }
+        return String.join("\n", parts);
+    }
+
+    private Map<String, Object> materialGenerationMetadata(
+        String assetType,
+        String title,
+        String description,
+        List<String> styleKeywords,
+        List<String> referenceAssetIds,
+        List<String> referenceImageUrls,
+        String aspectRatio,
+        Map<String, Object> run,
+        String remoteUrl
+    ) {
+        Map<String, Object> result = mapValue(run.get("result"));
+        Map<String, Object> metadata = new LinkedHashMap<>();
+        metadata.put("assetType", normalizeMaterialAssetType(assetType));
+        metadata.put("title", title);
+        metadata.put("description", description);
+        metadata.put("styleKeywords", styleKeywords);
+        metadata.put("referenceAssetIds", referenceAssetIds);
+        metadata.put("referenceImageUrls", referenceImageUrls);
+        metadata.put("aspectRatio", aspectRatio);
+        metadata.put("runId", stringValue(run.get("id")));
+        metadata.put("remoteSourceUrl", remoteUrl);
+        metadata.put("prompt", stringValue(result.get("prompt")));
+        metadata.put("shapedPrompt", stringValue(result.get("shapedPrompt")));
+        metadata.put("modelInfo", mapValue(result.get("modelInfo")));
+        return metadata;
+    }
+
+    private Map<String, Object> boundMaterialMetadata(MaterialAssetEntity sourceAsset, String variantKind) {
+        Map<String, Object> sourceMetadata = WorkflowJsonSupport.readMap(sourceAsset.getMetadataJson());
+        Map<String, Object> metadata = new LinkedHashMap<>(sourceMetadata);
+        metadata.put("variantKind", variantKind);
+        metadata.put("assetType", normalizeMaterialAssetTypeOrWorkflow(variantKind));
+        metadata.put("sourceMaterialAssetId", sourceAsset.getMaterialAssetId());
+        metadata.put("sourceAssetType", materialAssetType(sourceAsset));
+        return metadata;
+    }
+
     private int[] dimensionsFromAspectRatio(String aspectRatio) {
         if ("16:9".equals(trimmed(aspectRatio, ""))) {
             return new int[] {1280, 720};
         }
+        if ("1:1".equals(trimmed(aspectRatio, ""))) {
+            return new int[] {1024, 1024};
+        }
         return new int[] {720, 1280};
+    }
+
+    private List<?> listObjectValue(Object value) {
+        return value instanceof List<?> list ? list : List.of();
+    }
+
+    private List<String> normalizeStringList(Collection<?> values) {
+        if (values == null) {
+            return List.of();
+        }
+        LinkedHashSet<String> normalized = new LinkedHashSet<>();
+        for (Object item : values) {
+            String value = stringValue(item).trim();
+            if (!value.isBlank()) {
+                normalized.add(value);
+            }
+        }
+        return new ArrayList<>(normalized);
     }
 
     @SuppressWarnings("unchecked")
@@ -2869,20 +3676,6 @@ public class WorkflowApplicationService {
             return (Map<String, Object>) map;
         }
         return Map.of();
-    }
-
-    private List<String> normalizeCustomTags(List<String> values) {
-        if (values == null) {
-            return List.of();
-        }
-        LinkedHashSet<String> normalized = new LinkedHashSet<>();
-        for (String item : values) {
-            String value = trimmed(item, "").toLowerCase(Locale.ROOT);
-            if (!value.isBlank()) {
-                normalized.add(value);
-            }
-        }
-        return new ArrayList<>(normalized);
     }
 
     private String stageLabel(String stageType) {
@@ -2921,11 +3714,6 @@ public class WorkflowApplicationService {
             }
         }
         return String.join("\n", parts);
-    }
-
-    private String userExtraPromptBlock(String extraPrompt) {
-        String normalized = trimmed(extraPrompt, "");
-        return normalized.isBlank() ? "" : "额外追加生成要求：" + normalized;
     }
 
     private String visualStyleConstraintBlock(StageWorkflowEntity workflow) {
