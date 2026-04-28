@@ -22,6 +22,13 @@ public interface GenerationApplicationService {
     Map<String, Object> createRun(Map<String, Object> request);
 
     /**
+     * 创建异步运行。
+     * @param request 请求体
+     * @return 处理结果
+     */
+    Map<String, Object> createAsyncRun(Map<String, Object> request);
+
+    /**
      * 列出Runs。
      * @param limit 返回的最大条目数
      * @return 处理结果

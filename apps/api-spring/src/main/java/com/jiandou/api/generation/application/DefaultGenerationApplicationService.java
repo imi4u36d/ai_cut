@@ -2,6 +2,7 @@ package com.jiandou.api.generation.application;
 
 import com.jiandou.api.generation.GenerationModelKinds;
 import com.jiandou.api.generation.GenerationRunKinds;
+import com.jiandou.api.generation.GenerationRunStatuses;
 import com.jiandou.api.generation.exception.GenerationRunNotFoundException;
 import com.jiandou.api.generation.exception.UnsupportedGenerationKindException;
 import com.jiandou.api.generation.orchestration.GenerationRunFactory;
@@ -13,15 +14,23 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import org.springframework.beans.factory.DisposableBean;
 import org.springframework.stereotype.Service;
 
 /**
  * 默认生成应用服务。
  */
 @Service
-public class DefaultGenerationApplicationService implements GenerationApplicationService {
+public class DefaultGenerationApplicationService implements GenerationApplicationService, DisposableBean {
 
     private final ConcurrentHashMap<String, Map<String, Object>> runs = new ConcurrentHashMap<>();
+    private final ExecutorService asyncRunExecutor = Executors.newFixedThreadPool(2, r -> {
+        Thread thread = new Thread(r, "generation-run-async");
+        thread.setDaemon(true);
+        return thread;
+    });
     private final LocalGenerationRunStore generationRunStore;
     private final ModelRuntimePropertiesResolver modelResolver;
     private final GenerationCatalogService catalogService;
@@ -68,6 +77,37 @@ public class DefaultGenerationApplicationService implements GenerationApplicatio
     public Map<String, Object> createRun(Map<String, Object> request) {
         String runId = "run_" + UUID.randomUUID().toString().replace("-", "");
         String kind = String.valueOf(request.getOrDefault("kind", GenerationRunKinds.PROBE));
+        return createRunByKindAndPersist(runId, kind, request);
+    }
+
+    /**
+     * 创建异步运行。
+     * @param request 请求体
+     * @return 处理结果
+     */
+    @Override
+    public Map<String, Object> createAsyncRun(Map<String, Object> request) {
+        String runId = "run_" + UUID.randomUUID().toString().replace("-", "");
+        String kind = String.valueOf(request.getOrDefault("kind", GenerationRunKinds.PROBE));
+        if (GenerationRunKinds.PROBE.equalsIgnoreCase(kind)) {
+            return createRunByKindAndPersist(runId, kind, request);
+        }
+        validateSupportedKind(kind);
+        Map<String, Object> run = acceptedRun(runId, kind, request);
+        runs.put(runId, run);
+        persistRun(runId, run);
+        asyncRunExecutor.submit(() -> executeAsyncRun(runId, kind, request));
+        return run;
+    }
+
+    private Map<String, Object> createRunByKindAndPersist(String runId, String kind, Map<String, Object> request) {
+        Map<String, Object> run = createRunByKind(runId, kind, request);
+        runs.put(runId, run);
+        persistRun(runId, run);
+        return run;
+    }
+
+    private Map<String, Object> createRunByKind(String runId, String kind, Map<String, Object> request) {
         Map<String, Object> run = switch (kind.toLowerCase()) {
             case GenerationRunKinds.PROBE -> generationRunFactory.createProbeRun(runId, request);
             case GenerationRunKinds.SCRIPT -> generationRunFactory.createScriptRun(runId, request);
@@ -81,9 +121,68 @@ public class DefaultGenerationApplicationService implements GenerationApplicatio
              */
             default -> throw new UnsupportedGenerationKindException(kind);
         };
-        runs.put(runId, run);
-        persistRun(runId, run);
         return run;
+    }
+
+    private void validateSupportedKind(String kind) {
+        switch (kind.toLowerCase()) {
+            case GenerationRunKinds.PROBE, GenerationRunKinds.SCRIPT, GenerationRunKinds.SCRIPT_ADJUST, GenerationRunKinds.IMAGE, GenerationRunKinds.VIDEO -> {
+            }
+            default -> throw new UnsupportedGenerationKindException(kind);
+        }
+    }
+
+    private Map<String, Object> acceptedRun(String runId, String kind, Map<String, Object> request) {
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("runId", runId);
+        result.put("kind", kind);
+        result.put("callChain", List.of(support.callLog(
+            "generation",
+            "run.accepted",
+            "running",
+            "生成请求已接收，后台执行中。",
+            Map.of("kind", kind)
+        )));
+        result.put("metadata", Map.of("async", true));
+        return support.runEnvelope(runId, kind, request, result, resultKey(kind), GenerationRunStatuses.ACCEPTED);
+    }
+
+    private String resultKey(String kind) {
+        return switch (kind.toLowerCase()) {
+            case GenerationRunKinds.PROBE -> "resultProbe";
+            case GenerationRunKinds.SCRIPT, GenerationRunKinds.SCRIPT_ADJUST -> "resultScript";
+            case GenerationRunKinds.IMAGE -> "resultImage";
+            case GenerationRunKinds.VIDEO -> "resultVideo";
+            default -> "result";
+        };
+    }
+
+    private void executeAsyncRun(String runId, String kind, Map<String, Object> request) {
+        try {
+            Map<String, Object> run = createRunByKind(runId, kind, request);
+            runs.put(runId, run);
+            persistRun(runId, run);
+        } catch (RuntimeException ex) {
+            Map<String, Object> failed = failedRun(runId, kind, request, ex);
+            runs.put(runId, failed);
+            persistRun(runId, failed);
+        }
+    }
+
+    private Map<String, Object> failedRun(String runId, String kind, Map<String, Object> request, RuntimeException ex) {
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("runId", runId);
+        result.put("kind", kind);
+        result.put("error", ex.getMessage() == null ? ex.getClass().getSimpleName() : ex.getMessage());
+        result.put("callChain", List.of(support.callLog(
+            "generation",
+            "run.failed",
+            "error",
+            "后台生成执行失败。",
+            Map.of("error", ex.getMessage() == null ? ex.getClass().getSimpleName() : ex.getMessage())
+        )));
+        result.put("metadata", Map.of("async", true));
+        return support.runEnvelope(runId, kind, request, result, resultKey(kind), GenerationRunStatuses.FAILED);
     }
 
     /**
@@ -150,5 +249,10 @@ public class DefaultGenerationApplicationService implements GenerationApplicatio
      */
     private void persistRun(String runId, Map<String, Object> run) {
         generationRunStore.persistRun(runId, run);
+    }
+
+    @Override
+    public void destroy() {
+        asyncRunExecutor.shutdownNow();
     }
 }

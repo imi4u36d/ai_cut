@@ -267,6 +267,22 @@ function runStatus(rawRun: unknown): string {
   return asString(run.status).toLowerCase();
 }
 
+function runErrorMessage(rawRun: unknown): string {
+  const run = asRecord(rawRun) ?? {};
+  const resultRecord =
+    asRecord(run.result) ??
+    asRecord(run.resultImage) ??
+    asRecord(run.resultVideo) ??
+    {};
+  const metadata = asRecord(resultRecord.metadata) ?? {};
+  return (
+    asString(resultRecord.error) ||
+    asString(metadata.taskMessage) ||
+    asString(metadata.error) ||
+    "生成任务失败"
+  );
+}
+
 async function delay(ms: number) {
   await new Promise((resolve) => {
     setTimeout(resolve, ms);
@@ -283,7 +299,7 @@ async function waitForRunResult(runId: string, initialRun?: unknown) {
     if (latestRun) {
       const status = runStatus(latestRun);
       if (status === "failed" || status === "cancelled" || status === "canceled") {
-        return latestRun;
+        throw new Error(runErrorMessage(latestRun));
       }
     }
     await delay(RUN_POLL_INTERVAL_MS);

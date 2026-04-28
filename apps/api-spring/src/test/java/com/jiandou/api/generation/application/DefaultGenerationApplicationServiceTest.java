@@ -7,12 +7,14 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jiandou.api.config.JiandouStorageProperties;
 import com.jiandou.api.generation.GenerationRunKinds;
+import com.jiandou.api.generation.GenerationRunStatuses;
 import com.jiandou.api.generation.exception.GenerationRunNotFoundException;
 import com.jiandou.api.generation.exception.UnsupportedGenerationKindException;
 import com.jiandou.api.generation.orchestration.GenerationRunFactory;
@@ -22,6 +24,8 @@ import com.jiandou.api.generation.runtime.ModelRuntimePropertiesResolver;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.nio.file.Path;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -95,6 +99,42 @@ class DefaultGenerationApplicationServiceTest {
         );
 
         assertTrue(ex.getMessage().contains("unknown"));
+    }
+
+    @Test
+    void createAsyncRunReturnsAcceptedBeforeBackgroundExecutionPersistsResult() throws Exception {
+        Map<String, Object> request = Map.of("kind", GenerationRunKinds.SCRIPT, "prompt", "hello");
+        Map<String, Object> completed = new LinkedHashMap<>(Map.of("status", GenerationRunStatuses.SUCCEEDED));
+        CountDownLatch started = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        when(support.callLog(any(), any(), any(), any(), any())).thenReturn(Map.of("event", "run.accepted"));
+        when(support.runEnvelope(any(), eq(GenerationRunKinds.SCRIPT), eq(request), any(), eq("resultScript"), eq(GenerationRunStatuses.ACCEPTED)))
+            .thenAnswer(invocation -> {
+                Map<String, Object> run = new LinkedHashMap<>();
+                run.put("id", invocation.getArgument(0));
+                run.put("kind", GenerationRunKinds.SCRIPT);
+                run.put("status", GenerationRunStatuses.ACCEPTED);
+                run.put("result", invocation.getArgument(3));
+                return run;
+            });
+        when(runFactory.createScriptRun(any(), eq(request))).thenAnswer(invocation -> {
+            started.countDown();
+            if (!release.await(1, TimeUnit.SECONDS)) {
+                throw new IllegalStateException("test did not release async run");
+            }
+            return completed;
+        });
+
+        Map<String, Object> accepted = service.createAsyncRun(request);
+
+        assertEquals(GenerationRunStatuses.ACCEPTED, accepted.get("status"));
+        String runId = String.valueOf(accepted.get("id"));
+        assertTrue(runId.startsWith("run_"));
+        assertTrue(started.await(1, TimeUnit.SECONDS));
+        assertEquals(accepted, runStore.loadRun(runId));
+        release.countDown();
+        verify(runFactory, timeout(1000)).createScriptRun(eq(runId), eq(request));
+        assertEquals(completed, runStore.loadRun(runId));
     }
 
     @Test

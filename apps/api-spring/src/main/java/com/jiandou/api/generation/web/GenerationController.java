@@ -56,7 +56,7 @@ public class GenerationController {
     @PostMapping("/runs")
     public Map<String, Object> createRun(@RequestBody Map<String, Object> request) {
         try {
-            return generationService.createRun(attachCurrentUser(request));
+            return generationService.createAsyncRun(attachCurrentUser(request));
         } catch (IllegalArgumentException ex) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, ex.getMessage(), ex);
         } catch (UnsupportedGenerationKindException ex) {

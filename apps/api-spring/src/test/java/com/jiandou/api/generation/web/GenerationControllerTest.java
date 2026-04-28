@@ -53,14 +53,14 @@ class GenerationControllerTest {
     void createRunPassesThroughSuccess() {
         Map<String, Object> request = Map.of("kind", "probe");
         Map<String, Object> response = Map.of("id", "run_1");
-        when(service.createRun(request)).thenReturn(response);
+        when(service.createAsyncRun(request)).thenReturn(response);
 
         assertSame(response, controller.createRun(request));
     }
 
     @Test
     void createRunMapsBadRequestErrors() {
-        when(service.createRun(Map.of("kind", "x"))).thenThrow(new UnsupportedGenerationKindException("x"));
+        when(service.createAsyncRun(Map.of("kind", "x"))).thenThrow(new UnsupportedGenerationKindException("x"));
 
         ResponseStatusException ex = assertThrows(ResponseStatusException.class, () -> controller.createRun(Map.of("kind", "x")));
 
@@ -69,9 +69,9 @@ class GenerationControllerTest {
 
     @Test
     void createRunMapsServiceAvailabilityGatewayAndNotImplementedErrors() {
-        when(service.createRun(Map.of("kind", "cfg"))).thenThrow(new GenerationConfigurationException("cfg"));
-        when(service.createRun(Map.of("kind", "provider"))).thenThrow(new GenerationProviderException("provider"));
-        when(service.createRun(Map.of("kind", "todo"))).thenThrow(new GenerationNotImplementedException("todo"));
+        when(service.createAsyncRun(Map.of("kind", "cfg"))).thenThrow(new GenerationConfigurationException("cfg"));
+        when(service.createAsyncRun(Map.of("kind", "provider"))).thenThrow(new GenerationProviderException("provider"));
+        when(service.createAsyncRun(Map.of("kind", "todo"))).thenThrow(new GenerationNotImplementedException("todo"));
 
         assertEquals(HttpStatus.SERVICE_UNAVAILABLE, assertThrows(ResponseStatusException.class, () -> controller.createRun(Map.of("kind", "cfg"))).getStatusCode());
         assertEquals(HttpStatus.BAD_GATEWAY, assertThrows(ResponseStatusException.class, () -> controller.createRun(Map.of("kind", "provider"))).getStatusCode());
