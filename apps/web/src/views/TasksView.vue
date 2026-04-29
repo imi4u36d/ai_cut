@@ -1141,15 +1141,18 @@ onUnmounted(() => {
   height: 100%;
   min-height: 0;
   color: var(--text-strong);
+  padding: 22px;
+  overflow: auto;
 }
 
 .tasks-layout {
   display: block;
-  height: 100%;
+  min-height: 100%;
   min-height: 0;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 0 0 24px 24px;
+  border: 1px solid rgba(15, 20, 25, 0.06);
+  border-radius: 24px;
   overflow: hidden;
+  background: #fff;
 }
 
 .tasks-board {
@@ -1173,10 +1176,7 @@ onUnmounted(() => {
   font-size: 1.1rem;
   font-weight: 700;
   letter-spacing: -0.04em;
-  background: linear-gradient(90deg, #c567ff 0%, #8a8fff 46%, #67caff 100%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
+  color: var(--text-strong);
 }
 
 .tasks-last-updated {
@@ -1200,25 +1200,25 @@ onUnmounted(() => {
   min-height: 46px;
   padding: 0 14px;
   border-radius: 14px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(15, 20, 25, 0.08);
+  background: #fff;
 }
 
 .toolbar-search svg {
   width: 18px;
   height: 18px;
-  color: rgba(255, 255, 255, 0.46);
+  color: var(--text-muted);
 }
 
 .toolbar-search input {
   width: 100%;
   border: 0;
   background: transparent;
-  color: rgba(255, 255, 255, 0.86);
+  color: var(--text-strong);
 }
 
 .toolbar-search input::placeholder {
-  color: rgba(255, 255, 255, 0.34);
+  color: #9aa5ad;
 }
 
 .toolbar-pills {
@@ -1234,14 +1234,15 @@ onUnmounted(() => {
   min-height: 40px;
   padding: 0 14px;
   border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(255, 255, 255, 0.03);
-  color: rgba(255, 255, 255, 0.8);
+  border: 1px solid rgba(15, 20, 25, 0.08);
+  background: #fff;
+  color: var(--text-body);
 }
 
 .toolbar-pill-active {
-  border-color: rgba(145, 180, 255, 0.36);
-  box-shadow: var(--shadow-glow);
+  border-color: rgba(0, 161, 194, 0.24);
+  background: rgba(0, 161, 194, 0.08);
+  color: var(--accent-cyan);
 }
 
 .toolbar-pill__dot {
@@ -1274,14 +1275,14 @@ onUnmounted(() => {
   display: grid;
   place-items: center;
   border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(255, 255, 255, 0.03);
-  color: rgba(255, 255, 255, 0.7);
+  border: 1px solid rgba(15, 20, 25, 0.08);
+  background: #fff;
+  color: var(--text-body);
 }
 
 .toolbar-icon-active {
-  color: rgba(255, 255, 255, 0.96);
-  border-color: rgba(145, 180, 255, 0.32);
+  color: var(--accent-cyan);
+  border-color: rgba(0, 161, 194, 0.22);
 }
 
 .toolbar-icon svg {
@@ -1315,7 +1316,7 @@ onUnmounted(() => {
 .tasks-empty-board h3 {
   margin: 0;
   font-size: 1.35rem;
-  color: rgba(255, 255, 255, 0.94);
+  color: var(--text-strong);
 }
 
 .tasks-empty-board p {
@@ -1344,9 +1345,7 @@ onUnmounted(() => {
   gap: 14px;
   min-height: 0;
   padding: 12px;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.02)),
-    rgba(18, 21, 28, 0.82);
+  background: #f8fafb;
 }
 
 .board-column__head {
@@ -1360,11 +1359,11 @@ onUnmounted(() => {
   margin: 0;
   font-size: 0.98rem;
   font-weight: 700;
-  color: rgba(255, 255, 255, 0.94);
+  color: var(--text-strong);
 }
 
 .board-column__more {
-  color: rgba(255, 255, 255, 0.48);
+  color: var(--text-muted);
 }
 
 .board-column__list {
@@ -1386,10 +1385,8 @@ onUnmounted(() => {
   gap: 12px;
   padding: 10px;
   border-radius: 16px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.02)),
-    rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(15, 20, 25, 0.08);
+  background: #fff;
   text-align: left;
   transition: border-color 180ms ease, box-shadow 180ms ease, transform 180ms ease;
 }
@@ -1422,9 +1419,8 @@ onUnmounted(() => {
   border-radius: 10px;
   min-height: 96px;
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0.01)),
-    radial-gradient(circle at 50% 28%, rgba(247, 223, 167, 0.22), transparent 34%),
-    linear-gradient(135deg, rgba(52, 67, 84, 0.72), rgba(15, 18, 24, 0.96));
+    radial-gradient(circle at 50% 28%, rgba(0, 161, 194, 0.14), transparent 34%),
+    linear-gradient(135deg, #eef5f8, #ffffff);
 }
 
 .board-task__content {
@@ -1444,11 +1440,11 @@ onUnmounted(() => {
   margin: 0;
   font-size: 0.92rem;
   line-height: 1.3;
-  color: rgba(255, 255, 255, 0.94);
+  color: var(--text-strong);
 }
 
 .board-task__menu {
-  color: rgba(255, 255, 255, 0.44);
+  color: var(--text-muted);
 }
 
 .board-task__reason {
@@ -1462,27 +1458,27 @@ onUnmounted(() => {
 .board-task__reason span {
   font-size: 0.7rem;
   letter-spacing: 0.04em;
-  color: rgba(255, 179, 197, 0.86);
+  color: #b91c3b;
 }
 
 .board-task__reason p {
   margin: 0;
   font-size: 0.78rem;
   line-height: 1.45;
-  color: rgba(255, 228, 234, 0.96);
+  color: #8a2438;
 }
 
 .board-task__progress {
   height: 6px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.08);
+  background: rgba(15, 20, 25, 0.08);
   overflow: hidden;
 }
 
 .board-task__progress-fill {
   height: 100%;
   border-radius: inherit;
-  background: linear-gradient(90deg, #a96eff 0%, #59d7ff 100%);
+  background: var(--bg-accent);
 }
 
 .board-task__meta,
@@ -1491,7 +1487,7 @@ onUnmounted(() => {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  color: rgba(255, 255, 255, 0.52);
+  color: var(--text-muted);
   font-size: 0.76rem;
 }
 
@@ -1506,8 +1502,8 @@ onUnmounted(() => {
   display: grid;
   place-items: center;
   padding: 28px;
-  background: rgba(4, 6, 10, 0.72);
-  backdrop-filter: blur(18px);
+  background: rgba(15, 20, 25, 0.24);
+  backdrop-filter: blur(10px);
 }
 
 .task-details-dialog {
@@ -1517,10 +1513,8 @@ onUnmounted(() => {
   gap: 18px;
   padding: 24px;
   border-radius: 28px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.02)),
-    rgba(7, 10, 16, 0.96);
+  border: 1px solid rgba(15, 20, 25, 0.08);
+  background: #fff;
   overflow: auto;
 }
 
@@ -1548,7 +1542,7 @@ onUnmounted(() => {
   margin: 0;
   font-size: clamp(1.25rem, 2vw, 1.7rem);
   font-weight: 700;
-  color: rgba(255, 255, 255, 0.96);
+  color: var(--text-strong);
 }
 
 .task-details-dialog__meta {
@@ -1558,7 +1552,7 @@ onUnmounted(() => {
 }
 
 .task-details-dialog__close {
-  color: rgba(255, 255, 255, 0.54);
+  color: var(--text-muted);
   font-size: 1.5rem;
   line-height: 1;
   flex: 0 0 auto;
@@ -1568,12 +1562,12 @@ onUnmounted(() => {
 .task-details-panel__error {
   padding: 14px;
   border-radius: 14px;
-  background: rgba(255, 255, 255, 0.03);
+  background: #f8fafb;
   color: var(--text-muted);
 }
 
 .task-details-panel__error {
-  color: #ffabc0;
+  color: var(--accent-danger);
 }
 
 .task-details-panel__error-block {
@@ -1598,11 +1592,11 @@ onUnmounted(() => {
 
 .task-details-panel__title p {
   font-size: 0.88rem;
-  color: rgba(255, 255, 255, 0.94);
+  color: var(--text-strong);
 }
 
 .task-details-panel__title strong {
-  color: rgba(255, 255, 255, 0.86);
+  color: var(--text-body);
 }
 
 .detail-stage-line {
@@ -1623,7 +1617,7 @@ onUnmounted(() => {
   height: 18px;
   border-radius: 999px;
   position: relative;
-  background: linear-gradient(90deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.04));
+  background: rgba(15, 20, 25, 0.08);
 }
 
 .detail-stage-line__bar::after {
@@ -1632,37 +1626,37 @@ onUnmounted(() => {
   inset: 3px auto 3px calc(50% - 6px);
   width: 12px;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.18);
+  background: rgba(15, 20, 25, 0.18);
 }
 
 .task-stage-row--done {
-  background: linear-gradient(90deg, rgba(176, 92, 255, 0.9), rgba(78, 219, 255, 0.82));
+  background: var(--bg-accent);
 }
 
 .task-stage-row--done::after,
 .task-stage-row--active::after {
-  background: rgba(255, 255, 255, 0.78);
+  background: #fff;
 }
 
 .task-stage-row--active {
-  background: linear-gradient(90deg, rgba(176, 92, 255, 0.92), rgba(78, 219, 255, 0.9));
+  background: var(--bg-accent);
 }
 
 .task-stage-row--paused {
-  background: linear-gradient(90deg, rgba(255, 190, 100, 0.6), rgba(255, 255, 255, 0.06));
+  background: linear-gradient(90deg, rgba(255, 190, 100, 0.6), rgba(15, 20, 25, 0.06));
 }
 
 .task-stage-row--failed {
-  background: linear-gradient(90deg, rgba(255, 118, 150, 0.68), rgba(255, 255, 255, 0.06));
+  background: linear-gradient(90deg, rgba(255, 118, 150, 0.68), rgba(15, 20, 25, 0.06));
 }
 
 .task-stage-row--pending {
-  background: linear-gradient(90deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.05));
+  background: rgba(15, 20, 25, 0.08);
 }
 
 .detail-stage-line__item p {
   margin: 0;
-  color: rgba(255, 255, 255, 0.76);
+  color: var(--text-body);
   font-size: 0.72rem;
   line-height: 1.35;
 }
@@ -1675,15 +1669,15 @@ onUnmounted(() => {
 .detail-section-card {
   padding: 16px;
   border-radius: 18px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(15, 20, 25, 0.08);
+  background: #f8fafb;
 }
 
 .detail-section h3 {
   margin: 0;
   font-size: 0.88rem;
   font-weight: 700;
-  color: rgba(255, 255, 255, 0.94);
+  color: var(--text-strong);
 }
 
 .detail-section__head {
@@ -1702,11 +1696,11 @@ onUnmounted(() => {
   display: grid;
   grid-template-columns: 1fr auto;
   gap: 10px;
-  color: rgba(255, 255, 255, 0.64);
+  color: var(--text-body);
 }
 
 .detail-overview__row strong {
-  color: rgba(255, 255, 255, 0.9);
+  color: var(--text-strong);
 }
 
 .detail-overview__row-progress {
@@ -1717,7 +1711,7 @@ onUnmounted(() => {
 .detail-overview__progress {
   height: 6px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.08);
+  background: rgba(15, 20, 25, 0.08);
   overflow: hidden;
 }
 
@@ -1729,7 +1723,7 @@ onUnmounted(() => {
 
 .detail-params {
   display: grid;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(15, 20, 25, 0.08);
   border-radius: 14px;
   overflow: hidden;
 }
@@ -1749,13 +1743,13 @@ onUnmounted(() => {
 }
 
 .detail-params__row span {
-  background: rgba(255, 255, 255, 0.03);
-  color: rgba(255, 255, 255, 0.58);
+  background: #f8fafb;
+  color: var(--text-muted);
 }
 
 .detail-params__row strong {
-  background: rgba(0, 0, 0, 0.22);
-  color: rgba(255, 255, 255, 0.86);
+  background: #fff;
+  color: var(--text-strong);
   font-weight: 500;
 }
 
@@ -1770,11 +1764,11 @@ onUnmounted(() => {
   gap: 8px;
   padding: 14px;
   border-radius: 14px;
-  background: rgba(0, 0, 0, 0.24);
+  background: #f8fafb;
 }
 
 .detail-note-block span {
-  color: rgba(255, 255, 255, 0.5);
+  color: var(--text-muted);
   font-size: 0.74rem;
   letter-spacing: 0.12em;
   text-transform: uppercase;
@@ -1782,7 +1776,7 @@ onUnmounted(() => {
 
 .detail-note-block p {
   margin: 0;
-  color: rgba(255, 255, 255, 0.82);
+  color: var(--text-body);
   line-height: 1.7;
   white-space: pre-wrap;
 }
@@ -1798,8 +1792,8 @@ onUnmounted(() => {
 .detail-traces__empty {
   padding: 12px;
   border-radius: 12px;
-  background: rgba(0, 0, 0, 0.42);
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: #f8fafb;
+  border: 1px solid rgba(15, 20, 25, 0.06);
 }
 
 .detail-traces__item p,
@@ -1809,7 +1803,7 @@ onUnmounted(() => {
 }
 
 .detail-traces__item p {
-  color: rgba(255, 255, 255, 0.82);
+  color: var(--text-strong);
   font-size: 0.76rem;
   line-height: 1.55;
 }
@@ -1817,7 +1811,7 @@ onUnmounted(() => {
 .detail-traces__item small {
   display: block;
   margin-top: 0.32rem;
-  color: rgba(255, 255, 255, 0.42);
+  color: var(--text-muted);
   font-size: 0.68rem;
 }
 

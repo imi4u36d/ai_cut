@@ -110,33 +110,11 @@ async function handleSubmit() {
   place-items: center;
   padding: 24px;
   overflow: hidden;
-  background:
-    radial-gradient(circle at top left, rgba(255, 196, 86, 0.16), transparent 24%),
-    radial-gradient(circle at 84% 18%, rgba(86, 160, 255, 0.18), transparent 24%),
-    linear-gradient(135deg, #08101f 0%, #101725 48%, #1a1013 100%);
+  background: var(--bg-base);
 }
 
 .auth-screen__glow {
-  position: absolute;
-  border-radius: 999px;
-  filter: blur(80px);
-  opacity: 0.4;
-}
-
-.auth-screen__glow-left {
-  top: -40px;
-  left: -80px;
-  width: 260px;
-  height: 260px;
-  background: rgba(255, 177, 93, 0.26);
-}
-
-.auth-screen__glow-right {
-  right: -70px;
-  bottom: -60px;
-  width: 280px;
-  height: 280px;
-  background: rgba(88, 176, 255, 0.22);
+  display: none;
 }
 
 .auth-screen__panel {
@@ -144,16 +122,13 @@ async function handleSubmit() {
   z-index: 1;
   width: min(980px, 100%);
   display: grid;
-  grid-template-columns: minmax(0, 1.1fr) minmax(320px, 420px);
+  grid-template-columns: minmax(360px, 0.95fr) minmax(320px, 420px);
   gap: 28px;
   padding: 28px;
-  border-radius: 32px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  background: rgba(9, 14, 24, 0.82);
-  box-shadow:
-    0 30px 80px rgba(0, 0, 0, 0.4),
-    inset 0 1px 0 rgba(255, 255, 255, 0.05);
-  backdrop-filter: blur(26px);
+  border-radius: 28px;
+  border: 1px solid rgba(15, 20, 25, 0.06);
+  background: #fff;
+  box-shadow: var(--shadow-panel);
 }
 
 .auth-screen__hero {
@@ -162,7 +137,7 @@ async function handleSubmit() {
 
 .auth-screen__eyebrow {
   margin: 0 0 12px;
-  color: rgba(255, 214, 153, 0.84);
+  color: var(--accent-cyan);
   font-size: 0.72rem;
   font-weight: 700;
   letter-spacing: 0.24em;
@@ -172,16 +147,17 @@ async function handleSubmit() {
 .auth-screen__hero h1 {
   margin: 0;
   font-family: "Sora", "Inter", sans-serif;
-  font-size: clamp(2rem, 5vw, 3.2rem);
+  max-width: 10ch;
+  font-size: clamp(2.25rem, 4.4vw, 3.55rem);
   line-height: 1.05;
   letter-spacing: -0.06em;
-  color: #f8fbff;
+  color: var(--text-strong);
 }
 
 .auth-screen__hero p {
   margin: 16px 0 0;
   max-width: 30rem;
-  color: rgba(236, 242, 255, 0.72);
+  color: var(--text-body);
   line-height: 1.8;
 }
 
@@ -190,8 +166,8 @@ async function handleSubmit() {
   gap: 16px;
   padding: 22px;
   border-radius: 24px;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: #f7f9fa;
+  border: 1px solid rgba(15, 20, 25, 0.06);
 }
 
 .auth-form__field {
@@ -200,7 +176,7 @@ async function handleSubmit() {
 }
 
 .auth-form__field span {
-  color: rgba(255, 255, 255, 0.76);
+  color: var(--text-body);
   font-size: 0.88rem;
 }
 
@@ -209,9 +185,9 @@ async function handleSubmit() {
   min-height: 48px;
   padding: 0 14px;
   border-radius: 14px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  background: rgba(4, 7, 13, 0.72);
-  color: #fff;
+  border: 1px solid rgba(15, 20, 25, 0.08);
+  background: #fff;
+  color: var(--text-strong);
 }
 
 .auth-form__password-wrap {
@@ -231,19 +207,19 @@ async function handleSubmit() {
   padding: 6px 10px;
   border: 0;
   border-radius: 10px;
-  background: rgba(255, 255, 255, 0.08);
-  color: rgba(255, 234, 197, 0.92);
+  background: #eef2f4;
+  color: var(--text-body);
   font-size: 0.8rem;
   font-weight: 700;
   cursor: pointer;
 }
 
 .auth-form__password-toggle:hover {
-  background: rgba(255, 255, 255, 0.14);
+  background: #e3e8eb;
 }
 
 .auth-form__field input::placeholder {
-  color: rgba(255, 255, 255, 0.34);
+  color: #9aa5ad;
 }
 
 .auth-form__hint,
@@ -253,7 +229,7 @@ async function handleSubmit() {
 }
 
 .auth-form__hint {
-  color: rgba(255, 222, 171, 0.8);
+  color: var(--text-body);
 }
 
 .auth-form__error {
@@ -261,15 +237,15 @@ async function handleSubmit() {
   border-radius: 14px;
   border: 1px solid rgba(255, 111, 145, 0.18);
   background: rgba(255, 111, 145, 0.12);
-  color: #ffd3de;
+  color: var(--accent-danger);
 }
 
 .auth-form__submit {
   min-height: 48px;
   border: 0;
   border-radius: 16px;
-  background: linear-gradient(135deg, #ffb25a, #4eb0ff);
-  color: #07111c;
+  background: var(--bg-accent);
+  color: #fff;
   font-weight: 800;
   cursor: pointer;
 }
@@ -281,11 +257,11 @@ async function handleSubmit() {
 
 .auth-form__footer {
   margin: 0;
-  color: rgba(255, 255, 255, 0.62);
+  color: var(--text-muted);
 }
 
 .auth-form__footer a {
-  color: #ffe0ab;
+  color: var(--accent-cyan);
 }
 
 @media (max-width: 860px) {

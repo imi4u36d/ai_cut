@@ -17,25 +17,22 @@
   display: grid;
   place-items: center;
   padding: 24px;
-  background:
-    radial-gradient(circle at 20% 20%, rgba(255, 187, 116, 0.16), transparent 24%),
-    radial-gradient(circle at 80% 75%, rgba(92, 197, 255, 0.18), transparent 24%),
-    linear-gradient(135deg, #0c121d, #171521);
+  background: var(--bg-base);
 }
 
 .forbidden-view__card {
   width: min(560px, 100%);
   padding: 34px;
-  border-radius: 28px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(11, 16, 24, 0.82);
-  box-shadow: 0 28px 70px rgba(0, 0, 0, 0.42);
+  border-radius: 24px;
+  border: 1px solid rgba(15, 20, 25, 0.06);
+  background: #fff;
+  box-shadow: var(--shadow-panel);
   text-align: center;
 }
 
 .forbidden-view__eyebrow {
   margin: 0 0 12px;
-  color: rgba(255, 190, 117, 0.84);
+  color: var(--accent-cyan);
   font-size: 0.74rem;
   font-weight: 700;
   letter-spacing: 0.24em;
@@ -47,11 +44,12 @@
   font-family: "Sora", "Inter", sans-serif;
   font-size: clamp(1.8rem, 4vw, 2.6rem);
   letter-spacing: -0.05em;
+  color: var(--text-strong);
 }
 
 .forbidden-view__card p {
   margin: 16px 0 0;
-  color: rgba(236, 242, 255, 0.72);
+  color: var(--text-body);
   line-height: 1.8;
 }
 
@@ -74,14 +72,14 @@
 }
 
 .forbidden-view__primary {
-  background: linear-gradient(135deg, #ffb468, #61cbff);
-  color: #07101c;
+  background: var(--bg-accent);
+  color: #fff;
 }
 
 .forbidden-view__secondary {
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(255, 255, 255, 0.04);
-  color: rgba(255, 255, 255, 0.86);
+  border: 1px solid rgba(15, 20, 25, 0.08);
+  background: #fff;
+  color: var(--text-strong);
 }
 
 @media (max-width: 640px) {

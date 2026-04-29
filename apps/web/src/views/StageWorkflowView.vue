@@ -2994,6 +2994,8 @@ onBeforeUnmount(() => {
   gap: 20px;
   height: 100%;
   min-height: 0;
+  padding: 22px;
+  color: var(--text-strong);
 }
 
 .workflow-rail,
@@ -3108,7 +3110,7 @@ onBeforeUnmount(() => {
 
 .workflow-rail__search span {
   font-size: 0.84rem;
-  color: rgba(255, 255, 255, 0.7);
+  color: var(--text-body);
 }
 
 .workflow-list-shell {
@@ -3124,9 +3126,8 @@ onBeforeUnmount(() => {
   gap: 0;
   padding: 14px 24px 24px;
   border-radius: 28px;
-  background:
-    radial-gradient(circle at top right, rgba(89, 208, 255, 0.08), transparent 28%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.03));
+  background: #fff;
+  border: 1px solid rgba(15, 20, 25, 0.06);
 }
 
 .workflow-main {
@@ -3188,8 +3189,8 @@ onBeforeUnmount(() => {
   gap: 14px;
   padding: 16px;
   border-radius: 20px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(15, 20, 25, 0.06);
+  background: #fff;
 }
 
 .workflow-review-section__head h4 {
@@ -3209,8 +3210,8 @@ onBeforeUnmount(() => {
   gap: 14px;
   padding: 14px;
   border-radius: 16px;
-  background: rgba(5, 7, 11, 0.38);
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: #f8fafb;
+  border: 1px solid rgba(15, 20, 25, 0.06);
 }
 
 .workflow-review-item strong {
@@ -3220,7 +3221,7 @@ onBeforeUnmount(() => {
 
 .workflow-review-item p {
   margin: 0;
-  color: rgba(255, 255, 255, 0.62);
+  color: var(--text-body);
   line-height: 1.5;
 }
 
@@ -3234,25 +3235,25 @@ onBeforeUnmount(() => {
 .workflow-review-chip-success {
   border-color: rgba(88, 212, 136, 0.38);
   background: rgba(88, 212, 136, 0.12);
-  color: #d5ffe2;
+  color: #1b9f63;
 }
 
 .workflow-review-chip-warning {
   border-color: rgba(255, 180, 92, 0.46);
   background: rgba(255, 180, 92, 0.14);
-  color: #ffe1b1;
+  color: #9a6100;
 }
 
 .workflow-review-chip-muted {
-  border-color: rgba(255, 255, 255, 0.1);
-  background: rgba(255, 255, 255, 0.04);
-  color: rgba(255, 255, 255, 0.58);
+  border-color: rgba(15, 20, 25, 0.08);
+  background: #f8fafb;
+  color: var(--text-muted);
 }
 
 .surface-chip-quiet {
-  border-color: rgba(255, 255, 255, 0.1);
-  background: rgba(255, 255, 255, 0.05);
-  color: rgba(255, 255, 255, 0.72);
+  border-color: rgba(15, 20, 25, 0.08);
+  background: #f8fafb;
+  color: var(--text-body);
 }
 
 .workflow-review-actions {
@@ -3282,11 +3283,9 @@ onBeforeUnmount(() => {
   gap: 16px;
   padding: 18px;
   border-radius: 22px;
-  background:
-    radial-gradient(circle at top right, rgba(255, 180, 92, 0.12), transparent 40%),
-    rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  background: #fff;
+  border: 1px solid rgba(15, 20, 25, 0.06);
+  box-shadow: var(--shadow-soft);
 }
 
 .stage-config-card--base {
@@ -3318,7 +3317,7 @@ onBeforeUnmount(() => {
 .stage-progress-copy {
   margin: 8px 0 0;
   max-width: 620px;
-  color: rgba(255, 255, 255, 0.66);
+  color: var(--text-body);
   line-height: 1.6;
 }
 
@@ -3337,9 +3336,9 @@ onBeforeUnmount(() => {
   min-height: 40px;
   padding: 0 16px;
   border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(255, 255, 255, 0.03);
-  color: rgba(255, 255, 255, 0.76);
+  border: 1px solid rgba(15, 20, 25, 0.08);
+  background: #fff;
+  color: var(--text-body);
   font-size: 0.88rem;
   font-weight: 700;
   transition: border-color 0.2s ease, background 0.2s ease, transform 0.2s ease, color 0.2s ease;
@@ -3349,8 +3348,46 @@ onBeforeUnmount(() => {
 .stage-switch-btn-active {
   border-color: rgba(255, 180, 92, 0.54);
   background: rgba(255, 180, 92, 0.12);
-  color: #fff0d2;
+  color: #9a6100;
   transform: translateY(-1px);
+}
+
+.workflow-view :deep(.surface-panel),
+.workflow-view :deep(.surface-tile),
+.workflow-view :deep(.surface-chip),
+.workflow-view :deep(.status-pill),
+.workflow-view :deep(.action-chip) {
+  border-color: rgba(15, 20, 25, 0.08);
+  background: #fff;
+  color: var(--text-body);
+  box-shadow: var(--shadow-soft);
+}
+
+.workflow-view :deep(.field-input),
+.workflow-view :deep(.field-textarea),
+.workflow-view :deep(.field-select) {
+  border-color: rgba(15, 20, 25, 0.08);
+  background: #fff;
+  color: var(--text-strong);
+}
+
+.workflow-view :deep(.field-input::placeholder),
+.workflow-view :deep(.field-textarea::placeholder) {
+  color: #9aa5ad;
+}
+
+.workflow-view :deep(.btn-secondary),
+.workflow-view :deep(.btn-ghost),
+.workflow-view :deep(.shell-icon-btn) {
+  border-color: rgba(15, 20, 25, 0.08);
+  background: #fff;
+  color: var(--text-strong);
+  box-shadow: none;
+}
+
+.workflow-view :deep(.btn-primary) {
+  background: var(--bg-accent);
+  color: #fff;
 }
 
 .stage-config-fields {

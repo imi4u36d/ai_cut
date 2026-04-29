@@ -216,26 +216,23 @@ function handleSelect() {
 
 <style scoped>
 .neo-card {
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.02)),
-    rgba(14, 18, 26, 0.92);
-  color: rgba(255, 255, 255, 0.88);
+  border: 1px solid rgba(15, 20, 25, 0.06);
+  background: #fff;
+  color: var(--text-strong);
   box-shadow: var(--shadow-panel);
   transition: box-shadow 0.2s ease, transform 0.2s ease, border-color 0.2s ease;
 }
 .neo-card:hover {
   transform: translateY(-2px);
-  border-color: rgba(145, 180, 255, 0.22);
-  box-shadow: var(--shadow-glow);
+  border-color: rgba(0, 161, 194, 0.2);
+  box-shadow: var(--shadow-soft);
 }
 .neo-card-selected {
-  border-color: rgba(145, 180, 255, 0.4);
+  border-color: rgba(0, 161, 194, 0.28);
   box-shadow: var(--shadow-glow);
 }
 .task-card__rail {
   opacity: 0.9;
-  box-shadow: 0 0 18px rgba(145, 180, 255, 0.24);
 }
 .task-card__rail--completed {
   background: #68e0b0;
@@ -250,7 +247,7 @@ function handleSelect() {
   background: #6ed5ff;
 }
 .task-card__rail--idle {
-  background: rgba(255, 255, 255, 0.42);
+  background: rgba(15, 20, 25, 0.12);
 }
 .neo-card-busy {
   opacity: 0.9;
@@ -261,57 +258,53 @@ function handleSelect() {
   gap: 0.75rem;
   padding: 0.75rem;
   border-radius: 24px;
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  background: rgba(255, 255, 255, 0.03);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(15, 20, 25, 0.06);
+  background: #f8fafb;
 }
 .neo-stat-row {
   display: flex;
   flex-direction: column;
   gap: 0.1rem;
-  color: rgba(255, 255, 255, 0.5);
+  color: var(--text-muted);
   font-size: 0.8rem;
 }
 .neo-stat-row strong {
   font-size: 1rem;
-  color: rgba(255, 255, 255, 0.9);
+  color: var(--text-strong);
 }
 .neo-progress-track {
   height: 14px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.08);
+  background: rgba(15, 20, 25, 0.08);
 }
 .neo-progress-fill {
   height: 100%;
   border-radius: 999px;
-  background: linear-gradient(90deg, #b05cff 0%, #4edbff 100%);
-  box-shadow: 0 0 22px rgba(78, 219, 255, 0.24);
+  background: var(--bg-accent);
   transition: width 0.25s ease;
 }
 .neo-button {
   border-radius: 16px;
-  background: rgba(255, 255, 255, 0.04);
-  color: rgba(255, 255, 255, 0.86);
-  box-shadow: var(--shadow-soft);
+  background: #fff;
+  color: var(--text-strong);
+  box-shadow: none;
   transition: box-shadow 0.2s ease;
 }
 .neo-button:active {
   box-shadow: var(--shadow-glow);
 }
 .neo-button-accent {
-  color: #081018;
-  background: linear-gradient(90deg, #b05cff 0%, #4edbff 100%);
-  box-shadow:
-    0 14px 32px rgba(128, 99, 255, 0.28),
-    0 0 38px rgba(78, 219, 255, 0.14);
+  color: #fff;
+  background: var(--bg-accent);
+  box-shadow: 0 12px 28px rgba(0, 161, 194, 0.18);
 }
 .neo-button-accent:active {
   box-shadow: var(--shadow-glow);
 }
 :deep(.surface-chip) {
-  border: 1px solid rgba(145, 180, 255, 0.18);
-  background: rgba(255, 255, 255, 0.04);
-  color: rgba(255, 255, 255, 0.68);
+  border: 1px solid rgba(15, 20, 25, 0.06);
+  background: #f5f8fa;
+  color: var(--text-body);
   box-shadow: none;
   font-size: 0.65rem;
   letter-spacing: 0.1em;
@@ -319,11 +312,11 @@ function handleSelect() {
 }
 
 .neo-card :deep(.text-slate-900) {
-  color: rgba(255, 255, 255, 0.94) !important;
+  color: var(--text-strong) !important;
 }
 
 .neo-card :deep(.text-slate-600),
 .neo-card :deep(.text-slate-500) {
-  color: rgba(255, 255, 255, 0.52) !important;
+  color: var(--text-muted) !important;
 }
 </style>

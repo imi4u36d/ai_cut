@@ -1,70 +1,78 @@
 <template>
   <main class="home-page">
-    <section class="hero-block">
-      <div class="hero-block__glow hero-block__glow-left" aria-hidden="true"></div>
-      <div class="hero-block__glow hero-block__glow-right" aria-hidden="true"></div>
-
-      <div class="hero-copy">
-        <h2 class="hero-title">从小说到成片，一键直达</h2>
-        <div class="hero-actions">
-          <RouterLink class="btn-primary hero-btn hero-btn-primary" to="/generate">
-            <span class="hero-btn__icon">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <circle cx="12" cy="12" r="9" />
-                <path d="m10 8 6 4-6 4V8Z" fill="currentColor" stroke="none" />
-              </svg>
-            </span>
-            创建新任务
-          </RouterLink>
-          <RouterLink class="btn-secondary hero-btn hero-btn-secondary" to="/tasks">
-            <span class="hero-btn__icon">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <rect x="4" y="4" width="6" height="6" rx="1.4" />
-                <rect x="14" y="4" width="6" height="6" rx="1.4" />
-                <rect x="4" y="14" width="6" height="6" rx="1.4" />
-                <rect x="14" y="14" width="6" height="6" rx="1.4" />
-              </svg>
-            </span>
-            查看任务
-          </RouterLink>
+    <section class="home-hero">
+      <h1>开启你的 <span>Agent 模式</span> 即刻造梦！</h1>
+      <RouterLink class="home-composer" to="/generate">
+        <div class="home-composer__upload" aria-hidden="true">+</div>
+        <div class="home-composer__copy">
+          <p>上传小说、输入文字，自动拆解脚本、关键帧与视频生成链路</p>
         </div>
-      </div>
+        <div class="home-composer__toolbar">
+          <span>Agent 模式</span>
+          <span>自动</span>
+          <span>灵感搜索</span>
+          <span>创意设计</span>
+        </div>
+        <div class="home-composer__submit" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 19V5" />
+            <path d="m5 12 7-7 7 7" />
+          </svg>
+        </div>
+      </RouterLink>
+    </section>
+
+    <section class="feature-strip">
+      <RouterLink v-for="item in featureCards" :key="item.to" class="feature-card" :to="item.to">
+        <span class="feature-card__icon">{{ item.icon }}</span>
+        <span>
+          <strong>{{ item.title }}</strong>
+          <small>{{ item.subtitle }}</small>
+        </span>
+      </RouterLink>
     </section>
 
     <section class="cases-section">
-      <div class="cases-section__head">
-        <h3>案例展示</h3>
+      <div class="cases-section__nav">
+        <button class="cases-tab cases-tab-active" type="button">发现</button>
+        <button class="cases-tab" type="button">短片</button>
+        <button class="cases-tab" type="button">活动</button>
+        <label class="cases-search">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="11" cy="11" r="7" />
+            <path d="m20 20-3.5-3.5" />
+          </svg>
+          <input type="search" placeholder="产品" />
+        </label>
       </div>
 
-      <div v-if="caseStudies.length" class="case-grid">
+      <div v-if="caseStudies.length" class="case-masonry">
         <article
-          v-for="item in caseStudies"
+          v-for="(item, index) in caseStudies"
           :key="item.id"
           class="case-card"
+          :class="`case-card-${(index % 5) + 1}`"
           :style="{ '--case-accent': item.accent, '--case-scene': item.scene }"
         >
-          <div class="case-card__visual">
-            <div class="case-card__blur case-card__blur-left" aria-hidden="true"></div>
-            <div class="case-card__poster">
-              <video
-                v-if="item.previewUrl"
-                class="case-card__poster-media"
-                :src="item.previewUrl"
-                autoplay
-                loop
-                muted
-                playsinline
-                preload="metadata"
-              ></video>
-              <div v-else class="case-card__poster-inner"></div>
-              <p>{{ item.posterLabel }}</p>
+          <div class="case-card__media">
+            <video
+              v-if="item.previewUrl"
+              class="case-card__video"
+              :src="item.previewUrl"
+              autoplay
+              loop
+              muted
+              playsinline
+              preload="metadata"
+            ></video>
+            <div v-else class="case-card__placeholder">
+              <span>{{ item.posterLabel }}</span>
             </div>
-            <div class="case-card__blur case-card__blur-right" aria-hidden="true"></div>
           </div>
           <div class="case-card__body">
-            <h4>{{ item.title }}</h4>
+            <h2>{{ item.title }}</h2>
             <p>{{ item.subtitle }}</p>
-            <span class="case-card__meta">{{ item.description }}</span>
+            <span>{{ item.description }}</span>
           </div>
         </article>
       </div>
@@ -82,8 +90,35 @@ import { formatShowcaseTimeMeta, resolveShowcaseVisual, selectShowcasePrimaryMod
 
 const { items, loading, errorMessage } = useTaskShowcase();
 
+const featureCards = [
+  {
+    title: "一键生成",
+    subtitle: "小说到成片",
+    icon: "2.0",
+    to: "/generate",
+  },
+  {
+    title: "阶段工作流",
+    subtitle: "逐步校准",
+    icon: "AI",
+    to: "/workflows",
+  },
+  {
+    title: "图片生成",
+    subtitle: "关键帧资产",
+    icon: "4.1",
+    to: "/materials",
+  },
+  {
+    title: "任务管理",
+    subtitle: "追踪结果",
+    icon: "JD",
+    to: "/tasks",
+  },
+];
+
 const caseStudies = computed(() => {
-  return items.value.slice(0, 3).map((item, index) => {
+  return items.value.slice(0, 8).map((item, index) => {
     const visual = resolveShowcaseVisual(item, index);
     return {
       ...item,
@@ -102,279 +137,344 @@ const casesHint = computed(() => {
   if (errorMessage.value) {
     return errorMessage.value;
   }
-  if (caseStudies.value.length) {
-    return `当前展示 ${caseStudies.value.length} 条真实任务案例`;
-  }
   return "暂无可展示的真实案例";
 });
 </script>
 
 <style scoped>
 .home-page {
-  display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
-  gap: 46px;
-  height: 100%;
-  min-height: 0;
-  padding: 44px 16px 10px;
-  overflow: hidden;
+  min-height: 100%;
+  padding: 72px 48px 56px;
+  color: var(--text-strong);
 }
 
-.hero-block {
-  position: relative;
-  display: grid;
-  place-items: center;
-  padding: 54px 20px 52px;
-  overflow: hidden;
-}
-
-.hero-block__glow {
-  position: absolute;
-  border-radius: 999px;
-  filter: blur(78px);
-  opacity: 0.55;
-  pointer-events: none;
-}
-
-.hero-block__glow-left {
-  left: 10%;
-  top: 6%;
-  width: 300px;
-  height: 180px;
-  background: rgba(164, 83, 255, 0.28);
-}
-
-.hero-block__glow-right {
-  right: 8%;
-  top: 12%;
-  width: 340px;
-  height: 200px;
-  background: rgba(78, 219, 255, 0.22);
-}
-
-.hero-copy {
-  position: relative;
-  z-index: 1;
+.home-hero {
   display: grid;
   justify-items: center;
-  gap: 26px;
-  text-align: center;
+  gap: 42px;
 }
 
-.hero-title {
+.home-hero h1 {
   margin: 0;
-  max-width: 12ch;
-  font-family: "Sora", "Inter", sans-serif;
-  font-size: clamp(3rem, 6vw, 4.6rem);
-  font-weight: 700;
-  line-height: 1.06;
-  letter-spacing: -0.07em;
-  background: linear-gradient(90deg, #c567ff 0%, #9e92ff 38%, #65c8ff 100%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-  text-shadow:
-    0 0 32px rgba(176, 92, 255, 0.2),
-    0 0 48px rgba(78, 219, 255, 0.12);
+  font-size: clamp(1.35rem, 2vw, 1.85rem);
+  font-weight: 800;
+  letter-spacing: -0.02em;
 }
 
-.hero-actions {
+.home-hero h1 span {
+  color: var(--accent-cyan);
+}
+
+.home-composer {
+  position: relative;
+  display: grid;
+  width: min(100%, 1204px);
+  min-height: 176px;
+  padding: 20px 56px 16px 92px;
+  border: 1px solid rgba(15, 20, 25, 0.06);
+  border-radius: 24px;
+  background: #fff;
+  box-shadow: var(--shadow-panel);
+}
+
+.home-composer__upload {
+  position: absolute;
+  left: 24px;
+  top: 24px;
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 64px;
+  border-radius: 2px;
+  background: #f0f1f2;
+  color: var(--text-muted);
+  font-size: 1.5rem;
+  transform: rotate(-7deg);
+}
+
+.home-composer__copy p {
+  margin: 0;
+  color: #8a97a1;
+  font-size: 0.92rem;
+}
+
+.home-composer__toolbar {
+  align-self: end;
   display: flex;
   flex-wrap: wrap;
-  justify-content: center;
-  gap: 24px;
+  gap: 8px;
+  padding-top: 64px;
 }
 
-.hero-btn {
-  min-width: 280px;
-  min-height: 72px;
-  padding: 0 28px;
-  border-radius: 22px;
-  font-size: 1rem;
-}
-
-.hero-btn-primary {
-  box-shadow:
-    0 0 0 1px rgba(255, 255, 255, 0.08),
-    0 18px 40px rgba(176, 92, 255, 0.24),
-    0 0 68px rgba(78, 219, 255, 0.16);
-}
-
-.hero-btn-secondary {
-  background: rgba(8, 11, 18, 0.82);
-  border-color: rgba(176, 92, 255, 0.52);
-  color: #aa8bff;
-  box-shadow:
-    inset 0 0 0 1px rgba(255, 255, 255, 0.04),
-    0 0 36px rgba(176, 92, 255, 0.1);
-}
-
-.hero-btn__icon {
+.home-composer__toolbar span {
   display: inline-flex;
-  width: 22px;
-  height: 22px;
+  align-items: center;
+  min-height: 36px;
+  padding: 0 14px;
+  border: 1px solid rgba(15, 20, 25, 0.06);
+  border-radius: 9px;
+  color: var(--text-strong);
+  font-size: 0.78rem;
+  font-weight: 650;
 }
 
-.hero-btn__icon svg {
-  width: 22px;
-  height: 22px;
+.home-composer__toolbar span:first-child {
+  color: var(--accent-cyan);
+}
+
+.home-composer__submit {
+  position: absolute;
+  right: 18px;
+  bottom: 16px;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: #dce0e4;
+  color: #fff;
+}
+
+.home-composer__submit svg {
+  width: 18px;
+  height: 18px;
+}
+
+.feature-strip {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  width: min(100%, 1204px);
+  margin: 40px auto 72px;
+}
+
+.feature-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-height: 76px;
+  padding: 12px 18px;
+  border: 1px solid rgba(15, 20, 25, 0.05);
+  border-radius: 22px;
+  background: #fff;
+}
+
+.feature-card__icon {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #00d4f0, #246bfe);
+  color: #fff;
+  font-weight: 900;
+  letter-spacing: -0.04em;
+}
+
+.feature-card strong,
+.feature-card small {
+  display: block;
+}
+
+.feature-card strong {
+  font-size: 0.94rem;
+}
+
+.feature-card small {
+  margin-top: 4px;
+  color: var(--text-muted);
+  font-size: 0.78rem;
 }
 
 .cases-section {
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
   gap: 18px;
-  min-height: 0;
 }
 
-.cases-section__head h3 {
-  margin: 0;
-  font-size: 1.05rem;
+.cases-section__nav {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: min(100%, 1500px);
+  margin: 0 auto;
+}
+
+.cases-tab {
+  min-width: 68px;
+  min-height: 36px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--text-body);
   font-weight: 700;
-  color: rgba(255, 255, 255, 0.92);
+  cursor: pointer;
 }
 
-.cases-section__head p {
-  margin: 6px 0 0;
-  font-size: 0.84rem;
-  color: rgba(255, 255, 255, 0.56);
+.cases-tab-active {
+  background: #eceff2;
+  color: var(--text-strong);
 }
 
-.case-grid {
+.cases-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 312px;
+  min-height: 36px;
+  margin-left: 18px;
+  padding: 0 12px;
+  border: 1px solid rgba(15, 20, 25, 0.08);
+  border-radius: 9px;
+  background: #fff;
+  color: var(--text-muted);
+}
+
+.cases-search svg {
+  width: 17px;
+  height: 17px;
+}
+
+.cases-search input {
+  width: 100%;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--text-strong);
+  font-size: 0.82rem;
+}
+
+.case-masonry {
   display: grid;
-  gap: 20px;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  min-height: 0;
-  overflow: auto;
-  padding-right: 6px;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-auto-flow: dense;
+  gap: 0;
+  width: min(100%, 1560px);
+  margin: 0 auto;
 }
 
 .case-card {
-  display: grid;
-  gap: 14px;
-}
-
-.case-card__visual {
   position: relative;
-  display: grid;
-  grid-template-columns: 1fr 108px 1fr;
-  align-items: stretch;
-  min-height: 196px;
+  min-height: 260px;
   overflow: hidden;
-  border-radius: 16px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background:
-    radial-gradient(circle at 50% 50%, var(--case-accent), transparent 58%),
-    var(--case-scene);
-  box-shadow: var(--shadow-panel);
+  background: var(--case-scene);
 }
 
-.case-card__blur {
-  position: relative;
+.case-card-1 {
+  grid-column: span 2;
 }
 
-.case-card__blur::after {
-  content: "";
+.case-card-2 {
+  grid-row: span 2;
+}
+
+.case-card-4 {
+  grid-row: span 2;
+}
+
+.case-card__media {
   position: absolute;
   inset: 0;
-  backdrop-filter: blur(16px);
-  background: rgba(255, 255, 255, 0.04);
 }
 
-.case-card__poster {
-  position: relative;
-  z-index: 1;
-  display: grid;
-  align-content: end;
-  justify-items: center;
-  padding: 10px 0 14px;
-  background: rgba(0, 0, 0, 0.42);
-  border-left: 1px solid rgba(255, 255, 255, 0.08);
-  border-right: 1px solid rgba(255, 255, 255, 0.08);
-}
-
-.case-card__poster-media {
+.case-card__video,
+.case-card__placeholder {
   width: 100%;
-  height: 148px;
+  height: 100%;
   object-fit: cover;
-  border-radius: 0;
 }
 
-.case-card__poster-inner {
-  width: 100%;
-  flex: 1;
-  min-height: 148px;
+.case-card__placeholder {
+  display: grid;
+  place-items: center;
+  padding: 24px;
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0)),
-    radial-gradient(circle at 50% 34%, rgba(255, 244, 216, 0.2), transparent 34%),
-    linear-gradient(180deg, rgba(25, 32, 46, 0.42), rgba(6, 9, 14, 0.12));
-}
-
-.case-card__poster p {
-  margin: 0;
-  font-size: 0.54rem;
-  color: rgba(255, 255, 255, 0.88);
+    radial-gradient(circle at 50% 40%, var(--case-accent), transparent 56%),
+    linear-gradient(135deg, #eef5f8, #ffffff);
+  color: rgba(15, 20, 25, 0.52);
+  font-weight: 800;
 }
 
 .case-card__body {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
   display: grid;
-  gap: 4px;
+  gap: 5px;
+  padding: 46px 18px 16px;
+  color: #fff;
+  background: linear-gradient(180deg, transparent, rgba(0, 0, 0, 0.58));
 }
 
-.case-card__body h4 {
-  margin: 0;
-  font-size: 0.98rem;
-  font-weight: 700;
-  color: rgba(255, 255, 255, 0.94);
-}
-
+.case-card__body h2,
 .case-card__body p {
   margin: 0;
-  font-size: 0.84rem;
-  color: rgba(255, 255, 255, 0.5);
 }
 
-.case-card__meta {
-  font-size: 0.76rem;
-  color: rgba(255, 255, 255, 0.42);
+.case-card__body h2 {
+  font-size: 1rem;
+  font-weight: 800;
+}
+
+.case-card__body p,
+.case-card__body span {
+  font-size: 0.78rem;
+  color: rgba(255, 255, 255, 0.82);
 }
 
 .cases-empty {
   display: grid;
   place-items: center;
-  min-height: 180px;
-  border-radius: 18px;
-  border: 1px dashed rgba(255, 255, 255, 0.14);
-  color: rgba(255, 255, 255, 0.56);
-  background: rgba(8, 11, 18, 0.52);
+  min-height: 220px;
+  width: min(100%, 1204px);
+  margin: 0 auto;
+  border: 1px dashed rgba(15, 20, 25, 0.12);
+  border-radius: 20px;
+  background: #fff;
+  color: var(--text-muted);
 }
 
-@media (max-width: 1100px) {
-  .case-grid {
+@media (max-width: 1180px) {
+  .home-page {
+    padding: 44px 22px 36px;
+  }
+
+  .feature-strip,
+  .case-masonry {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 720px) {
+  .home-page {
+    padding: 28px 14px 32px;
+  }
+
+  .home-composer {
+    padding: 18px 18px 16px;
+  }
+
+  .home-composer__upload {
+    position: static;
+    margin-bottom: 16px;
+  }
+
+  .home-composer__toolbar {
+    padding-top: 34px;
+  }
+
+  .feature-strip,
+  .case-masonry {
     grid-template-columns: 1fr;
   }
-}
 
-@media (max-width: 768px) {
-  .home-page {
-    padding: 18px 2px 10px;
-    gap: 28px;
+  .cases-section__nav {
+    flex-wrap: wrap;
   }
 
-  .hero-block {
-    padding: 24px 0 10px;
-  }
-
-  .hero-actions {
+  .cases-search {
     width: 100%;
-    gap: 14px;
-  }
-
-  .hero-btn {
-    min-width: 0;
-    width: 100%;
-    min-height: 58px;
-    border-radius: 18px;
+    margin-left: 0;
   }
 }
 </style>
