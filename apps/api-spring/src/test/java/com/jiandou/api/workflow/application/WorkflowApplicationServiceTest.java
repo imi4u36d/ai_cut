@@ -243,6 +243,41 @@ class WorkflowApplicationServiceTest {
     }
 
     @Test
+    void generateKeyframeKeepsSuccessfulFrameWhenOtherFrameFails() {
+        StageWorkflowEntity workflow = workflow("wf_partial_keyframe");
+        workflows.put(workflow.getWorkflowId(), workflow);
+        versions.put("sv_story", storyboardVersion(workflow.getWorkflowId(), storyboardClips()));
+
+        when(generationApplicationService.createRun(any())).thenReturn(
+            imageRun("run_start_partial", "https://cdn.example.com/clip1-first-partial.png")
+        ).thenThrow(new GenerationProviderException("tail provider timeout"));
+
+        Map<String, Object> detail = service.generateKeyframe("wf_partial_keyframe", 1);
+
+        verify(generationApplicationService, times(2)).createRun(any());
+        StageVersionEntity keyframeVersion = listStageVersions(workflow.getWorkflowId()).stream()
+            .filter(item -> WorkflowConstants.STAGE_KEYFRAME.equals(item.getStageType()))
+            .findFirst()
+            .orElseThrow();
+        assertEquals("PARTIAL", keyframeVersion.getStatus());
+        assertEquals(0, keyframeVersion.getSelected());
+        Map<String, Object> outputSummary = WorkflowJsonSupport.readMap(keyframeVersion.getOutputSummaryJson());
+        assertEquals("https://cdn.example.com/clip1-first-partial.png", outputSummary.get("firstFrameUrl"));
+        assertEquals("", outputSummary.get("lastFrameUrl"));
+        assertEquals(1, listValue(outputSummary.get("generatedFrames")).size());
+        List<Map<String, Object>> frameFailures = listValue(outputSummary.get("frameFailures"));
+        assertEquals(1, frameFailures.size());
+        assertEquals("last", frameFailures.get(0).get("frameRole"));
+        assertTrue(String.valueOf(frameFailures.get(0).get("errorMessage")).contains("tail provider timeout"));
+
+        List<Map<String, Object>> clipSlots = listValue(detail.get("clipSlots"));
+        Map<String, Object> keyframeRow = listValue(clipSlots.get(0).get("keyframeVersions")).get(0);
+        Map<String, Object> rowOutputSummary = mapValue(keyframeRow.get("outputSummary"));
+        assertEquals("https://cdn.example.com/clip1-first-partial.png", rowOutputSummary.get("firstFrameUrl"));
+        assertEquals(1, listValue(rowOutputSummary.get("frameFailures")).size());
+    }
+
+    @Test
     void generateKeyframeOmitsSeedWhenImageModelDoesNotSupportSeed() {
         StageWorkflowEntity workflow = workflow("wf_gpt_image_no_seed");
         workflow.setImageModel("gpt-image-2");
@@ -1052,6 +1087,46 @@ class WorkflowApplicationServiceTest {
     }
 
     @Test
+    void generateKeyframeUsesSelectedCharacterSheetAssetDescriptionAsCharacterConstraint() {
+        StageWorkflowEntity workflow = workflow("wf_sheet_reference_prompt");
+        workflow.setImageModel("image-model");
+        workflows.put(workflow.getWorkflowId(), workflow);
+        List<Map<String, Object>> clips = new ArrayList<>(storyboardClips());
+        Map<String, Object> firstClip = new LinkedHashMap<>(clips.get(0));
+        firstClip.put("firstFramePrompt", "林舒推门进入废弃图书馆。");
+        firstClip.put("lastFramePrompt", "林舒停在门口，回望黑暗书架。");
+        firstClip.put("imagePrompt", "林舒推门进入废弃图书馆。");
+        clips.set(0, firstClip);
+        versions.put("sv_story", storyboardVersion(workflow.getWorkflowId(), clips, storyboardMarkdownWithCharacters()));
+        when(storyboardPlanner.extractCharacterDefinitions(anyString())).thenReturn(List.of(
+            new TaskStoryboardPlanner.CharacterDefinition("林舒", "旧外观：黑色长发，黑色吊带短裙", "旧外观：黑色长发，黑色吊带短裙")
+        ));
+        versions.put("sv_sheet_1", characterSheetVersion(workflow.getWorkflowId(), 1001, "sv_story", "asset_sheet_1", "林舒", false));
+        versions.put("sv_sheet_2", characterSheetVersion(workflow.getWorkflowId(), 1001, "sv_story", "asset_sheet_2", "林舒", true));
+        MaterialAssetEntity v1Asset = asset(workflow.getWorkflowId(), "asset_sheet_1", WorkflowConstants.STAGE_KEYFRAME, 1001, "https://cdn.example.com/character-sheet-v1.png", "image/png");
+        v1Asset.setMetadataJson(WorkflowJsonSupport.write(Map.of("description", "V1黑裙三视图")));
+        MaterialAssetEntity v2Asset = asset(workflow.getWorkflowId(), "asset_sheet_2", WorkflowConstants.STAGE_KEYFRAME, 1001, "https://cdn.example.com/character-sheet-v2.png", "image/png");
+        v2Asset.setMetadataJson(WorkflowJsonSupport.write(Map.of("description", "V2银白长发，校园制服，黑色过膝袜")));
+        assets.put("asset_sheet_1", v1Asset);
+        assets.put("asset_sheet_2", v2Asset);
+        when(generationApplicationService.createRun(any())).thenReturn(
+            imageRun("run_sheet_ref_start", "https://cdn.example.com/clip1-first.png"),
+            imageRun("run_sheet_ref_last", "https://cdn.example.com/clip1-last.png")
+        );
+
+        service.generateKeyframe(workflow.getWorkflowId(), 1);
+
+        ArgumentCaptor<Map<String, Object>> requestCaptor = ArgumentCaptor.forClass(Map.class);
+        verify(generationApplicationService, times(2)).createRun(requestCaptor.capture());
+        Map<String, Object> startInput = mapValue(requestCaptor.getAllValues().get(0).get("input"));
+        String prompt = String.valueOf(startInput.get("prompt"));
+        assertTrue(prompt.contains("V2银白长发，校园制服，黑色过膝袜"));
+        assertFalse(prompt.contains("林舒：旧外观：黑色长发，黑色吊带短裙"));
+        assertEquals("https://cdn.example.com/character-sheet-v2.png", startInput.get("referenceImageUrl"));
+        assertEquals(List.of("https://cdn.example.com/character-sheet-v2.png"), listValue(startInput.get("referenceImageUrls")));
+    }
+
+    @Test
     void createMaterialGenerationStoresStandaloneAssetWithMetadata() {
         when(generationApplicationService.createRun(any())).thenReturn(
             imageRun("run_material_scene", "https://cdn.example.com/material-scene.png", "https://remote.example.com/material-scene.png")
@@ -1279,6 +1354,53 @@ class WorkflowApplicationServiceTest {
         Map<String, Object> input = mapValue(requestCaptor.getValue().get("input"));
         assertEquals("data:image/png;base64,cmVm", input.get("referenceImageUrl"));
         assertEquals(List.of("data:image/png;base64,cmVm"), listValue(input.get("referenceImageUrls")));
+    }
+
+    @Test
+    void createMaterialGenerationConvertsLocalLibraryReferenceToDataUriForSeedreamModel() {
+        when(modelResolver.resolveMediaProfile("Doubao-Seedream-4.5", GenerationModelKinds.IMAGE, USER_ID)).thenReturn(mediaProfile(
+            GenerationModelKinds.IMAGE,
+            "Doubao-Seedream-4.5",
+            "seedream",
+            "doubao-seedream-4-5-251128",
+            true,
+            true,
+            ""
+        ));
+        MaterialAssetEntity referenceAsset = asset(
+            "",
+            "asset_ref_seedream_local",
+            "material_center",
+            0,
+            "/storage/gen/material-center/seedream-ref.png",
+            "image/png"
+        );
+        assets.put(referenceAsset.getMaterialAssetId(), referenceAsset);
+        when(localMediaArtifactService.imageDataUriFromPublicUrl("/storage/gen/material-center/seedream-ref.png"))
+            .thenReturn("data:image/png;base64,c2VlZHJlYW0=");
+        when(generationApplicationService.createRun(any())).thenReturn(
+            imageRun("run_material_seedream_ref", "https://cdn.example.com/material-seedream-ref.png", "")
+        );
+
+        service.createMaterialGeneration(new CreateMaterialGenerationRequest(
+            "free",
+            "参考图生成",
+            "沿用参考图构图生成",
+            List.of(),
+            List.of(),
+            List.of("asset_ref_seedream_local"),
+            "1:1",
+            "1024x1024",
+            "gpt-5.4",
+            "Doubao-Seedream-4.5",
+            null
+        ));
+
+        ArgumentCaptor<Map<String, Object>> requestCaptor = ArgumentCaptor.forClass(Map.class);
+        verify(generationApplicationService).createRun(requestCaptor.capture());
+        Map<String, Object> input = mapValue(requestCaptor.getValue().get("input"));
+        assertEquals("data:image/png;base64,c2VlZHJlYW0=", input.get("referenceImageUrl"));
+        assertEquals(List.of("data:image/png;base64,c2VlZHJlYW0="), listValue(input.get("referenceImageUrls")));
     }
 
     @Test

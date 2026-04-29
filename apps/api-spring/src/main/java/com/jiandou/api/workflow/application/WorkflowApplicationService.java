@@ -476,14 +476,15 @@ public class WorkflowApplicationService {
         }
         Map<String, Object> clip = requireStoryboardClip(storyboardVersion, clipIndex);
         List<CharacterSheetSlot> matchedCharacterSlots = matchedCharacterSheetSlots(storyboardVersion, clip);
-        List<String> characterReferenceImageUrls = resolveCharacterReferenceImageUrls(workflowId, storyboardVersion, matchedCharacterSlots);
-        String characterConstraintPrompt = buildCharacterConsistencyPrompt(matchedCharacterSlots, !characterReferenceImageUrls.isEmpty());
+        List<CharacterReference> characterReferences = resolveCharacterReferences(workflowId, storyboardVersion, matchedCharacterSlots);
+        List<String> characterReferenceImageUrls = characterReferences.stream()
+            .map(CharacterReference::imageUrl)
+            .filter(url -> !url.isBlank())
+            .toList();
+        String characterConstraintPrompt = buildCharacterConsistencyPrompt(characterReferences);
         int versionNo = workflowRepository.nextStageVersionNo(workflowId, WorkflowConstants.STAGE_KEYFRAME, clipIndex);
         String continuitySource = clipIndex == 1 ? "generated_start_frame" : "previous_clip_end_frame";
-        Map<String, Object> startFrameRun = Map.of();
-        Map<String, Object> startFrameResult = Map.of();
-        String startFrameUrl = "";
-        String startFrameRemoteUrl = "";
+        FrameGenerationResult startFrame;
         if (clipIndex == 1) {
             Map<String, Object> startFrameRequest = buildKeyframeRunRequest(
                 workflow,
@@ -497,25 +498,23 @@ public class WorkflowApplicationService {
                 "first",
                 "clip" + clipIndex + "-first-v" + versionNo
             );
-            startFrameRun = createLoggedGenerationRun(
+            startFrame = generateKeyframeFrameSafely(
                 workflow,
-                WorkflowConstants.STAGE_KEYFRAME,
-                "workflow.keyframe.generate",
+                clipIndex,
+                versionNo,
+                "first",
                 startFrameRequest,
                 Map.of("clipIndex", clipIndex, "versionNo", versionNo, "frameRole", "first")
             );
-            startFrameResult = mapValue(startFrameRun.get("result"));
-            startFrameUrl = extractGenerationFileUrl(startFrameResult);
-            if (startFrameUrl.isBlank()) {
-                throw badRequest("workflow_keyframe_empty", "首帧关键帧生成结果为空");
-            }
-            startFrameRemoteUrl = resolveGeneratedMediaRemoteUrl(startFrameResult);
         } else {
-            startFrameUrl = resolveWorkflowClipStartFrameUrl(workflowId, clipIndex);
-            startFrameRemoteUrl = resolveWorkflowClipStartFrameRemoteUrl(workflowId, clipIndex);
-            if (startFrameUrl.isBlank()) {
+            String inheritedStartFrameUrl = resolveWorkflowClipStartFrameUrl(workflowId, clipIndex);
+            String inheritedStartFrameRemoteUrl = resolveWorkflowClipStartFrameRemoteUrl(workflowId, clipIndex);
+            if (inheritedStartFrameUrl.isBlank()) {
                 continuitySource = "previous_clip_end_frame_missing";
             }
+            startFrame = inheritedStartFrameUrl.isBlank()
+                ? FrameGenerationResult.failure("first", "上一镜头尾帧缺失")
+                : FrameGenerationResult.reused("first", inheritedStartFrameUrl, inheritedStartFrameRemoteUrl);
         }
         Map<String, Object> keyframeRequest = buildKeyframeRunRequest(
             workflow,
@@ -524,24 +523,25 @@ public class WorkflowApplicationService {
             versionNo,
             firstNonBlank(stringValue(clip.get("endFrame")), stringValue(clip.get("lastFramePrompt"))),
             characterConstraintPrompt,
-            firstNonBlank(startFrameRemoteUrl, startFrameUrl).isBlank() ? List.of() : List.of(firstNonBlank(startFrameRemoteUrl, startFrameUrl)),
+            firstNonBlank(startFrame.remoteUrl(), startFrame.fileUrl()).isBlank() ? List.of() : List.of(firstNonBlank(startFrame.remoteUrl(), startFrame.fileUrl())),
             characterReferenceImageUrls,
             "last",
             "clip" + clipIndex + "-last-v" + versionNo
         );
-        Map<String, Object> run = createLoggedGenerationRun(
+        FrameGenerationResult endFrame = generateKeyframeFrameSafely(
             workflow,
-            WorkflowConstants.STAGE_KEYFRAME,
-            "workflow.keyframe.generate",
+            clipIndex,
+            versionNo,
+            "last",
             keyframeRequest,
             Map.of("clipIndex", clipIndex, "versionNo", versionNo, "frameRole", "last", "continuitySource", continuitySource)
         );
-        Map<String, Object> result = mapValue(run.get("result"));
-        String fileUrl = extractGenerationFileUrl(result);
-        if (fileUrl.isBlank()) {
-            throw badRequest("workflow_keyframe_empty", "尾帧关键帧生成结果为空");
+        if (!startFrame.available() && !endFrame.available()) {
+            throw badRequest("workflow_keyframe_empty", String.join("；", frameFailureMessages(startFrame, endFrame)));
         }
-        String endFrameRemoteUrl = resolveGeneratedMediaRemoteUrl(result);
+        String fileUrl = firstNonBlank(endFrame.fileUrl(), startFrame.fileUrl());
+        String remoteUrl = firstNonBlank(endFrame.remoteUrl(), startFrame.remoteUrl());
+        Map<String, Object> assetResult = !endFrame.result().isEmpty() ? endFrame.result() : startFrame.result();
         MaterialAssetEntity asset = createMaterialAsset(
             workflow,
             WorkflowConstants.STAGE_KEYFRAME,
@@ -551,14 +551,14 @@ public class WorkflowApplicationService {
             workflow.getTitle() + " 关键帧 #" + clipIndex + " V" + versionNo,
             fileUrl,
             fileUrl,
-            stringValue(result.getOrDefault("mimeType", "image/png")),
+            stringValue(assetResult.getOrDefault("mimeType", "image/png")),
             0.0,
-            intValue(result.get("width"), 0),
-            intValue(result.get("height"), 0),
+            intValue(assetResult.get("width"), 0),
+            intValue(assetResult.get("height"), 0),
             false,
-            stringValue(mapValue(result.get("metadata")).get("taskId")),
-            endFrameRemoteUrl,
-            keyframeAssetMetadata(clip, run, startFrameRun, startFrameUrl, startFrameRemoteUrl, fileUrl, endFrameRemoteUrl, continuitySource)
+            stringValue(mapValue(assetResult.get("metadata")).get("taskId")),
+            remoteUrl,
+            keyframeAssetMetadata(clip, endFrame.run(), startFrame.run(), startFrame.fileUrl(), startFrame.remoteUrl(), endFrame.fileUrl(), endFrame.remoteUrl(), continuitySource)
         );
         workflowRepository.saveMaterialAsset(asset);
         StageVersionEntity version = new StageVersionEntity();
@@ -569,8 +569,10 @@ public class WorkflowApplicationService {
         version.setClipIndex(clipIndex);
         version.setVersionNo(versionNo);
         version.setTitle("关键帧 #" + clipIndex + " V" + versionNo);
-        version.setStatus("SUCCEEDED");
-        version.setSelected(hasNoSelectedVersion(workflowId, WorkflowConstants.STAGE_KEYFRAME, clipIndex) ? 1 : 0);
+        boolean completePair = startFrame.available() && endFrame.available();
+        boolean shouldSelectWholeVersion = completePair && hasNoSelectedVersion(workflowId, WorkflowConstants.STAGE_KEYFRAME, clipIndex);
+        version.setStatus(completePair ? "SUCCEEDED" : "PARTIAL");
+        version.setSelected(shouldSelectWholeVersion ? 1 : 0);
         version.setRating(null);
         version.setRatingNote("");
         version.setParentVersionId(storyboardVersion.getStageVersionId());
@@ -593,14 +595,14 @@ public class WorkflowApplicationService {
         keyframeInputSummary.put("continuityHint", stringValue(clip.get("continuityHint")));
         keyframeInputSummary.put("matchedCharacters", matchedCharacterSlots.stream().map(this::toCharacterMatchRow).toList());
         keyframeInputSummary.put("characterReferenceImageUrls", characterReferenceImageUrls);
-        keyframeInputSummary.put("startFrameUrl", startFrameUrl);
-        keyframeInputSummary.put("firstFrameUrl", startFrameUrl);
-        keyframeInputSummary.put("startFrameRemoteUrl", startFrameRemoteUrl);
-        keyframeInputSummary.put("firstFrameRemoteUrl", startFrameRemoteUrl);
-        keyframeInputSummary.put("endFrameUrl", fileUrl);
-        keyframeInputSummary.put("lastFrameUrl", fileUrl);
-        keyframeInputSummary.put("endFrameRemoteUrl", endFrameRemoteUrl);
-        keyframeInputSummary.put("lastFrameRemoteUrl", endFrameRemoteUrl);
+        keyframeInputSummary.put("startFrameUrl", startFrame.fileUrl());
+        keyframeInputSummary.put("firstFrameUrl", startFrame.fileUrl());
+        keyframeInputSummary.put("startFrameRemoteUrl", startFrame.remoteUrl());
+        keyframeInputSummary.put("firstFrameRemoteUrl", startFrame.remoteUrl());
+        keyframeInputSummary.put("endFrameUrl", endFrame.fileUrl());
+        keyframeInputSummary.put("lastFrameUrl", endFrame.fileUrl());
+        keyframeInputSummary.put("endFrameRemoteUrl", endFrame.remoteUrl());
+        keyframeInputSummary.put("lastFrameRemoteUrl", endFrame.remoteUrl());
         keyframeInputSummary.put("continuitySource", continuitySource);
         Integer keyframeSeed = resolvedKeyframeSeedForImageModel(workflow, clipIndex);
         if (keyframeSeed != null) {
@@ -610,34 +612,46 @@ public class WorkflowApplicationService {
         Map<String, Object> outputSummary = new LinkedHashMap<>();
         outputSummary.put("clip", clip);
         outputSummary.put("fileUrl", fileUrl);
-        outputSummary.put("startFrameUrl", startFrameUrl);
-        outputSummary.put("firstFrameUrl", startFrameUrl);
-        outputSummary.put("startFrameRemoteUrl", startFrameRemoteUrl);
-        outputSummary.put("firstFrameRemoteUrl", startFrameRemoteUrl);
-        outputSummary.put("endFrameUrl", fileUrl);
-        outputSummary.put("lastFrameUrl", fileUrl);
-        outputSummary.put("endFrameRemoteUrl", endFrameRemoteUrl);
-        outputSummary.put("lastFrameRemoteUrl", endFrameRemoteUrl);
+        outputSummary.put("startFrameUrl", startFrame.fileUrl());
+        outputSummary.put("firstFrameUrl", startFrame.fileUrl());
+        outputSummary.put("startFrameRemoteUrl", startFrame.remoteUrl());
+        outputSummary.put("firstFrameRemoteUrl", startFrame.remoteUrl());
+        outputSummary.put("endFrameUrl", endFrame.fileUrl());
+        outputSummary.put("lastFrameUrl", endFrame.fileUrl());
+        outputSummary.put("endFrameRemoteUrl", endFrame.remoteUrl());
+        outputSummary.put("lastFrameRemoteUrl", endFrame.remoteUrl());
         outputSummary.put("continuitySource", continuitySource);
-        outputSummary.put("width", intValue(result.get("width"), 0));
-        outputSummary.put("height", intValue(result.get("height"), 0));
-        outputSummary.put("generatedFrames", generatedKeyframeFrames(startFrameRun, startFrameResult, run, result, startFrameUrl, startFrameRemoteUrl, fileUrl, endFrameRemoteUrl));
+        outputSummary.put("width", intValue(assetResult.get("width"), 0));
+        outputSummary.put("height", intValue(assetResult.get("height"), 0));
+        outputSummary.put("generatedFrames", generatedKeyframeFrames(startFrame.run(), startFrame.result(), endFrame.run(), endFrame.result(), startFrame.fileUrl(), startFrame.remoteUrl(), endFrame.fileUrl(), endFrame.remoteUrl()));
+        outputSummary.put("frameFailures", frameFailures(startFrame, endFrame));
         version.setOutputSummaryJson(WorkflowJsonSupport.write(outputSummary));
         Map<String, Object> modelCallSummary = new LinkedHashMap<>();
-        modelCallSummary.put("runId", stringValue(run.get("id")));
-        modelCallSummary.put("endFrameRunId", stringValue(run.get("id")));
-        modelCallSummary.put("modelInfo", mapValue(result.get("modelInfo")));
-        if (!stringValue(startFrameRun.get("id")).isBlank()) {
-            modelCallSummary.put("startFrameRunId", stringValue(startFrameRun.get("id")));
-            modelCallSummary.put("startFrameModelInfo", mapValue(startFrameResult.get("modelInfo")));
+        modelCallSummary.put("runId", firstNonBlank(stringValue(endFrame.run().get("id")), stringValue(startFrame.run().get("id"))));
+        modelCallSummary.put("endFrameRunId", stringValue(endFrame.run().get("id")));
+        modelCallSummary.put("modelInfo", !endFrame.result().isEmpty() ? mapValue(endFrame.result().get("modelInfo")) : mapValue(startFrame.result().get("modelInfo")));
+        if (!stringValue(startFrame.run().get("id")).isBlank()) {
+            modelCallSummary.put("startFrameRunId", stringValue(startFrame.run().get("id")));
+            modelCallSummary.put("startFrameModelInfo", mapValue(startFrame.result().get("modelInfo")));
         }
-        modelCallSummary.put("endFrameModelInfo", mapValue(result.get("modelInfo")));
+        modelCallSummary.put("endFrameModelInfo", mapValue(endFrame.result().get("modelInfo")));
+        modelCallSummary.put("frameFailures", frameFailures(startFrame, endFrame));
         version.setModelCallSummaryJson(WorkflowJsonSupport.write(modelCallSummary));
         version.setIsDeleted(0);
         workflowRepository.saveStageVersion(version);
+        if (startFrame.available() && selectedKeyframeFrameVersion(workflowId, clipIndex, "first") == null) {
+            markSelectedKeyframeFrame(workflowId, clipIndex, version.getStageVersionId(), "first");
+        }
+        if (endFrame.available() && selectedKeyframeFrameVersion(workflowId, clipIndex, "last") == null) {
+            markSelectedKeyframeFrame(workflowId, clipIndex, version.getStageVersionId(), "last");
+        }
         if (version.getSelected() == 1) {
             syncWorkflowStageAssetSelection(workflowId, WorkflowConstants.STAGE_KEYFRAME, clipIndex, version.getStageVersionId());
             workflow.setCurrentStage(WorkflowConstants.STAGE_VIDEO);
+            workflow.setStatus(WorkflowConstants.STATUS_READY);
+            workflowRepository.saveWorkflow(workflow);
+        } else {
+            workflow.setCurrentStage(WorkflowConstants.STAGE_KEYFRAME);
             workflow.setStatus(WorkflowConstants.STATUS_READY);
             workflowRepository.saveWorkflow(workflow);
         }
@@ -660,8 +674,12 @@ public class WorkflowApplicationService {
         }
         Map<String, Object> clip = requireStoryboardClip(storyboardVersion, clipIndex);
         List<CharacterSheetSlot> matchedCharacterSlots = matchedCharacterSheetSlots(storyboardVersion, clip);
-        List<String> characterReferenceImageUrls = resolveCharacterReferenceImageUrls(workflowId, storyboardVersion, matchedCharacterSlots);
-        String characterConstraintPrompt = buildCharacterConsistencyPrompt(matchedCharacterSlots, !characterReferenceImageUrls.isEmpty());
+        List<CharacterReference> characterReferences = resolveCharacterReferences(workflowId, storyboardVersion, matchedCharacterSlots);
+        List<String> characterReferenceImageUrls = characterReferences.stream()
+            .map(CharacterReference::imageUrl)
+            .filter(url -> !url.isBlank())
+            .toList();
+        String characterConstraintPrompt = buildCharacterConsistencyPrompt(characterReferences);
         int versionNo = workflowRepository.nextStageVersionNo(workflowId, WorkflowConstants.STAGE_KEYFRAME, clipIndex);
         StageVersionEntity selectedVersion = selectedKeyframeFrameVersion(workflowId, clipIndex, frameRole);
         String inheritedStartFrameUrl = firstNonBlank(
@@ -3085,6 +3103,62 @@ public class WorkflowApplicationService {
         return metadata;
     }
 
+    private FrameGenerationResult generateKeyframeFrameSafely(
+        StageWorkflowEntity workflow,
+        int clipIndex,
+        int versionNo,
+        String frameRole,
+        Map<String, Object> request,
+        Map<String, Object> context
+    ) {
+        try {
+            Map<String, Object> run = createLoggedGenerationRun(
+                workflow,
+                WorkflowConstants.STAGE_KEYFRAME,
+                "workflow.keyframe.generate",
+                request,
+                context
+            );
+            Map<String, Object> result = mapValue(run.get("result"));
+            String fileUrl = extractGenerationFileUrl(result);
+            if (fileUrl.isBlank()) {
+                return FrameGenerationResult.failure(frameRole, frameLabel(frameRole) + "关键帧生成结果为空");
+            }
+            return FrameGenerationResult.success(frameRole, run, result, fileUrl, resolveGeneratedMediaRemoteUrl(result));
+        } catch (Exception ex) {
+            return FrameGenerationResult.failure(frameRole, firstNonBlank(ex.getMessage(), frameLabel(frameRole) + "关键帧生成失败"));
+        }
+    }
+
+    private List<String> frameFailureMessages(FrameGenerationResult... frames) {
+        List<String> messages = new ArrayList<>();
+        for (FrameGenerationResult frame : frames) {
+            if (frame != null && !frame.available() && !frame.errorMessage().isBlank()) {
+                messages.add(frameLabel(frame.frameRole()) + "失败：" + frame.errorMessage());
+            }
+        }
+        return messages.isEmpty() ? List.of("关键帧生成失败") : messages;
+    }
+
+    private List<Map<String, Object>> frameFailures(FrameGenerationResult... frames) {
+        List<Map<String, Object>> failures = new ArrayList<>();
+        for (FrameGenerationResult frame : frames) {
+            if (frame == null || frame.available() || frame.errorMessage().isBlank()) {
+                continue;
+            }
+            Map<String, Object> failure = new LinkedHashMap<>();
+            failure.put("frameRole", normalizeFrameRole(frame.frameRole()));
+            failure.put("label", frameLabel(frame.frameRole()));
+            failure.put("errorMessage", frame.errorMessage());
+            failures.add(failure);
+        }
+        return failures;
+    }
+
+    private String frameLabel(String frameRole) {
+        return "last".equals(normalizeFrameRole(frameRole)) ? "尾帧" : "首帧";
+    }
+
     private List<Map<String, Object>> generatedKeyframeFrames(
         Map<String, Object> startFrameRun,
         Map<String, Object> startFrameResult,
@@ -3105,14 +3179,41 @@ public class WorkflowApplicationService {
             first.put("modelInfo", mapValue(startFrameResult.get("modelInfo")));
             frames.add(first);
         }
-        Map<String, Object> last = new LinkedHashMap<>();
-        last.put("frameRole", "last");
-        last.put("runId", stringValue(endFrameRun.get("id")));
-        last.put("fileUrl", endFrameUrl);
-        last.put("remoteUrl", endFrameRemoteUrl);
-        last.put("modelInfo", mapValue(endFrameResult.get("modelInfo")));
-        frames.add(last);
+        if (!endFrameUrl.isBlank()) {
+            Map<String, Object> last = new LinkedHashMap<>();
+            last.put("frameRole", "last");
+            last.put("runId", stringValue(endFrameRun.get("id")));
+            last.put("fileUrl", endFrameUrl);
+            last.put("remoteUrl", endFrameRemoteUrl);
+            last.put("modelInfo", mapValue(endFrameResult.get("modelInfo")));
+            frames.add(last);
+        }
         return frames;
+    }
+
+    private record FrameGenerationResult(
+        String frameRole,
+        Map<String, Object> run,
+        Map<String, Object> result,
+        String fileUrl,
+        String remoteUrl,
+        String errorMessage
+    ) {
+        static FrameGenerationResult success(String frameRole, Map<String, Object> run, Map<String, Object> result, String fileUrl, String remoteUrl) {
+            return new FrameGenerationResult(frameRole, run, result, fileUrl, remoteUrl, "");
+        }
+
+        static FrameGenerationResult reused(String frameRole, String fileUrl, String remoteUrl) {
+            return new FrameGenerationResult(frameRole, Map.of(), Map.of(), fileUrl, remoteUrl, "");
+        }
+
+        static FrameGenerationResult failure(String frameRole, String errorMessage) {
+            return new FrameGenerationResult(frameRole, Map.of(), Map.of(), "", "", errorMessage == null ? "" : errorMessage);
+        }
+
+        boolean available() {
+            return !fileUrl.isBlank();
+        }
     }
 
     private Map<String, Object> videoAssetMetadata(
@@ -3187,23 +3288,27 @@ public class WorkflowApplicationService {
         );
     }
 
-    private String buildCharacterConsistencyPrompt(List<CharacterSheetSlot> matchedCharacterSlots, boolean hasCharacterReferenceImages) {
-        if (matchedCharacterSlots == null || matchedCharacterSlots.isEmpty()) {
+    private String buildCharacterConsistencyPrompt(List<CharacterReference> characterReferences) {
+        if (characterReferences == null || characterReferences.isEmpty()) {
             return "";
         }
         List<String> parts = new ArrayList<>();
         parts.add("角色一致性绑定：");
-        for (CharacterSheetSlot slot : matchedCharacterSlots) {
-            parts.add("- " + slot.characterName() + "：" + firstNonBlank(slot.characterAppearance(), slot.characterDefinition()));
+        boolean hasCharacterReferenceImages = false;
+        for (CharacterReference reference : characterReferences) {
+            if (!reference.imageUrl().isBlank()) {
+                hasCharacterReferenceImages = true;
+            }
+            parts.add("- " + reference.characterName() + "：" + firstNonBlank(reference.referenceAppearance(), reference.fallbackAppearance()));
         }
         if (hasCharacterReferenceImages) {
-            parts.add("若附带角色三视图参考图，脸型、五官、发型、服装、体型、年龄感、配饰必须以参考图为唯一准绳，不得自行重设计。");
+            parts.add("已附带当前选中的角色三视图参考图；脸型、五官、发型、服装、体型、年龄感、配饰必须以选中三视图为唯一准绳，不得回退到旧版本或自行重设计。");
         }
         parts.add("若镜头中出现上述角色，必须严格沿用对应外观锚点，禁止换脸、换发型、换服装、换年龄感。");
         return String.join("\n", parts);
     }
 
-    private List<String> resolveCharacterReferenceImageUrls(
+    private List<CharacterReference> resolveCharacterReferences(
         String workflowId,
         StageVersionEntity storyboardVersion,
         List<CharacterSheetSlot> matchedCharacterSlots
@@ -3212,7 +3317,7 @@ public class WorkflowApplicationService {
             return List.of();
         }
         List<StageVersionEntity> stageVersions = workflowRepository.listStageVersions(workflowId);
-        LinkedHashSet<String> urls = new LinkedHashSet<>();
+        List<CharacterReference> references = new ArrayList<>();
         for (CharacterSheetSlot slot : matchedCharacterSlots) {
             StageVersionEntity selectedSheet = stageVersions.stream()
                 .filter(item -> WorkflowConstants.STAGE_KEYFRAME.equals(item.getStageType()))
@@ -3223,11 +3328,41 @@ public class WorkflowApplicationService {
                 .findFirst()
                 .orElse(null);
             String url = resolveCharacterSheetReferenceUrl(selectedSheet);
-            if (!url.isBlank()) {
-                urls.add(url);
-            }
+            references.add(new CharacterReference(
+                slot.characterName(),
+                firstNonBlank(slot.characterAppearance(), slot.characterDefinition()),
+                resolveCharacterSheetAppearance(selectedSheet, slot),
+                url
+            ));
         }
-        return List.copyOf(urls);
+        return references;
+    }
+
+    private String resolveCharacterSheetAppearance(StageVersionEntity version, CharacterSheetSlot slot) {
+        if (version == null) {
+            return "";
+        }
+        MaterialAssetEntity asset = workflowRepository.findMaterialAsset(version.getMaterialAssetId(), requiredUserId());
+        Map<String, Object> assetMetadata = asset == null ? Map.of() : WorkflowJsonSupport.readMap(asset.getMetadataJson());
+        Map<String, Object> outputSummary = stageOutputSummary(version);
+        Map<String, Object> inputSummary = stageInputSummary(version);
+        String assetDescription = firstNonBlank(
+            stringValue(assetMetadata.get("description")),
+            stringValue(assetMetadata.get("shapedPrompt")),
+            stringValue(assetMetadata.get("prompt")),
+            stringValue(asset == null ? "" : asset.getTitle())
+        );
+        String selectedSheetDescription = firstNonBlank(
+            assetDescription,
+            stringValue(outputSummary.get("characterAppearance")),
+            stringValue(inputSummary.get("characterAppearance")),
+            slot.characterAppearance(),
+            slot.characterDefinition()
+        );
+        if (assetDescription.isBlank()) {
+            return selectedSheetDescription;
+        }
+        return "以当前选中的三视图素材为准：" + selectedSheetDescription;
     }
 
     private String resolveCharacterSheetReferenceUrl(StageVersionEntity version) {
@@ -4153,4 +4288,5 @@ public class WorkflowApplicationService {
     }
 
     private record CharacterSheetSlot(String characterName, String characterAppearance, String characterDefinition, int syntheticClipIndex) {}
+    private record CharacterReference(String characterName, String fallbackAppearance, String referenceAppearance, String imageUrl) {}
 }

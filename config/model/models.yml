@@ -74,6 +74,7 @@ model:
       provider_model: "doubao-seedream-4-5-251128"
       timeout_seconds: 300
       family: "seedream"
+      supports_image_data_uri_references: true
       capabilities:
         - "image_generation"
       description: "Seedream 文生图模型。"

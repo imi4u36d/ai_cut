@@ -365,7 +365,8 @@ class TaskExecutionRuntimeSupport {
     }
 
     private boolean supportsImageDataUriReferences(String imageModel) {
-        return stringValue(imageModel).toLowerCase().contains("gpt-image");
+        String normalized = stringValue(imageModel).toLowerCase();
+        return normalized.contains("gpt-image") || normalized.contains("seedream");
     }
 
     /**

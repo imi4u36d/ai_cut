@@ -1062,6 +1062,7 @@
                         <span v-if="frame.selected" class="surface-chip">已选中</span>
                       </div>
                       <button
+                        v-if="frame.url"
                         type="button"
                         class="character-sheet-preview-trigger"
                         :aria-label="`查看${version.title}${frame.label}原图`"
@@ -1074,6 +1075,10 @@
                           :alt="`${version.title}${frame.label}`"
                         />
                       </button>
+                      <div v-else class="keyframe-frame-card__failure">
+                        <strong>{{ frame.label }}生成失败</strong>
+                        <span>{{ frame.errorMessage || "请单独重生此帧" }}</span>
+                      </div>
                       <div class="keyframe-frame-card__actions">
                         <button
                           class="btn-secondary btn-sm"
@@ -1472,6 +1477,7 @@ interface PreviewFrame {
   url: string;
   selected?: boolean;
   regenerable?: boolean;
+  errorMessage?: string;
 }
 
 interface ImagePreviewItem {
@@ -2106,6 +2112,20 @@ function summaryNumberValue(summary: Record<string, unknown> | null | undefined,
   return 0;
 }
 
+function summaryFrameFailures(summary: Record<string, unknown> | null | undefined) {
+  const value = summary?.frameFailures;
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value
+    .filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === "object" && !Array.isArray(item))
+    .map((item) => ({
+      role: typeof item.frameRole === "string" && item.frameRole.trim() === "last" ? "last" : "first",
+      message: typeof item.errorMessage === "string" ? item.errorMessage.trim() : "",
+    }))
+    .filter((item) => item.message);
+}
+
 function isLandscapeKeyframeVersion(version: StageVersion) {
   const outputSummary = version.outputSummary ?? {};
   const width = summaryNumberValue(outputSummary, "width") || Number(version.asset?.width ?? 0);
@@ -2120,8 +2140,10 @@ function isLandscapeKeyframeVersion(version: StageVersion) {
 function keyframePreviewFrames(version: StageVersion, slot?: WorkflowClipSlot): PreviewFrame[] {
   const outputSummary = version.outputSummary ?? {};
   const firstFrameUrl = summaryUrlValue(outputSummary, "startFrameUrl", "firstFrameUrl");
-  const lastFrameUrl = summaryUrlValue(outputSummary, "endFrameUrl", "lastFrameUrl", "fileUrl")
-    || (typeof version.previewUrl === "string" ? version.previewUrl : "");
+  const frameFailures = summaryFrameFailures(outputSummary);
+  const lastFailure = frameFailures.find((item) => item.role === "last");
+  const lastFrameUrl = summaryUrlValue(outputSummary, "endFrameUrl", "lastFrameUrl")
+    || (!lastFailure ? summaryUrlValue(outputSummary, "fileUrl") || (typeof version.previewUrl === "string" ? version.previewUrl : "") : "");
   const hasExplicitFirstSelection = slot ? slot.keyframeVersions.some((item) => Boolean(item.outputSummary?.selectedFirstFrame)) : false;
   const hasExplicitLastSelection = slot ? slot.keyframeVersions.some((item) => Boolean(item.outputSummary?.selectedLastFrame)) : false;
   const frames: PreviewFrame[] = [];
@@ -2134,6 +2156,17 @@ function keyframePreviewFrames(version: StageVersion, slot?: WorkflowClipSlot): 
       regenerable: version.clipIndex <= 1,
     });
   }
+  const firstFailure = frameFailures.find((item) => item.role === "first");
+  if (!firstFrameUrl && firstFailure) {
+    frames.push({
+      role: "first",
+      label: "首帧",
+      url: "",
+      selected: false,
+      regenerable: version.clipIndex <= 1,
+      errorMessage: firstFailure.message,
+    });
+  }
   if (lastFrameUrl && (!firstFrameUrl || lastFrameUrl !== firstFrameUrl || version.clipIndex === 1)) {
     frames.push({
       role: "last",
@@ -2141,6 +2174,16 @@ function keyframePreviewFrames(version: StageVersion, slot?: WorkflowClipSlot): 
       url: lastFrameUrl,
       selected: Boolean(outputSummary.selectedLastFrame || (!hasExplicitLastSelection && version.selected)),
       regenerable: true,
+    });
+  }
+  if (!lastFrameUrl && lastFailure) {
+    frames.push({
+      role: "last",
+      label: "尾帧",
+      url: "",
+      selected: false,
+      regenerable: true,
+      errorMessage: lastFailure.message,
     });
   }
   return frames;
@@ -2282,7 +2325,10 @@ function openImagePreview(url: string, alt: string) {
 }
 
 function openKeyframeImagePreview(version: StageVersion, frame: PreviewFrame) {
-  const frames = keyframePreviewFrames(version);
+  if (!frame.url) {
+    return;
+  }
+  const frames = keyframePreviewFrames(version).filter((item) => item.url);
   const gallery = frames.map((item) => ({
     url: item.url,
     alt: `${version.title}${item.label}`,
@@ -4286,6 +4332,29 @@ onBeforeUnmount(() => {
 .keyframe-frame-card__image-landscape {
   aspect-ratio: 16 / 9;
   object-fit: contain;
+}
+
+.keyframe-frame-card__failure {
+  display: grid;
+  min-height: 180px;
+  place-content: center;
+  gap: 6px;
+  border: 1px dashed rgba(225, 81, 89, 0.38);
+  border-radius: 8px;
+  background: rgba(225, 81, 89, 0.08);
+  padding: 16px;
+  color: #7f1d1d;
+  text-align: center;
+}
+
+.keyframe-frame-card__failure strong,
+.keyframe-frame-card__failure span {
+  overflow-wrap: anywhere;
+}
+
+.keyframe-frame-card__failure span {
+  font-size: 12px;
+  line-height: 1.5;
 }
 
 .keyframe-frame-card__actions {
