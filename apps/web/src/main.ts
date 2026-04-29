@@ -7,26 +7,17 @@ import router from "./router";
 import "./styles/tailwind.css";
 import { loadRuntimeConfig } from "./api/runtime-config";
 import { ensureAuthSession, installAuthClientBridge } from "./auth/session";
-
-function normalizeRedirectTarget(value: unknown) {
-  if (typeof value !== "string" || !value.startsWith("/") || value.startsWith("//")) {
-    return "/tasks";
-  }
-  return value;
-}
+import { openAuthModal } from "./auth/modal";
 
 async function bootstrap() {
   await loadRuntimeConfig();
-  installAuthClientBridge((path) => {
-    const currentPath = normalizeRedirectTarget(path ?? router.currentRoute.value.fullPath);
-    if (router.currentRoute.value.path === "/login") {
+  installAuthClientBridge(() => {
+    if (router.currentRoute.value.path === "/login" || router.currentRoute.value.path === "/activate") {
       return;
     }
-    void router.replace({
-      path: "/login",
-      query: {
-        redirect: currentPath
-      }
+    void openAuthModal({
+      title: "登录后继续",
+      message: "当前操作需要登录账号，请登录或使用邀请码注册。"
     });
   });
   try {

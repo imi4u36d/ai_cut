@@ -187,13 +187,7 @@ public class AdminIdentityService {
      */
     public AdminInviteResponse createInvite(CreateInviteRequest request, CurrentUserPrincipal actor) {
         UserRole role = UserRole.from(request.role());
-        OffsetDateTime expiresAt = request.expiresAt();
-        if (expiresAt == null) {
-            expiresAt = OffsetDateTime.now().plusDays(authProperties.getInviteDefaultExpiryDays());
-        }
-        if (!expiresAt.isAfter(OffsetDateTime.now())) {
-            throw new ApiException(HttpStatus.BAD_REQUEST, "invalid_invite_expiry", "邀请码过期时间必须晚于当前时间");
-        }
+        OffsetDateTime expiresAt = OffsetDateTime.now().plusHours(authProperties.getInviteExpiryHours());
         SysInviteCodeEntity invite = authRepository.createInvite(role, expiresAt, actor.userId());
         Map<Long, SysUserEntity> userMap = authRepository.findUsersByIds(Set.of(actor.userId()));
         return toInviteResponse(invite, userMap);

@@ -331,6 +331,7 @@ import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { fetchGenerationOptions } from "@/api/generation";
 import { createGenerationTask, fetchTasks, uploadText } from "@/api/tasks";
+import { requireAuth } from "@/auth/modal";
 import AppSelect from "@/components/common/AppSelect.vue";
 import type { AppSelectOption } from "@/components/common/app-select";
 import { useTaskProgress } from "@/components/generate/useTaskProgress";
@@ -982,6 +983,14 @@ async function loadOptions() {
 }
 
 async function loadReusableSeeds() {
+  const authenticated = await requireAuth({
+    title: "登录后读取种子库",
+    message: "高分种子来自你的历史任务，请先登录或使用邀请码注册。",
+  });
+  if (!authenticated) {
+    reusableSeedError.value = "登录后可读取高分种子。";
+    return;
+  }
   loadingReusableSeeds.value = true;
   reusableSeedError.value = "";
   try {
@@ -1035,6 +1044,15 @@ async function handleTextFileChange(event: Event) {
   if (!file) {
     return;
   }
+  const authenticated = await requireAuth({
+    title: "登录后上传文本",
+    message: "上传文本会保存到你的生成任务中，请先登录或使用邀请码注册。",
+  });
+  if (!authenticated) {
+    input.value = "";
+    statusText.value = "登录后可继续上传文本。";
+    return;
+  }
   uploadingText.value = true;
   statusText.value = "正在上传文本文件...";
   try {
@@ -1071,6 +1089,14 @@ async function submitTask() {
   }
   if (seedMode.value === "manual" && seedValidationMessage.value) {
     statusText.value = seedValidationMessage.value;
+    return;
+  }
+  const authenticated = await requireAuth({
+    title: "登录后创建任务",
+    message: "视频生成任务会保存到你的账号下，请先登录或使用邀请码注册。",
+  });
+  if (!authenticated) {
+    statusText.value = "登录后即可继续创建任务。";
     return;
   }
 
@@ -1144,7 +1170,6 @@ onMounted(() => {
     nowMs.value = Date.now();
   }, 1000);
   void loadOptions();
-  void loadReusableSeeds();
 });
 
 onUnmounted(() => {

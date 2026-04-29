@@ -98,6 +98,24 @@ public class UserModelConfigService {
         return read(userId);
     }
 
+    /**
+     * 仅重新设置指定用户的厂商 Key，不读取该用户现有配置。
+     * @param userId 用户ID
+     * @param request 请求体
+     */
+    public void resetKeys(Long userId, AdminModelConfigKeyUpdateRequest request) {
+        if (userId == null) {
+            throw new IllegalArgumentException("缺少用户ID");
+        }
+        ApiKeyUpdateBatch updates = collectApiKeyUpdates(request, readProviderCatalog());
+        if (!updates.errors().isEmpty()) {
+            throw new IllegalArgumentException(String.join(" / ", updates.errors()));
+        }
+        if (!updates.apiKeys().isEmpty()) {
+            userModelCredentialRepository.saveApiKeys(userId, updates.apiKeys());
+        }
+    }
+
     private AdminModelConfigResponse.Defaults readDefaults() {
         return new AdminModelConfigResponse.Defaults(
             modelResolver.value("pipeline", "default_aspect_ratio", "9:16"),
@@ -222,6 +240,44 @@ public class UserModelConfigService {
         }
         items.sort(Comparator.comparing(AdminModelConfigResponse.ProviderItem::key, String.CASE_INSENSITIVE_ORDER));
         return items;
+    }
+
+    private List<AdminModelConfigResponse.ProviderItem> readProviderCatalog() {
+        Map<String, ProviderCatalogItem> providers = new LinkedHashMap<>();
+        addProviderCatalogModels(providers, GenerationModelKinds.TEXT);
+        addProviderCatalogModels(providers, GenerationModelKinds.IMAGE);
+        addProviderCatalogModels(providers, GenerationModelKinds.VIDEO);
+        for (ModelRuntimePropertiesResolver.ConfigSection section : modelResolver.listSections("model.providers")) {
+            String provider = firstNonBlank(section.values().get("provider"), section.name());
+            String vendor = stringValue(section.values().get("vendor"));
+            String key = providerGroupKey(vendor, provider);
+            if (key.isBlank()) {
+                continue;
+            }
+            providers.computeIfAbsent(key, ignored -> new ProviderCatalogItem(key, provider, vendor));
+        }
+        return providers.values().stream()
+            .map(ProviderCatalogItem::toProviderItem)
+            .sorted(Comparator.comparing(AdminModelConfigResponse.ProviderItem::key, String.CASE_INSENSITIVE_ORDER))
+            .toList();
+    }
+
+    private void addProviderCatalogModels(Map<String, ProviderCatalogItem> providers, String kind) {
+        for (Map<String, Object> item : modelResolver.listModelsByKind(kind)) {
+            String provider = stringValue(item.get("provider"));
+            String vendor = stringValue(item.get("vendor"));
+            String key = providerGroupKey(vendor, provider);
+            if (key.isBlank()) {
+                key = stringValue(item.get("value"));
+            }
+            if (key.isBlank()) {
+                continue;
+            }
+            String providerKey = key;
+            ProviderCatalogItem providerItem = providers.computeIfAbsent(providerKey, ignored -> new ProviderCatalogItem(providerKey, provider, vendor));
+            providerItem.addKind(kind);
+            providerItem.addModelName(stringValue(item.get("value")));
+        }
     }
 
     private String resolveProviderBaseUrl(List<AdminModelConfigResponse.ModelItem> providerModels, Long userId) {
@@ -574,5 +630,50 @@ public class UserModelConfigService {
         Map<String, String> apiKeys,
         List<String> errors
     ) {
+    }
+
+    private static final class ProviderCatalogItem {
+
+        private final String key;
+        private final String provider;
+        private final String vendor;
+        private final LinkedHashSet<String> kinds = new LinkedHashSet<>();
+        private final LinkedHashSet<String> modelNames = new LinkedHashSet<>();
+
+        private ProviderCatalogItem(String key, String provider, String vendor) {
+            this.key = key;
+            this.provider = provider == null || provider.isBlank() ? key : provider.trim();
+            this.vendor = vendor == null || vendor.isBlank() ? this.provider : vendor.trim();
+        }
+
+        private void addKind(String kind) {
+            if (kind != null && !kind.isBlank()) {
+                kinds.add(kind.trim());
+            }
+        }
+
+        private void addModelName(String modelName) {
+            if (modelName != null && !modelName.isBlank()) {
+                modelNames.add(modelName.trim());
+            }
+        }
+
+        private AdminModelConfigResponse.ProviderItem toProviderItem() {
+            return new AdminModelConfigResponse.ProviderItem(
+                key,
+                provider,
+                vendor,
+                List.copyOf(kinds),
+                "",
+                "",
+                "",
+                "",
+                false,
+                false,
+                false,
+                Map.of(),
+                List.copyOf(modelNames)
+            );
+        }
     }
 }

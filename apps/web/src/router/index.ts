@@ -2,6 +2,7 @@
  * 前端路由注册入口。
  */
 import { createRouter, createWebHistory } from "vue-router";
+import { getRuntimeConfig } from "@/api/runtime-config";
 import WorkspaceShell from "@/components/layout/WorkspaceShell.vue";
 import { ensureAuthSession, useAuthSessionState } from "@/auth/session";
 import ActivateInviteView from "@/views/ActivateInviteView.vue";
@@ -13,18 +14,42 @@ import MaterialLibraryView from "@/views/MaterialLibraryView.vue";
 import NewTaskView from "@/views/NewTaskView.vue";
 import OfficialDocsView from "@/views/OfficialDocsView.vue";
 import OfficialSiteView from "@/views/OfficialSiteView.vue";
-import SettingsView from "@/views/SettingsView.vue";
 import StageWorkflowView from "@/views/StageWorkflowView.vue";
 import TasksView from "@/views/TasksView.vue";
 
 function normalizeRedirectTarget(value: unknown) {
   if (typeof value !== "string" || !value.startsWith("/") || value.startsWith("//")) {
-    return "/tasks";
+    return "/workspace";
   }
   return value;
 }
 
 const authState = useAuthSessionState();
+const AdminPortalRedirectView = { render: () => null };
+
+function redirectToAdminPortal(pathMatch: string | string[] | undefined, query: Record<string, unknown>, hash: string) {
+  const segments = Array.isArray(pathMatch) ? pathMatch : pathMatch ? [pathMatch] : [];
+  const adminPath = segments.join("/").replace(/^\/+/, "");
+  const target = new URL(getRuntimeConfig().adminBaseUrl || window.location.origin);
+  target.pathname = adminPath ? `/${adminPath}` : "/";
+  const searchParams = new URLSearchParams();
+  Object.entries(query).forEach(([key, value]) => {
+    if (Array.isArray(value)) {
+      value.forEach((item) => {
+        if (item != null) {
+          searchParams.append(key, String(item));
+        }
+      });
+      return;
+    }
+    if (value != null) {
+      searchParams.set(key, String(value));
+    }
+  });
+  target.search = searchParams.toString();
+  target.hash = hash;
+  window.location.assign(target.toString());
+}
 
 const router = createRouter({
   history: createWebHistory(),
@@ -64,6 +89,10 @@ const router = createRouter({
       }
     },
     {
+      path: "/official",
+      redirect: "/"
+    },
+    {
       path: "/docs",
       name: "official-docs",
       component: OfficialDocsView,
@@ -72,11 +101,16 @@ const router = createRouter({
       }
     },
     {
+      path: "/admin/:pathMatch(.*)*",
+      component: AdminPortalRedirectView,
+      beforeEnter: (to) => {
+        redirectToAdminPortal(to.params.pathMatch as string | string[] | undefined, to.query, to.hash);
+        return false;
+      }
+    },
+    {
       path: "/",
       component: WorkspaceShell,
-      meta: {
-        requiresAuth: true
-      },
       children: [
         {
           path: "workspace",
@@ -88,11 +122,7 @@ const router = createRouter({
         },
         {
           path: "generate",
-          name: "generate",
-          component: NewTaskView,
-          meta: {
-            title: "一键生成"
-          }
+          redirect: "/workspace"
         },
         {
           path: "tasks/new",
@@ -141,14 +171,6 @@ const router = createRouter({
           meta: {
             title: "任务管理"
           }
-        },
-        {
-          path: "settings",
-          name: "settings",
-          component: SettingsView,
-          meta: {
-            title: "设置"
-          }
         }
       ]
     },
@@ -173,6 +195,14 @@ router.beforeEach(async (to) => {
     return normalizeRedirectTarget(to.query.redirect);
   }
   if (requiresAuth && !isAuthenticated) {
+    return {
+      path: "/login",
+      query: {
+        redirect: to.fullPath
+      }
+    };
+  }
+  if (requiresAdmin && !isAuthenticated) {
     return {
       path: "/login",
       query: {

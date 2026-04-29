@@ -2,15 +2,18 @@ package com.jiandou.api.task;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import com.jiandou.api.auth.infrastructure.mybatis.MybatisAuthRepository;
 import com.jiandou.api.auth.infrastructure.mybatis.SysUserEntity;
+import com.jiandou.api.auth.security.CurrentUserPrincipal;
 import com.jiandou.api.config.JiandouStorageProperties;
 import com.jiandou.api.config.JiandouTaskOpsProperties;
 import com.jiandou.api.task.application.TaskDiagnosisService;
 import com.jiandou.api.task.application.TaskExecutionCoordinator;
 import com.jiandou.api.task.application.TaskQueryService;
 import com.jiandou.api.task.application.port.TaskQueuePort;
+import com.jiandou.api.task.exception.TaskNotFoundException;
 import com.jiandou.api.task.persistence.TaskPersistenceMutation;
 import com.jiandou.api.task.persistence.TaskRepository;
 import com.jiandou.api.task.view.TaskViewMapper;
@@ -22,6 +25,8 @@ import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
 
 /**
  * 任务查询相关测试。
@@ -37,6 +42,8 @@ class TaskQueryServiceTest {
      */
     @BeforeEach
     void setUp() {
+        SecurityContextHolder.clearContext();
+        authenticate(88L);
         taskRepository = new FakeTaskRepository();
         executionCoordinator = new RecordingTaskExecutionCoordinator(taskRepository);
         TaskViewMapper taskViewMapper = new TaskViewMapper(storageProperties("../../storage"));
@@ -110,6 +117,35 @@ class TaskQueryServiceTest {
         assertEquals(2, recentRunningTasks.size());
     }
 
+    @Test
+    void listTasksOnlyReturnsCurrentUserTasks() {
+        TaskRecord own = task("task_own", "COMPLETED", "2026-04-14T00:00:02Z");
+        own.setOwnerUserId(88L);
+        TaskRecord other = task("task_other", "COMPLETED", "2026-04-14T00:00:01Z");
+        other.setOwnerUserId(99L);
+        TaskRecord legacy = task("task_legacy", "COMPLETED", "2026-04-14T00:00:00Z");
+        legacy.setOwnerUserId(null);
+        taskRepository.tasks = List.of(own, other, legacy);
+
+        List<Map<String, Object>> rows = service.listTasks(null, null, "updated_desc");
+
+        assertEquals(1, rows.size());
+        assertEquals("task_own", rows.get(0).get("id"));
+    }
+
+    @Test
+    void requireOwnedTaskRejectsOtherUserTask() {
+        TaskRecord own = task("task_own", "COMPLETED", "2026-04-14T00:00:02Z");
+        own.setOwnerUserId(88L);
+        TaskRecord other = task("task_other", "COMPLETED", "2026-04-14T00:00:01Z");
+        other.setOwnerUserId(99L);
+        taskRepository.tasks = List.of(own, other);
+
+        assertEquals("task_own", service.getTask("task_own").get("id"));
+        assertThrows(TaskNotFoundException.class, () -> service.getTask("task_other"));
+        assertThrows(TaskNotFoundException.class, () -> service.getTrace("task_other", 10));
+    }
+
     /**
      * 处理任务。
      * @param id 标识值
@@ -120,6 +156,7 @@ class TaskQueryServiceTest {
     private TaskRecord task(String id, String status, String updatedAt) {
         TaskRecord task = new TaskRecord();
         task.setId(id);
+        task.setOwnerUserId(88L);
         task.setTitle(id);
         task.setStatus(status);
         task.setCreatedAt(updatedAt);
@@ -127,6 +164,16 @@ class TaskQueryServiceTest {
         task.setExecutionContext(new LinkedHashMap<>());
         taskRepository.tasksById.put(id, task);
         return task;
+    }
+
+    private void authenticate(Long userId) {
+        SecurityContextHolder.getContext().setAuthentication(
+            UsernamePasswordAuthenticationToken.authenticated(
+                new CurrentUserPrincipal(userId, "tester", "Tester", "USER", "ACTIVE"),
+                null,
+                List.of()
+            )
+        );
     }
 
     private JiandouStorageProperties storageProperties(String rootDir) {

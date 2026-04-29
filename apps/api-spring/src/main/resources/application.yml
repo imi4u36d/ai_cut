@@ -32,7 +32,7 @@ jiandou:
     workflow:
       bootstrap-mock-data: ${JIANDOU_WORKFLOW_BOOTSTRAP_MOCK_DATA:false}
   auth:
-    invite-default-expiry-days: ${JIANDOU_AUTH_INVITE_DEFAULT_EXPIRY_DAYS:7}
+    invite-expiry-hours: ${JIANDOU_AUTH_INVITE_EXPIRY_HOURS:12}
     credential-secret: ${JIANDOU_USER_CREDENTIAL_SECRET:dev-user-credential-secret-change-me}
     bootstrap:
       initial-admin:

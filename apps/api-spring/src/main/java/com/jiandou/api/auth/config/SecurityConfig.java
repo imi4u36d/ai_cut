@@ -129,7 +129,8 @@ public class SecurityConfig {
                     ApiPathConstants.AUTH_SESSION,
                     ApiPathConstants.AUTH_LOGIN,
                     ApiPathConstants.AUTH_ACTIVATE_INVITE,
-                    ApiPathConstants.TASK_SHOWCASE
+                    ApiPathConstants.TASK_SHOWCASE,
+                    ApiPathConstants.GENERATION_CATALOG
                 ).permitAll()
                 .requestMatchers(ApiPathConstants.ADMIN_PATTERN).hasRole(UserRole.ADMIN.value())
                 .requestMatchers(ApiPathConstants.API_V2_PATTERN).authenticated()

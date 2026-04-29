@@ -95,7 +95,7 @@
           <div class="tasks-empty-board__actions">
             <button v-if="isFilterActive" class="btn-warning" type="button" @click="clearFilters">清空筛选</button>
             <RouterLink v-else to="/tasks/new" class="btn-primary">新建任务</RouterLink>
-            <RouterLink to="/generate" class="btn-secondary">打开生成器</RouterLink>
+            <RouterLink to="/workspace" class="btn-secondary">打开工作台</RouterLink>
           </div>
         </div>
 
@@ -326,6 +326,7 @@ import { useRoute, useRouter } from "vue-router";
 import AppSelect from "@/components/common/AppSelect.vue";
 import type { AppSelectOption } from "@/components/common/app-select";
 import { continueTask, deleteTask, fetchTask, fetchTaskTrace, fetchTasks, pauseTask, rateTaskEffect, retryTask, terminateTask } from "@/api/tasks";
+import { requireAuth } from "@/auth/modal";
 import type { TaskDetail, TaskListItem, TaskStatus, TaskTraceEvent } from "@/types";
 import { usePolling } from "@/composables/usePolling";
 import {
@@ -745,6 +746,16 @@ const boardColumns = computed(() => {
 });
 
 async function loadTasks() {
+  const authenticated = await requireAuth({
+    title: "登录后查看任务",
+    message: "任务管理只展示你的个人任务，请先登录或使用邀请码注册。",
+  });
+  if (!authenticated) {
+    tasks.value = [];
+    errorMessage.value = "登录后可查看任务管理。";
+    loading.value = false;
+    return;
+  }
   errorMessage.value = "";
   loading.value = tasks.value.length === 0;
   try {
@@ -801,6 +812,14 @@ async function refreshSelectedTask() {
 
 async function saveSelectedTaskRating() {
   if (!selectedTaskId.value || !selectedTaskRatingDraft.value) {
+    return;
+  }
+  const authenticated = await requireAuth({
+    title: "登录后保存评分",
+    message: "任务评分会保存到你的任务记录，请先登录或使用邀请码注册。",
+  });
+  if (!authenticated) {
+    selectedTaskError.value = "登录后可继续保存评分。";
     return;
   }
   selectedTaskRatingSaving.value = true;
@@ -949,6 +968,14 @@ async function handleRetry(task: TaskListItem) {
   if (managingTaskId.value) {
     return;
   }
+  const authenticated = await requireAuth({
+    title: "登录后操作任务",
+    message: "任务操作会修改你的任务状态，请先登录或使用邀请码注册。",
+  });
+  if (!authenticated) {
+    errorMessage.value = "登录后可继续操作任务。";
+    return;
+  }
   managingTaskId.value = task.id;
   errorMessage.value = "";
   try {
@@ -963,6 +990,14 @@ async function handleRetry(task: TaskListItem) {
 
 async function handlePause(task: TaskListItem) {
   if (managingTaskId.value) {
+    return;
+  }
+  const authenticated = await requireAuth({
+    title: "登录后操作任务",
+    message: "任务操作会修改你的任务状态，请先登录或使用邀请码注册。",
+  });
+  if (!authenticated) {
+    errorMessage.value = "登录后可继续操作任务。";
     return;
   }
   managingTaskId.value = task.id;
@@ -981,6 +1016,14 @@ async function handleContinueTask(task: TaskListItem) {
   if (managingTaskId.value) {
     return;
   }
+  const authenticated = await requireAuth({
+    title: "登录后操作任务",
+    message: "任务操作会修改你的任务状态，请先登录或使用邀请码注册。",
+  });
+  if (!authenticated) {
+    errorMessage.value = "登录后可继续操作任务。";
+    return;
+  }
   managingTaskId.value = task.id;
   errorMessage.value = "";
   try {
@@ -995,6 +1038,14 @@ async function handleContinueTask(task: TaskListItem) {
 
 async function handleTerminate(task: TaskListItem) {
   if (managingTaskId.value) {
+    return;
+  }
+  const authenticated = await requireAuth({
+    title: "登录后操作任务",
+    message: "任务操作会修改你的任务状态，请先登录或使用邀请码注册。",
+  });
+  if (!authenticated) {
+    errorMessage.value = "登录后可继续操作任务。";
     return;
   }
   const ok = window.confirm(`确认终止任务“${task.title}”吗？终止后任务会变为失败状态，可再删除或重试。`);
@@ -1015,6 +1066,14 @@ async function handleTerminate(task: TaskListItem) {
 
 async function handleDelete(task: TaskListItem) {
   if (managingTaskId.value) {
+    return;
+  }
+  const authenticated = await requireAuth({
+    title: "登录后删除任务",
+    message: "删除任务会修改你的任务记录，请先登录或使用邀请码注册。",
+  });
+  if (!authenticated) {
+    errorMessage.value = "登录后可继续删除任务。";
     return;
   }
   const ok = window.confirm(`确认删除任务“${task.title}”吗？已生成的输出和日志也会一并清理。`);

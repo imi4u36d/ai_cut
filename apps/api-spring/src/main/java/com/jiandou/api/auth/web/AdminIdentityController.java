@@ -1,6 +1,8 @@
 package com.jiandou.api.auth.web;
 
 import com.jiandou.api.auth.application.AdminIdentityService;
+import com.jiandou.api.auth.application.UserModelConfigService;
+import com.jiandou.api.admin.dto.AdminModelConfigKeyUpdateRequest;
 import com.jiandou.api.auth.security.CurrentUserPrincipal;
 import com.jiandou.api.auth.web.dto.AdminInviteResponse;
 import com.jiandou.api.auth.web.dto.AdminUserResponse;
@@ -30,9 +32,11 @@ import org.springframework.web.bind.annotation.RestController;
 public class AdminIdentityController {
 
     private final AdminIdentityService adminIdentityService;
+    private final UserModelConfigService userModelConfigService;
 
-    public AdminIdentityController(AdminIdentityService adminIdentityService) {
+    public AdminIdentityController(AdminIdentityService adminIdentityService, UserModelConfigService userModelConfigService) {
         this.adminIdentityService = adminIdentityService;
+        this.userModelConfigService = userModelConfigService;
     }
 
     /**
@@ -118,6 +122,20 @@ public class AdminIdentityController {
     @DeleteMapping("/users/{id}")
     public void deleteUser(@PathVariable Long id) {
         adminIdentityService.deleteUser(id);
+    }
+
+    /**
+     * 保存用户模型厂商 Key。
+     * @param id 用户ID
+     * @param request 请求体
+     */
+    @PostMapping("/users/{id}/model-config/keys")
+    public void saveUserModelConfigKeys(
+        @PathVariable Long id,
+        @RequestBody AdminModelConfigKeyUpdateRequest request
+    ) {
+        adminIdentityService.getUser(id);
+        userModelConfigService.resetKeys(id, request);
     }
 
     /**

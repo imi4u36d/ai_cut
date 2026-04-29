@@ -2,6 +2,8 @@ package com.jiandou.api.task.application;
 
 import com.jiandou.api.auth.infrastructure.mybatis.MybatisAuthRepository;
 import com.jiandou.api.auth.infrastructure.mybatis.SysUserEntity;
+import com.jiandou.api.auth.security.SecurityCurrentUser;
+import com.jiandou.api.common.exception.ApiException;
 import com.jiandou.api.config.JiandouTaskOpsProperties;
 import com.jiandou.api.task.TaskRecord;
 import com.jiandou.api.task.domain.TaskStatus;
@@ -19,6 +21,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 
 /**
@@ -67,9 +70,11 @@ public class TaskQueryService {
      * @return 处理结果
      */
     public List<Map<String, Object>> listTasks(String q, String status, String sort) {
+        Long ownerUserId = requiredUserId();
         List<TaskRecord> tasks = new ArrayList<>(taskRepository.findAll());
         executionCoordinator.recomputeQueuePositions(tasks);
         List<TaskRecord> filteredTasks = tasks.stream()
+            .filter(item -> ownedBy(item, ownerUserId))
             .sorted(taskComparator(sort))
             .filter(item -> q == null || q.isBlank() || containsIgnoreCase(item.title(), q) || containsIgnoreCase(item.creativePrompt(), q))
             .filter(item -> matchesStatus(item, status))
@@ -109,7 +114,7 @@ public class TaskQueryService {
      * @return 处理结果
      */
     public Map<String, Object> getTask(String taskId) {
-        TaskRecord task = requireTask(taskId);
+        TaskRecord task = requireOwnedTask(taskId);
         executionCoordinator.recomputeQueuePositions(List.of(task));
         return enrichTaskRow(task, taskViewMapper.toDetail(task));
     }
@@ -121,7 +126,7 @@ public class TaskQueryService {
      * @return 处理结果
      */
     public List<Map<String, Object>> getTrace(String taskId, int limit) {
-        return tail(requireTask(taskId).trace(), limit);
+        return tail(requireOwnedTask(taskId).trace(), limit);
     }
 
     /**
@@ -141,7 +146,7 @@ public class TaskQueryService {
      * @return 处理结果
      */
     public List<Map<String, Object>> getStatusHistory(String taskId, int limit) {
-        return tail(requireTask(taskId).statusHistory(), limit);
+        return tail(requireOwnedTask(taskId).statusHistory(), limit);
     }
 
     /**
@@ -151,7 +156,7 @@ public class TaskQueryService {
      * @return 处理结果
      */
     public List<Map<String, Object>> getModelCalls(String taskId, int limit) {
-        return tail(requireTask(taskId).modelCalls(), limit);
+        return tail(requireOwnedTask(taskId).modelCalls(), limit);
     }
 
     /**
@@ -160,7 +165,7 @@ public class TaskQueryService {
      * @return 处理结果
      */
     public List<Map<String, Object>> getResults(String taskId) {
-        return new ArrayList<>(requireTask(taskId).outputs());
+        return new ArrayList<>(requireOwnedTask(taskId).outputs());
     }
 
     /**
@@ -169,7 +174,7 @@ public class TaskQueryService {
      * @return 处理结果
      */
     public List<Map<String, Object>> getMaterials(String taskId) {
-        return new ArrayList<>(requireTask(taskId).materials());
+        return new ArrayList<>(requireOwnedTask(taskId).materials());
     }
 
     /**
@@ -369,6 +374,31 @@ public class TaskQueryService {
             throw new TaskNotFoundException(taskId);
         }
         return task;
+    }
+
+    /**
+     * 处理当前用户任务。
+     * @param taskId 任务标识
+     * @return 处理结果
+     */
+    public TaskRecord requireOwnedTask(String taskId) {
+        TaskRecord task = requireTask(taskId);
+        if (!ownedBy(task, requiredUserId())) {
+            throw new TaskNotFoundException(taskId);
+        }
+        return task;
+    }
+
+    private Long requiredUserId() {
+        Long userId = SecurityCurrentUser.currentUserId();
+        if (userId == null) {
+            throw new ApiException(HttpStatus.UNAUTHORIZED, "unauthorized", "请先登录");
+        }
+        return userId;
+    }
+
+    private boolean ownedBy(TaskRecord task, Long ownerUserId) {
+        return task != null && ownerUserId != null && ownerUserId.equals(task.ownerUserId());
     }
 
     /**

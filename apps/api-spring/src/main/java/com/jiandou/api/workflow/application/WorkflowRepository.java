@@ -196,6 +196,28 @@ public class WorkflowRepository {
         }
     }
 
+    public List<MaterialAssetEntity> listMaterialAssetsPage(Long ownerUserId, int offset, int limit) {
+        try (SqlSession session = sqlSessionFactory.openSession()) {
+            return session.getMapper(MaterialAssetMapper.class).selectList(
+                Wrappers.<MaterialAssetEntity>lambdaQuery()
+                    .eq(ownerUserId != null, MaterialAssetEntity::getOwnerUserId, ownerUserId)
+                    .eq(MaterialAssetEntity::getIsDeleted, 0)
+                    .orderByDesc(MaterialAssetEntity::getCreateTime)
+                    .last("LIMIT " + Math.max(0, offset) + ", " + Math.max(1, limit))
+            );
+        }
+    }
+
+    public Long countMaterialAssets(Long ownerUserId) {
+        try (SqlSession session = sqlSessionFactory.openSession()) {
+            return session.getMapper(MaterialAssetMapper.class).selectCount(
+                Wrappers.<MaterialAssetEntity>lambdaQuery()
+                    .eq(ownerUserId != null, MaterialAssetEntity::getOwnerUserId, ownerUserId)
+                    .eq(MaterialAssetEntity::getIsDeleted, 0)
+            );
+        }
+    }
+
     public Map<String, MaterialAssetEntity> findMaterialAssetsByIds(Set<String> assetIds, Long ownerUserId) {
         if (assetIds == null || assetIds.isEmpty()) {
             return Map.of();

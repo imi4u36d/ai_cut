@@ -14,19 +14,37 @@
         <button
           type="button"
           class="home-composer__upload"
-          :disabled="uploadingText"
-          @click="textFileInput?.click()"
+          :disabled="uploadingReference"
+          @click="handleReferenceEntryClick"
         >
-          <span>+</span>
-          <small>{{ selectedMode.kind === "video" ? "参考内容" : "参考图" }}</small>
+          <template v-if="selectedMode.kind === 'image' && referenceImages.length">
+            <img :src="referenceImages[0].fileUrl" :alt="referenceImages[0].label" />
+            <span class="home-reference-add">+</span>
+          </template>
+          <span v-else>+</span>
+          <small>参考图</small>
         </button>
         <input
           ref="textFileInput"
           type="file"
-          accept=".txt,text/plain"
+          :accept="selectedMode.kind === 'image' ? 'image/*' : '.txt,text/plain'"
           class="home-hidden-input"
-          @change="handleTextFileChange"
+          :multiple="selectedMode.kind === 'image'"
+          @change="handleReferenceFileChange"
         />
+
+        <div v-if="selectedMode.kind === 'image' && referenceImages.length" class="home-reference-stack" aria-label="已添加参考图">
+          <span
+            v-for="item in referenceImages.slice(0, 3)"
+            :key="item.id"
+            class="home-reference-thumb"
+            :class="{ 'home-reference-thumb-mentioned': promptText.includes(`@${item.label}`) }"
+          >
+            <img :src="item.fileUrl" :alt="item.label" />
+            <button type="button" :aria-label="`移除${item.label}`" @click="removeReferenceImage(item.id)">×</button>
+          </span>
+          <span v-if="referenceImages.length > 3" class="home-reference-more">+{{ referenceImages.length - 3 }}</span>
+        </div>
 
         <label class="home-composer__prompt">
           <span>{{ promptLabel }}</span>
@@ -112,11 +130,11 @@
           <div class="home-menu">
             <button type="button" class="home-tool" :class="{ 'home-tool-active': activeMenu === 'ratio' }" @click="toggleMenu('ratio')">
               <span class="home-tool__shape"></span>
-              {{ form.aspectRatio }}
+              {{ ratioToolLabel }}
             </button>
             <div v-if="activeMenu === 'ratio'" class="home-popover home-popover-ratio">
               <p class="home-popover__label">选择比例</p>
-              <div class="home-ratio-list">
+              <div class="home-ratio-list home-ratio-list-immersive">
                 <button
                   v-for="ratio in ratioOptions"
                   :key="ratio.value"
@@ -125,31 +143,42 @@
                   @click="selectRatio(ratio.value)"
                 >
                   <span class="home-ratio__shape" :style="{ aspectRatio: ratio.shape }"></span>
-                  <span>{{ ratio.label }}</span>
+                  <span>{{ ratio.shortLabel }}</span>
                 </button>
               </div>
               <template v-if="selectedMode.kind === 'image'">
                 <p class="home-popover__label">选择分辨率</p>
-                <div class="home-segment-grid">
+                <div class="home-resolution-list">
                   <button
                     v-for="size in imageSizeOptions"
                     :key="size.value"
                     type="button"
-                    :class="{ 'home-segment-active': form.imageSize === size.value }"
+                    :class="{ 'home-resolution-active': form.imageSize === size.value }"
                     @click="form.imageSize = size.value"
                   >
-                    {{ compactImageSizeLabel(size.label || size.value) }}
+                    {{ formatImageSizeOptionLabel(size) }}
                   </button>
                 </div>
+                <template v-if="selectedImageSizeDimensions">
+                  <p class="home-popover__label">尺寸</p>
+                  <div class="home-dimension-row">
+                    <span>W</span>
+                    <strong>{{ selectedImageSizeDimensions.width }}</strong>
+                    <span class="home-dimension-link">⌁</span>
+                    <span>H</span>
+                    <strong>{{ selectedImageSizeDimensions.height }}</strong>
+                    <span>PX</span>
+                  </div>
+                </template>
               </template>
               <template v-else>
                 <p class="home-popover__label">视频尺寸</p>
-                <div class="home-segment-grid">
+                <div class="home-resolution-list">
                   <button
                     v-for="size in videoSizeOptions"
                     :key="size.value"
                     type="button"
-                    :class="{ 'home-segment-active': form.videoSize === size.value }"
+                    :class="{ 'home-resolution-active': form.videoSize === size.value }"
                     @click="form.videoSize = size.value"
                   >
                     {{ formatVideoSizeLabel(size.label || size.value) }}
@@ -181,7 +210,7 @@
             </div>
           </div>
 
-          <div class="home-menu">
+          <div v-if="selectedModeValue !== 'character_sheet'" class="home-menu">
             <button type="button" class="home-tool" :class="{ 'home-tool-active': activeMenu === 'count' }" @click="toggleMenu('count')">
               ✦ {{ selectedMode.kind === "image" ? `${imageOutputCount} / 张` : outputCountLabel }}
             </button>
@@ -216,8 +245,44 @@
           </div>
 
           <div class="home-menu">
-            <button type="button" class="home-tool" :class="{ 'home-tool-active': activeMenu === 'seed' }" @click="toggleMenu('seed')">
+            <button type="button" class="home-tool" :class="{ 'home-tool-active': activeMenu === 'mention' }" @click="toggleMenu('mention')">
               <span class="home-tool__icon">@</span>
+              引用
+            </button>
+            <div v-if="activeMenu === 'mention'" class="home-popover home-popover-mention">
+              <p class="home-popover__label">可能@的内容</p>
+              <button type="button" class="home-popover__item" @click="insertMention('创建主体')">
+                <span class="home-popover__icon">+</span>
+                <span>
+                  <strong>创建主体</strong>
+                  <small>{{ selectedMode.kind === "image" ? "基于参考图或描述生成主体" : "视频主体功能正在开发中" }}</small>
+                </span>
+              </button>
+              <template v-if="selectedMode.kind === 'image'">
+                <button
+                  v-for="item in referenceImages"
+                  :key="item.id"
+                  type="button"
+                  class="home-popover__item"
+                  @click="insertMention(item.label)"
+                >
+                  <span class="home-popover__image">
+                    <img :src="item.fileUrl" :alt="item.label" />
+                  </span>
+                  <span>
+                    <strong>{{ item.label }}</strong>
+                    <small>{{ item.fileName }}</small>
+                  </span>
+                </button>
+              </template>
+              <p v-if="selectedMode.kind === 'video'" class="home-popover__empty">视频模式参考图正在开发中</p>
+              <p v-else-if="!referenceImages.length" class="home-popover__empty">暂无参考图</p>
+            </div>
+          </div>
+
+          <div class="home-menu">
+            <button type="button" class="home-tool" :class="{ 'home-tool-active': activeMenu === 'seed' }" @click="toggleMenu('seed')">
+              <span class="home-tool__icon">#</span>
               {{ seedMode === "auto" ? "自动种子" : "手动种子" }}
             </button>
             <div v-if="activeMenu === 'seed'" class="home-popover home-popover-seed">
@@ -242,7 +307,7 @@
         <div class="home-composer__meta">
           <span>{{ statusText }}</span>
           <RouterLink v-if="createdTaskId" :to="{ name: 'tasks', query: { selected: createdTaskId } }">查看任务</RouterLink>
-          <RouterLink v-if="createdImageAssetId" to="/materials?assetType=free">查看素材</RouterLink>
+          <RouterLink v-if="createdImageAssetId" :to="createdImageAssetLink">查看素材</RouterLink>
         </div>
 
         <button class="home-composer__submit" type="submit" :disabled="submitting || loadingOptions || !isFormReady" :title="submitLabel">
@@ -253,6 +318,14 @@
           <span v-else>...</span>
         </button>
       </form>
+
+      <div v-if="referenceDevelopingDialogOpen" class="home-dialog" role="dialog" aria-modal="true" aria-labelledby="reference-developing-title" @click.self="referenceDevelopingDialogOpen = false">
+        <div class="home-dialog__panel">
+          <h2 id="reference-developing-title">正在开发中</h2>
+          <p>视频模式添加参考图正在开发中。</p>
+          <button type="button" @click="referenceDevelopingDialogOpen = false">知道了</button>
+        </div>
+      </div>
     </section>
 
     <section class="feature-strip">
@@ -335,6 +408,7 @@ import { computed, onMounted, ref, watch } from "vue";
 import { createMaterialGeneration } from "@/api/material-assets";
 import { fetchGenerationOptions } from "@/api/generation";
 import { createGenerationTask, uploadText } from "@/api/tasks";
+import { requireAuth } from "@/auth/modal";
 import { useTaskShowcase } from "@/composables/useTaskShowcase";
 import { formatShowcaseTimeMeta, resolveShowcaseVisual, selectShowcasePrimaryModel } from "@/utils/showcase";
 import { formatVideoSizeLabel } from "@/utils/presentation";
@@ -349,8 +423,22 @@ import type {
   GenerationVideoSizeOption,
 } from "@/types";
 
-type ModeValue = "video" | "image";
-type MenuKey = "" | "mode" | "model" | "ratio" | "duration" | "count" | "seed";
+type ModeValue = "video" | "image" | "character_sheet";
+type MenuKey = "" | "mode" | "model" | "ratio" | "duration" | "count" | "mention" | "seed";
+type AspectRatioValue = "16:9" | "9:16";
+type RatioOptionValue = "智能" | "1:1" | "21:9" | "16:9" | "3:2" | "4:3" | "3:4" | "2:3" | "9:16";
+
+interface ReferenceImageItem {
+  id: string;
+  label: string;
+  fileUrl: string;
+  fileName: string;
+}
+
+type WorkbenchForm = Omit<CreateGenerationTaskRequest, "aspectRatio"> & {
+  aspectRatio: RatioOptionValue;
+  imageSize?: string | null;
+};
 
 const { items, loading, errorMessage } = useTaskShowcase();
 
@@ -358,10 +446,12 @@ const activeMenu = ref<MenuKey>("");
 const selectedModeValue = ref<ModeValue>("video");
 const loadingOptions = ref(false);
 const submitting = ref(false);
-const uploadingText = ref(false);
+const uploadingReference = ref(false);
+const referenceDevelopingDialogOpen = ref(false);
 const statusText = ref("参数加载中...");
 const promptText = ref("");
 const textFileInput = ref<HTMLInputElement | null>(null);
+const referenceImages = ref<ReferenceImageItem[]>([]);
 const createdTaskId = ref("");
 const createdImageAssetId = ref("");
 const seedMode = ref<"auto" | "manual">("auto");
@@ -372,7 +462,7 @@ const selectedDurationSeconds = ref<number | null>(null);
 const imageOutputCount = ref(1);
 
 const options = ref<GenerationOptionsResponse | null>(null);
-const form = ref<CreateGenerationTaskRequest & { imageSize?: string | null }>({
+const form = ref<WorkbenchForm>({
   title: "工作台生成任务",
   creativePrompt: "",
   aspectRatio: "16:9",
@@ -402,6 +492,13 @@ const modeOptions = [
     description: "素材中心自由模式，支持参考图再创作",
     icon: "▧",
   },
+  {
+    value: "character_sheet" as const,
+    kind: "image" as const,
+    label: "角色三视图",
+    description: "生成同一角色正面、侧面、背面设定图",
+    icon: "▥",
+  },
 ];
 
 const quickModeCards = [
@@ -417,14 +514,22 @@ const quickModeCards = [
     subtitle: "自由模式出图",
     icon: "I",
   },
+  {
+    value: "character_sheet" as const,
+    title: "角色三视图",
+    subtitle: "人物设定图",
+    icon: "3V",
+  },
 ];
 
 const selectedMode = computed(() => modeOptions.find((item) => item.value === selectedModeValue.value) ?? modeOptions[0]);
 const promptLabel = computed(() => selectedMode.value.kind === "video" ? "文本 / 小说正文" : "图片提示词");
 const promptPlaceholder = computed(() =>
   selectedMode.value.kind === "video"
-    ? "上传最多 12 个参考素材、输入文字或 @ 参考内容，自由组合图、文、音、视频多元素，定义精彩互动。"
-    : "上传参考图、输入文字或 @ 主体，描述你想生成的图片。",
+    ? "输入文字或小说正文，描述你想生成的视频内容。"
+    : selectedMode.value.value === "character_sheet"
+      ? "描述角色身份、年龄感、脸部五官、发型、体型身高、服装和稳定配饰，用于生成正面、侧面、背面三视图。"
+      : "上传参考图、输入文字或 @ 主体，描述你想生成的图片。",
 );
 
 const textModelOptions = computed<GenerationTextAnalysisModelInfo[]>(() => options.value?.textAnalysisModels ?? []);
@@ -446,38 +551,57 @@ const selectedPrimaryModelLabel = computed(() => {
   return selectedImageModelOption.value?.label || selectedImageModelOption.value?.value || "图片模型";
 });
 
+const ratioDisplayOrder: RatioOptionValue[] = ["智能", "21:9", "16:9", "3:2", "4:3", "1:1", "3:4", "2:3", "9:16"];
+
 const ratioOptions = computed(() => {
-  const catalog = options.value?.aspectRatios ?? [];
-  const usable = catalog.filter((item) => item.value === "16:9" || item.value === "9:16");
-  const source = usable.length ? usable : [
-    { value: "16:9", label: "16:9" },
-    { value: "9:16", label: "9:16" },
-  ];
-  return source.map((item) => ({
-    value: item.value as "16:9" | "9:16",
-    label: item.value,
-    shape: item.value === "16:9" ? "16 / 9" : "9 / 16",
-  }));
+  const values = selectedMode.value.kind === "image" ? availableImageRatios.value : availableVideoRatios.value;
+  return [...values]
+    .sort((a, b) => ratioDisplayOrder.indexOf(a) - ratioDisplayOrder.indexOf(b))
+    .map((value) => ({
+      value,
+      label: value,
+      shortLabel: value === "智能" ? "智能" : value,
+      shape: ratioShape(value),
+    }));
 });
 
-const imageSizeOptions = computed<GenerationImageSizeOption[]>(() => {
+const availableVideoRatios = computed<RatioOptionValue[]>(() => {
+  const catalog = options.value?.aspectRatios ?? [];
+  const values = catalog
+    .map((item) => item.value)
+    .filter((value): value is AspectRatioValue => value === "16:9" || value === "9:16");
+  return values.length ? [...new Set(values)] : ["16:9", "9:16"];
+});
+
+const availableImageRatios = computed<RatioOptionValue[]>(() => {
+  const ratios = imageCandidateSizes.value
+    .map((item) => sizeRatioLabel(item))
+    .filter((value): value is RatioOptionValue => Boolean(value));
+  const unique = [...new Set(ratios)];
+  return unique.length ? unique : availableVideoRatios.value;
+});
+
+const imageCandidateSizes = computed<GenerationImageSizeOption[]>(() => {
   const source = options.value?.imageSizes ?? [];
   const selectedSizes = selectedImageModelOption.value?.supportedSizes ?? [];
   const normalizedSelectedSizes = selectedSizes.map(normalizeSizeValue);
-  const filtered = source
-    .filter((item) => {
-      if (normalizedSelectedSizes.length && !normalizedSelectedSizes.includes(normalizeSizeValue(item.value))) {
-        return false;
-      }
-      return imageSizeMatchesRatio(item, form.value.aspectRatio);
-    });
-  return filtered.length ? filtered : source.filter((item) => imageSizeMatchesRatio(item, form.value.aspectRatio));
+  return source.filter((item) => {
+    return !normalizedSelectedSizes.length || normalizedSelectedSizes.includes(normalizeSizeValue(item.value));
+  });
+});
+
+const imageSizeOptions = computed<GenerationImageSizeOption[]>(() => {
+  const filtered = imageCandidateSizes.value
+    .filter((item) => imageSizeMatchesRatio(item, form.value.aspectRatio))
+    .sort(compareSizeByArea);
+  return filtered.length ? filtered : imageCandidateSizes.value.filter((item) => imageSizeMatchesRatio(item, form.value.aspectRatio)).sort(compareSizeByArea);
 });
 
 const videoSizeOptions = computed<GenerationVideoSizeOption[]>(() => {
   const selectedModel = normalizeModelName(form.value.videoModel);
+  const ratio = videoAspectRatio(form.value.aspectRatio);
   return (options.value?.videoSizes ?? [])
-    .filter((item) => resolveSizeRatio(item) === form.value.aspectRatio)
+    .filter((item) => resolveVideoSizeRatio(item) === ratio)
     .filter((item) => {
       const supportedModels = Array.isArray(item.supportedModels) ? item.supportedModels : [];
       return !selectedModel || !supportedModels.length || supportedModels.some((model) => normalizeModelName(model) === selectedModel);
@@ -506,6 +630,21 @@ const durationLabel = computed(() => {
 const videoOutputCountOptions = [1, 2, 3, 4, 6, 8, 10, 12];
 const imageOutputCountOptions = [1, 2, 3, 4];
 const outputCountLabel = computed(() => form.value.outputCount === "auto" ? "自动分镜" : `${form.value.outputCount} 段`);
+const selectedImageSizeOption = computed(() => {
+  return imageSizeOptions.value.find((item) => item.value === form.value.imageSize) ?? null;
+});
+const selectedImageSizeDimensions = computed(() => {
+  return selectedImageSizeOption.value ? parseSize(selectedImageSizeOption.value) : null;
+});
+const selectedMaterialAssetType = computed(() => selectedMode.value.value === "character_sheet" ? "character_sheet" : "free");
+const createdImageAssetLink = computed(() => `/materials?assetType=${encodeURIComponent(selectedMaterialAssetType.value)}`);
+const ratioToolLabel = computed(() => {
+  if (selectedMode.value.kind === "image") {
+    const quality = selectedImageSizeOption.value ? imageQualityLabel(selectedImageSizeOption.value) : "";
+    return [form.value.aspectRatio, quality].filter(Boolean).join(" | ") || form.value.aspectRatio;
+  }
+  return form.value.aspectRatio;
+});
 
 const parsedManualSeed = computed(() => parseSeed(seedInput.value));
 const seedCapabilityHint = computed(() => {
@@ -534,7 +673,7 @@ const submitLabel = computed(() => {
   if (submitting.value) {
     return "创建中...";
   }
-  return selectedMode.value.kind === "video" ? "生成视频" : "生成图片";
+  return selectedMode.value.kind === "video" ? "生成视频" : selectedMode.value.value === "character_sheet" ? "生成三视图" : "生成图片";
 });
 
 const caseStudies = computed(() => {
@@ -567,10 +706,19 @@ function toggleMenu(menu: Exclude<MenuKey, "">) {
 function selectMode(value: ModeValue) {
   selectedModeValue.value = value;
   activeMenu.value = "";
-  statusText.value = value === "video" ? "视频生成会创建一键生成任务。" : "图片生成会使用素材中心自由模式。";
+  if (value === "character_sheet" && availableImageRatios.value.includes("1:1")) {
+    form.value.aspectRatio = "1:1";
+  } else if (value === "video" && form.value.aspectRatio !== "16:9" && form.value.aspectRatio !== "9:16") {
+    form.value.aspectRatio = "16:9";
+  }
+  statusText.value = value === "video"
+    ? "视频生成会创建工作台视频任务。"
+    : value === "character_sheet"
+      ? "角色三视图会生成到素材库，可在阶段工作流中选择。"
+      : "图片生成会使用素材中心自由模式。";
 }
 
-function selectRatio(value: "16:9" | "9:16") {
+function selectRatio(value: RatioOptionValue) {
   form.value.aspectRatio = value;
 }
 
@@ -621,13 +769,63 @@ function readTextFile(file: File): Promise<string> {
   });
 }
 
-async function handleTextFileChange(event: Event) {
-  const input = event.target as HTMLInputElement;
-  const file = input.files?.[0];
-  if (!file) {
+function readImageAsDataUri(file: File): Promise<ReferenceImageItem> {
+  if (!file.type.startsWith("image/")) {
+    return Promise.reject(new Error(`${file.name || "参考图"} 不是图片文件`));
+  }
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = typeof reader.result === "string" ? reader.result : "";
+      if (!result.startsWith("data:image/") || !result.includes(";base64,")) {
+        reject(new Error(`${file.name || "参考图"} 无法转换为 base64 图片`));
+        return;
+      }
+      const nextIndex = referenceImages.value.length + 1;
+      resolve({
+        id: `${Date.now()}-${nextIndex}-${file.name}`,
+        label: `图片${nextIndex}`,
+        fileUrl: result,
+        fileName: file.name || `图片${nextIndex}`,
+      });
+    };
+    reader.onerror = () => reject(reader.error ?? new Error("参考图读取失败"));
+    reader.readAsDataURL(file);
+  });
+}
+
+function handleReferenceEntryClick() {
+  if (selectedMode.value.kind === "video") {
+    referenceDevelopingDialogOpen.value = true;
+    statusText.value = "视频模式添加参考图正在开发中。";
     return;
   }
-  uploadingText.value = true;
+  textFileInput.value?.click();
+}
+
+async function handleReferenceFileChange(event: Event) {
+  const input = event.target as HTMLInputElement;
+  const files = Array.from(input.files ?? []);
+  if (!files.length) {
+    return;
+  }
+  if (selectedMode.value.kind === "image") {
+    await handleImageReferenceFiles(files, input);
+    return;
+  }
+  await handleTextReferenceFile(files[0], input);
+}
+
+async function handleTextReferenceFile(file: File, input: HTMLInputElement) {
+  const authenticated = await requireAuth({
+    title: "登录后上传参考内容",
+    message: "文本上传会保存到你的账号下，请先登录或使用邀请码注册。",
+  });
+  if (!authenticated) {
+    input.value = "";
+    return;
+  }
+  uploadingReference.value = true;
   statusText.value = "正在读取参考内容...";
   try {
     const [, content] = await Promise.all([uploadText(file), readTextFile(file)]);
@@ -639,9 +837,49 @@ async function handleTextFileChange(event: Event) {
   } catch (error) {
     statusText.value = error instanceof Error ? error.message : "参考内容读取失败";
   } finally {
-    uploadingText.value = false;
+    uploadingReference.value = false;
     input.value = "";
   }
+}
+
+async function handleImageReferenceFiles(files: File[], input: HTMLInputElement) {
+  uploadingReference.value = true;
+  statusText.value = "正在读取参考图...";
+  try {
+    const items = await Promise.all(files.map(readImageAsDataUri));
+    const previousCount = referenceImages.value.length;
+    const merged = [...referenceImages.value, ...items].slice(0, 12);
+    referenceImages.value = merged.map((item, index) => ({
+      ...item,
+      label: `图片${index + 1}`,
+    }));
+    const addedCount = Math.max(referenceImages.value.length - previousCount, 0);
+    statusText.value = addedCount > 0
+      ? `已添加 ${addedCount} 张参考图，可通过 @ 引用。`
+      : "最多支持 12 张参考图。";
+  } catch (error) {
+    statusText.value = error instanceof Error ? error.message : "参考图读取失败";
+  } finally {
+    uploadingReference.value = false;
+    input.value = "";
+  }
+}
+
+function removeReferenceImage(id: string) {
+  referenceImages.value = referenceImages.value
+    .filter((item) => item.id !== id)
+    .map((item, index) => ({
+      ...item,
+      label: `图片${index + 1}`,
+    }));
+}
+
+function insertMention(label: string) {
+  const mention = `@${label}`;
+  if (!promptText.value.includes(mention)) {
+    promptText.value = promptText.value.trim() ? `${promptText.value.trim()} ${mention} ` : `${mention} `;
+  }
+  activeMenu.value = "";
 }
 
 function parseSize(item: { value: string; width?: number; height?: number }) {
@@ -660,7 +898,7 @@ function parseSize(item: { value: string; width?: number; height?: number }) {
   return { width, height };
 }
 
-function resolveSizeRatio(item: { value: string; width?: number; height?: number }): "16:9" | "9:16" | null {
+function resolveVideoSizeRatio(item: { value: string; width?: number; height?: number }): AspectRatioValue | null {
   const parsed = parseSize(item);
   if (!parsed || parsed.width === parsed.height) {
     return null;
@@ -669,7 +907,7 @@ function resolveSizeRatio(item: { value: string; width?: number; height?: number
 }
 
 function imageSizeMatchesRatio(item: GenerationImageSizeOption, ratio: string) {
-  const itemRatio = resolveSizeRatio(item);
+  const itemRatio = sizeRatioLabel(item);
   return !itemRatio || itemRatio === ratio;
 }
 
@@ -681,8 +919,68 @@ function compareSizeByArea(a: { value: string; width?: number; height?: number }
   return aArea - bArea;
 }
 
-function compactImageSizeLabel(value: string) {
-  return value.replace(/（.*?）/g, "").replace(/\s*·\s*/g, " ");
+function sizeRatioLabel(item: { value: string; width?: number; height?: number }): RatioOptionValue | null {
+  const parsed = parseSize(item);
+  if (!parsed) {
+    return null;
+  }
+  const divisor = gcd(parsed.width, parsed.height);
+  const width = parsed.width / divisor;
+  const height = parsed.height / divisor;
+  const ratio = `${width}:${height}`;
+  return ratioDisplayOrder.includes(ratio as RatioOptionValue) ? ratio as RatioOptionValue : null;
+}
+
+function ratioShape(value: RatioOptionValue) {
+  if (value === "智能") {
+    return "1 / 1";
+  }
+  return value.replace(":", " / ");
+}
+
+function videoAspectRatio(value: RatioOptionValue): AspectRatioValue {
+  return value === "9:16" ? "9:16" : "16:9";
+}
+
+function gcd(a: number, b: number): number {
+  let x = Math.abs(Math.trunc(a));
+  let y = Math.abs(Math.trunc(b));
+  while (y) {
+    const next = x % y;
+    x = y;
+    y = next;
+  }
+  return x || 1;
+}
+
+function imageQualityLabel(item: { value: string; label?: string | null; width?: number; height?: number }) {
+  const label = String(item.label ?? "");
+  if (/\b4K\b/i.test(label)) {
+    return "超清 4K";
+  }
+  if (/\b2K\b/i.test(label)) {
+    return "高清 2K";
+  }
+  if (/\b1K\b/i.test(label)) {
+    return "标准 1K";
+  }
+  const size = parseSize(item);
+  if (!size) {
+    return String(item.value ?? "");
+  }
+  const longest = Math.max(size.width, size.height);
+  if (longest >= 2800) {
+    return "超清 4K";
+  }
+  if (longest >= 1800) {
+    return "高清 2K";
+  }
+  return "标准 1K";
+}
+
+function formatImageSizeOptionLabel(item: GenerationImageSizeOption) {
+  const label = imageQualityLabel(item);
+  return label.includes("4K") ? `${label} ✦` : label;
 }
 
 async function loadOptions() {
@@ -690,7 +988,7 @@ async function loadOptions() {
   try {
     const result = await fetchGenerationOptions();
     options.value = result;
-    form.value.aspectRatio = (result.defaultAspectRatio as "16:9" | "9:16" | null) || "16:9";
+    form.value.aspectRatio = (result.defaultAspectRatio as AspectRatioValue | null) || "16:9";
     form.value.textAnalysisModel = result.defaultTextAnalysisModel || result.textAnalysisModels?.[0]?.value || null;
     form.value.imageModel = resolveDefaultImageModel(result.imageModels ?? [], form.value.imageModel);
     form.value.videoModel = result.defaultVideoModel || result.videoModels?.[0]?.value || null;
@@ -758,6 +1056,14 @@ async function submitComposer() {
     statusText.value = "请先输入内容并补全参数。";
     return;
   }
+  const authenticated = await requireAuth({
+    title: "登录后开始生成",
+    message: "生成结果会保存到你的任务和素材库中，请先登录或使用邀请码注册。",
+  });
+  if (!authenticated) {
+    statusText.value = "登录后即可继续生成。";
+    return;
+  }
   submitting.value = true;
   createdTaskId.value = "";
   createdImageAssetId.value = "";
@@ -775,9 +1081,10 @@ async function submitComposer() {
 }
 
 async function submitImageGeneration() {
+  const isCharacterSheet = selectedMaterialAssetType.value === "character_sheet";
   const result = await createMaterialGeneration({
-    assetType: "free",
-    title: promptText.value.trim().slice(0, 32) || "图片生成",
+    assetType: selectedMaterialAssetType.value,
+    title: promptText.value.trim().slice(0, 32) || (isCharacterSheet ? "角色三视图" : "图片生成"),
     description: promptText.value.trim(),
     styleKeywords: [],
     aspectRatio: form.value.aspectRatio,
@@ -787,13 +1094,15 @@ async function submitImageGeneration() {
     seed: selectedImageModelOption.value?.supportsSeed
       ? (seedMode.value === "manual" ? parsedManualSeed.value : autoSeed.value)
       : null,
-    referenceImageUrls: [],
+    referenceImageUrls: referenceImages.value.map((item) => item.fileUrl),
     referenceAssetIds: [],
   });
   createdImageAssetId.value = result.asset?.id || result.id || "";
-  statusText.value = imageOutputCount.value > 1
+  statusText.value = isCharacterSheet
+    ? "角色三视图已提交，生成后会进入素材库。"
+    : imageOutputCount.value > 1
     ? "当前图片接口按单张素材生成，已创建 1 张图片。"
-    : "图片生成已提交。";
+    : (referenceImages.value.length ? `图片生成已提交，已附带 ${referenceImages.value.length} 张参考图。` : "图片生成已提交。");
 }
 
 async function submitVideoGeneration() {
@@ -801,7 +1110,7 @@ async function submitVideoGeneration() {
   const payload: CreateGenerationTaskRequest = {
     title: promptText.value.trim().slice(0, 32) || "工作台视频生成",
     creativePrompt: "",
-    aspectRatio: form.value.aspectRatio,
+    aspectRatio: videoAspectRatio(form.value.aspectRatio),
     textAnalysisModel: form.value.textAnalysisModel || null,
     imageModel: form.value.imageModel || null,
     videoModel: form.value.videoModel || null,
@@ -897,9 +1206,93 @@ onMounted(loadOptions);
   line-height: 1;
 }
 
+.home-composer__upload img {
+  width: 42px;
+  height: 42px;
+  border-radius: 4px;
+  object-fit: cover;
+  transform: rotate(7deg);
+}
+
+.home-reference-add {
+  position: absolute;
+  right: -8px;
+  top: -8px;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #18c1d9;
+  color: #fff;
+  font-size: 0.92rem !important;
+  font-weight: 900;
+  transform: rotate(7deg);
+  box-shadow: 0 6px 14px rgba(24, 193, 217, 0.28);
+}
+
 .home-composer__upload small {
   font-size: 0.68rem;
   font-weight: 700;
+}
+
+.home-reference-stack {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 34px;
+  margin: -8px 0 10px;
+}
+
+.home-reference-thumb {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border: 2px solid transparent;
+  border-radius: 7px;
+  background: #f0f1f2;
+}
+
+.home-reference-thumb-mentioned {
+  border-color: var(--accent-cyan);
+}
+
+.home-reference-thumb img {
+  width: 100%;
+  height: 100%;
+  border-radius: 5px;
+  object-fit: cover;
+}
+
+.home-reference-thumb button {
+  position: absolute;
+  right: -7px;
+  top: -7px;
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(15, 20, 25, 0.78);
+  color: #fff;
+  font-size: 0.72rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.home-reference-more {
+  display: grid;
+  place-items: center;
+  min-width: 32px;
+  height: 32px;
+  border-radius: 999px;
+  background: #eef0f2;
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  font-weight: 800;
 }
 
 .home-composer__prompt {
@@ -996,7 +1389,11 @@ onMounted(loadOptions);
 }
 
 .home-popover-ratio {
-  width: 510px;
+  width: min(820px, calc(100vw - 48px));
+  gap: 22px;
+  padding: 24px 26px 28px;
+  border-radius: 18px;
+  box-shadow: 0 28px 84px rgba(20, 28, 36, 0.18);
 }
 
 .home-popover-compact,
@@ -1042,6 +1439,22 @@ onMounted(loadOptions);
   font-weight: 900;
 }
 
+.home-popover__image {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #eef0f2;
+}
+
+.home-popover__image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
 .home-popover__item strong,
 .home-popover__item small {
   display: block;
@@ -1061,6 +1474,64 @@ onMounted(loadOptions);
 .home-popover__check {
   color: var(--text-strong);
   font-size: 0.94rem;
+}
+
+.home-popover__empty {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: #f7f8f9;
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.home-dialog {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(15, 20, 25, 0.28);
+}
+
+.home-dialog__panel {
+  display: grid;
+  gap: 14px;
+  width: min(100%, 360px);
+  padding: 22px;
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 24px 70px rgba(15, 20, 25, 0.2);
+}
+
+.home-dialog__panel h2,
+.home-dialog__panel p {
+  margin: 0;
+}
+
+.home-dialog__panel h2 {
+  font-size: 1rem;
+  font-weight: 850;
+}
+
+.home-dialog__panel p {
+  color: var(--text-muted);
+  font-size: 0.86rem;
+  line-height: 1.6;
+}
+
+.home-dialog__panel button {
+  justify-self: end;
+  min-width: 82px;
+  min-height: 36px;
+  border: 0;
+  border-radius: 9px;
+  background: var(--text-strong);
+  color: #fff;
+  font-weight: 800;
+  cursor: pointer;
 }
 
 .home-field {
@@ -1087,20 +1558,16 @@ onMounted(loadOptions);
   padding: 0 12px;
 }
 
-.home-ratio-list,
 .home-segment-grid {
   display: grid;
   gap: 8px;
 }
 
 .home-ratio-list {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  padding: 10px;
-  border-radius: 12px;
-  background: #f7f8f9;
+  display: grid;
+  gap: 6px;
 }
 
-.home-ratio-list button,
 .home-segment-grid button,
 .home-seed-row button {
   border: 0;
@@ -1111,12 +1578,27 @@ onMounted(loadOptions);
   cursor: pointer;
 }
 
+.home-ratio-list-immersive {
+  grid-template-columns: repeat(auto-fit, minmax(70px, 1fr));
+  align-items: stretch;
+  padding: 8px;
+  border-radius: 19px;
+  background: #f4f5f6;
+}
+
 .home-ratio-list button {
   display: grid;
   justify-items: center;
-  gap: 6px;
-  min-height: 70px;
-  padding: 8px 6px;
+  align-content: center;
+  gap: 8px;
+  min-height: 90px;
+  border: 0;
+  border-radius: 17px;
+  background: transparent;
+  color: #1f2831;
+  font-size: 0.88rem;
+  font-weight: 850;
+  cursor: pointer;
 }
 
 .home-ratio-active,
@@ -1126,12 +1608,81 @@ onMounted(loadOptions);
   box-shadow: 0 1px 4px rgba(15, 20, 25, 0.08);
 }
 
+.home-ratio-active {
+  color: #1f2831 !important;
+  box-shadow: 0 10px 28px rgba(20, 28, 36, 0.08) !important;
+}
+
 .home-ratio__shape {
-  width: 30px;
+  width: 28px;
   max-height: 34px;
-  min-height: 16px;
-  border: 2px solid currentColor;
+  min-height: 18px;
+  border: 2.2px solid currentColor;
   border-radius: 4px;
+}
+
+.home-resolution-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0;
+  overflow: hidden;
+  padding: 6px;
+  border-radius: 16px;
+  background: #f4f5f6;
+}
+
+.home-resolution-list button {
+  min-height: 68px;
+  border: 0;
+  border-radius: 14px;
+  background: transparent;
+  color: #1f2831;
+  font-size: 1rem;
+  font-weight: 850;
+  cursor: pointer;
+}
+
+.home-resolution-active {
+  background: #fff !important;
+  color: #1f2831 !important;
+  box-shadow: 0 8px 22px rgba(20, 28, 36, 0.07);
+}
+
+.home-dimension-row {
+  display: grid;
+  grid-template-columns: 42px minmax(110px, 1fr) 52px 42px minmax(110px, 1fr) 42px;
+  align-items: center;
+  gap: 12px;
+}
+
+.home-dimension-row span,
+.home-dimension-row strong {
+  min-height: 58px;
+  display: grid;
+  align-items: center;
+  border-radius: 13px;
+  background: #f4f5f6;
+}
+
+.home-dimension-row span {
+  justify-items: center;
+  color: #63717d;
+  font-size: 0.92rem;
+  font-weight: 800;
+}
+
+.home-dimension-row strong {
+  justify-items: end;
+  padding: 0 20px;
+  color: #1f2831;
+  font-size: 1rem;
+  font-weight: 850;
+}
+
+.home-dimension-row .home-dimension-link {
+  background: transparent;
+  color: #63717d;
+  font-size: 1.1rem;
 }
 
 .home-segment-grid {

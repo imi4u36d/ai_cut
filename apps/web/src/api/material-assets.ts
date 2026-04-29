@@ -7,6 +7,7 @@ import type {
   ImageUploadResponse,
   MaterialAssetDeleteResult,
   MaterialAssetLibraryItem,
+  MaterialAssetPage,
   MaterialGenerationResponse,
   MaterialAssetQuery,
   ReuseMaterialRequest,
@@ -37,12 +38,23 @@ function buildQuery(filters?: MaterialAssetQuery) {
   if (typeof filters?.clipIndex === "number") {
     params.set("clipIndex", String(filters.clipIndex));
   }
+  if (typeof filters?.offset === "number") {
+    params.set("offset", String(filters.offset));
+  }
+  if (typeof filters?.limit === "number") {
+    params.set("limit", String(filters.limit));
+  }
   return params.toString();
 }
 
 export function fetchMaterialAssets(filters?: MaterialAssetQuery) {
   const query = buildQuery(filters);
   return getJson<MaterialAssetLibraryItem[]>(query ? `/material-assets?${query}` : "/material-assets");
+}
+
+export function fetchMaterialAssetPage(filters?: MaterialAssetQuery) {
+  const query = buildQuery(filters);
+  return getJson<MaterialAssetPage>(query ? `/material-assets?${query}` : "/material-assets");
 }
 
 export function fetchMaterialAsset(assetId: string) {

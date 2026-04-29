@@ -195,7 +195,7 @@ public class TaskApplicationServiceImpl implements TaskApplicationService {
      */
     @Override
     public Map<String, Object> retryTask(String taskId) {
-        return taskQueryService.getTask(taskCommandService.retry(taskQueryService.requireTask(taskId)).id());
+        return taskQueryService.getTask(taskCommandService.retry(taskQueryService.requireOwnedTask(taskId)).id());
     }
 
     /**
@@ -205,7 +205,7 @@ public class TaskApplicationServiceImpl implements TaskApplicationService {
      */
     @Override
     public Map<String, Object> pauseTask(String taskId) {
-        return taskQueryService.getTask(taskCommandService.pause(taskQueryService.requireTask(taskId)).id());
+        return taskQueryService.getTask(taskCommandService.pause(taskQueryService.requireOwnedTask(taskId)).id());
     }
 
     /**
@@ -215,7 +215,7 @@ public class TaskApplicationServiceImpl implements TaskApplicationService {
      */
     @Override
     public Map<String, Object> continueTask(String taskId) {
-        return taskQueryService.getTask(taskCommandService.resume(taskQueryService.requireTask(taskId)).id());
+        return taskQueryService.getTask(taskCommandService.resume(taskQueryService.requireOwnedTask(taskId)).id());
     }
 
     /**
@@ -225,7 +225,7 @@ public class TaskApplicationServiceImpl implements TaskApplicationService {
      */
     @Override
     public Map<String, Object> terminateTask(String taskId) {
-        return taskQueryService.getTask(taskCommandService.terminate(taskQueryService.requireTask(taskId)).id());
+        return taskQueryService.getTask(taskCommandService.terminate(taskQueryService.requireOwnedTask(taskId)).id());
     }
 
     /**
@@ -236,7 +236,7 @@ public class TaskApplicationServiceImpl implements TaskApplicationService {
      */
     @Override
     public Map<String, Object> rateTaskEffect(String taskId, RateTaskEffectRequest request) {
-        return taskQueryService.getTask(taskCommandService.rateEffect(taskQueryService.requireTask(taskId), request).id());
+        return taskQueryService.getTask(taskCommandService.rateEffect(taskQueryService.requireOwnedTask(taskId), request).id());
     }
 
     /**
@@ -246,7 +246,7 @@ public class TaskApplicationServiceImpl implements TaskApplicationService {
      */
     @Override
     public Map<String, Object> deleteTask(String taskId) {
-        return taskCommandService.delete(taskQueryService.requireTask(taskId));
+        return taskCommandService.delete(taskQueryService.requireOwnedTask(taskId));
     }
 
     /**

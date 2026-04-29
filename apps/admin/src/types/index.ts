@@ -2,6 +2,8 @@ export type UserRole = "ADMIN" | "USER";
 
 export type UserStatus = "ACTIVE" | "DISABLED";
 
+export type InviteStatus = "UNUSED" | "USED" | "REVOKED" | "EXPIRED";
+
 export interface AuthenticatedUser {
   id: number;
   username: string;
@@ -52,6 +54,59 @@ export interface UpdateAdminUserRequest {
 
 export interface UpdateAdminUserPasswordRequest {
   password: string;
+}
+
+export interface AdminModelConfigProviderItem {
+  key: string;
+  provider: string;
+  vendor: string;
+  kinds: string[];
+  baseUrl: string;
+  taskBaseUrl: string;
+  endpointHost: string;
+  taskEndpointHost: string;
+  apiKeyConfigured: boolean;
+  baseUrlConfigured: boolean;
+  taskBaseUrlConfigured: boolean;
+  extras: Record<string, string>;
+  modelNames: string[];
+}
+
+export interface AdminModelConfigResponse {
+  configSource: string;
+  providers: AdminModelConfigProviderItem[];
+}
+
+export interface AdminModelConfigProviderKeyInput {
+  key: string;
+  apiKey: string;
+}
+
+export interface AdminModelConfigKeyUpdateRequest {
+  providers: AdminModelConfigProviderKeyInput[];
+}
+
+export interface AdminInviteActor {
+  id: number;
+  username: string;
+  displayName: string;
+}
+
+export interface AdminInvite {
+  id: number;
+  code: string;
+  role: UserRole;
+  status: InviteStatus;
+  expiresAt?: string | null;
+  createdBy?: AdminInviteActor | null;
+  usedBy?: AdminInviteActor | null;
+  usedAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateAdminInviteRequest {
+  role: UserRole;
 }
 
 export type TaskStatus =

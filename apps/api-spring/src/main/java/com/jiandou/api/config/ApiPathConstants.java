@@ -25,6 +25,7 @@ public final class ApiPathConstants {
     public static final String ADMIN = API_V2 + "/admin";
     public static final String ADMIN_PATTERN = ADMIN + "/**";
     public static final String GENERATION = API_V2 + "/generation";
+    public static final String GENERATION_CATALOG = GENERATION + "/catalog";
 
     private ApiPathConstants() {
     }

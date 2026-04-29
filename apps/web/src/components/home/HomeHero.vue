@@ -7,7 +7,7 @@
         以最少输入启动生成流程，自动跟踪任务阶段，并将结果沉淀到可复用的素材库。设计、运营、发布可共享同一套交付链路。
       </p>
       <div class="hero-actions">
-        <RouterLink class="primary-cta" to="/generate">开始生成</RouterLink>
+        <RouterLink class="primary-cta" to="/workspace">开始生成</RouterLink>
         <RouterLink class="secondary-cta" to="/tasks">查看任务</RouterLink>
       </div>
       <div class="hero-chips">

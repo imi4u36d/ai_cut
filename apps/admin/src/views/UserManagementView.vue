@@ -73,11 +73,12 @@
             {{ formatDateTime(row.createdAt) }}
           </template>
         </el-table-column>
-        <el-table-column align="right" fixed="right" label="操作" min-width="280">
+        <el-table-column align="right" fixed="right" label="操作" min-width="330">
           <template #default="{ row }">
             <div class="user-page__actions">
               <el-button link type="primary" @click="openEditDialog(row)">编辑</el-button>
               <el-button link type="warning" @click="openPasswordDialog(row)">改密码</el-button>
+              <el-button link type="primary" @click="openModelKeyDialog(row)">模型 Key</el-button>
               <el-button
                 v-if="row.status === 'ACTIVE'"
                 link
@@ -148,6 +149,39 @@
         </el-button>
       </template>
     </el-dialog>
+
+    <el-dialog v-model="modelKeyDialogVisible" :title="modelKeyDialogTitle" width="720px">
+      <el-alert
+        :closable="false"
+        class="user-page__alert"
+        show-icon
+        title="仅重新设置新输入的厂商 Key，未填写的厂商保持不变。"
+        type="info"
+      />
+      <el-form v-loading="loadingModelConfig" label-position="top">
+        <div class="user-page__key-list">
+          <div v-for="item in modelKeyForm.providers" :key="item.key" class="user-page__key-row">
+            <div class="user-page__key-meta">
+              <strong>{{ item.vendor || item.provider || item.key }}</strong>
+              <span>{{ item.kinds.map(formatModelKind).join(" / ") || "模型接入" }}</span>
+            </div>
+            <el-input
+              v-model.trim="item.apiKey"
+              clearable
+              placeholder="输入新的 API Key"
+              show-password
+              type="password"
+            />
+          </div>
+        </div>
+      </el-form>
+      <template #footer>
+        <el-button @click="modelKeyDialogVisible = false">取消</el-button>
+        <el-button :loading="submittingModelKeys" type="primary" @click="submitModelKeys">
+          重新设置
+        </el-button>
+      </template>
+    </el-dialog>
   </section>
 </template>
 
@@ -160,17 +194,29 @@ import {
   deleteAdminUser,
   disableAdminUser,
   enableAdminUser,
+  fetchAdminModelConfig,
   fetchAdminUsers,
+  resetAdminUserModelConfigKeys,
   updateAdminUser,
   updateAdminUserPassword
 } from "@/api/users";
-import type { AdminUser, CreateAdminUserRequest, UpdateAdminUserRequest, UserRole, UserStatus } from "@/types";
+import type {
+  AdminModelConfigProviderItem,
+  AdminUser,
+  CreateAdminUserRequest,
+  UpdateAdminUserRequest,
+  UserRole,
+  UserStatus
+} from "@/types";
 
 const loading = ref(false);
 const submittingEditor = ref(false);
 const submittingPassword = ref(false);
+const loadingModelConfig = ref(false);
+const submittingModelKeys = ref(false);
 const errorMessage = ref("");
 const users = ref<AdminUser[]>([]);
+const modelConfigProviders = ref<AdminModelConfigProviderItem[]>([]);
 const filters = reactive({
   q: "",
   role: "" as UserRole | "",
@@ -194,6 +240,19 @@ const passwordForm = reactive({
   password: ""
 });
 
+const modelKeyDialogVisible = ref(false);
+const modelKeyUser = ref<AdminUser | null>(null);
+const modelKeyForm = reactive({
+  providers: [] as Array<AdminModelConfigProviderItem & { apiKey: string }>
+});
+
+const modelKeyDialogTitle = computed(() => {
+  if (!modelKeyUser.value) {
+    return "重新设置模型 Key";
+  }
+  return `重新设置模型 Key - ${modelKeyUser.value.username}`;
+});
+
 const summaryCards = computed(() => {
   const total = users.value.length;
   const active = users.value.filter((user) => user.status === "ACTIVE").length;
@@ -212,6 +271,20 @@ function formatDateTime(value?: string | null) {
     return "未记录";
   }
   return new Date(value).toLocaleString();
+}
+
+function formatModelKind(kind: string) {
+  const normalized = kind.trim().toLowerCase();
+  if (normalized === "text") {
+    return "文本";
+  }
+  if (normalized === "image") {
+    return "图片";
+  }
+  if (normalized === "video") {
+    return "视频";
+  }
+  return kind;
 }
 
 function resetEditorForm() {
@@ -265,6 +338,31 @@ function openPasswordDialog(user: AdminUser) {
   passwordDialogVisible.value = true;
 }
 
+async function openModelKeyDialog(user: AdminUser) {
+  modelKeyUser.value = user;
+  modelKeyDialogVisible.value = true;
+  modelKeyForm.providers = modelConfigProviders.value.map((provider) => ({
+    ...provider,
+    apiKey: ""
+  }));
+  if (modelConfigProviders.value.length > 0) {
+    return;
+  }
+  loadingModelConfig.value = true;
+  try {
+    const response = await fetchAdminModelConfig();
+    modelConfigProviders.value = response.providers ?? [];
+    modelKeyForm.providers = modelConfigProviders.value.map((provider) => ({
+      ...provider,
+      apiKey: ""
+    }));
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : "读取厂商列表失败");
+  } finally {
+    loadingModelConfig.value = false;
+  }
+}
+
 async function submitEditor() {
   submittingEditor.value = true;
   try {
@@ -313,6 +411,33 @@ async function submitPassword() {
     ElMessage.error(error instanceof Error ? error.message : "更新密码失败");
   } finally {
     submittingPassword.value = false;
+  }
+}
+
+async function submitModelKeys() {
+  if (!modelKeyUser.value) {
+    return;
+  }
+  const providers = modelKeyForm.providers
+    .map((provider) => ({
+      key: provider.key,
+      apiKey: provider.apiKey.trim()
+    }))
+    .filter((provider) => provider.apiKey);
+  if (providers.length === 0) {
+    ElMessage.warning("请至少输入一个厂商 Key");
+    return;
+  }
+  submittingModelKeys.value = true;
+  try {
+    await resetAdminUserModelConfigKeys(modelKeyUser.value.id, { providers });
+    modelKeyDialogVisible.value = false;
+    modelKeyForm.providers = [];
+    ElMessage.success("模型 Key 已重新设置");
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : "重新设置模型 Key 失败");
+  } finally {
+    submittingModelKeys.value = false;
   }
 }
 
@@ -454,6 +579,38 @@ onMounted(async () => {
   gap: 14px;
 }
 
+.user-page__key-list {
+  display: grid;
+  gap: 14px;
+  max-height: 54vh;
+  overflow: auto;
+  padding-right: 4px;
+}
+
+.user-page__key-row {
+  display: grid;
+  grid-template-columns: minmax(160px, 220px) minmax(0, 1fr);
+  gap: 14px;
+  align-items: center;
+}
+
+.user-page__key-meta {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.user-page__key-meta strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.user-page__key-meta span {
+  color: var(--jd-text-soft);
+  font-size: 0.86rem;
+}
+
 @media (max-width: 1200px) {
   .user-page__summary {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -462,7 +619,8 @@ onMounted(async () => {
 
 @media (max-width: 768px) {
   .user-page__summary,
-  .user-page__dialog-grid {
+  .user-page__dialog-grid,
+  .user-page__key-row {
     grid-template-columns: 1fr;
   }
 

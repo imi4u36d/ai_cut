@@ -39,13 +39,14 @@
           class="workflow-project-card"
           :class="{ 'workflow-project-card-active': item.id === selectedWorkflowId }"
         >
-          <button type="button" class="workflow-project-card__open" @click="openWorkflow(item.id, item.currentStage)">
+          <button type="button" class="workflow-project-card__open" @click="openWorkflow(item.id, workflowSummaryCanvasStage(item))">
             <div class="workflow-project-card__title">
               <strong>{{ item.title }}</strong>
-              <span>{{ workflowStageLabel(item.currentStage) }}</span>
+              <span>{{ workflowStageLabel(workflowSummaryCanvasStage(item)) }}</span>
             </div>
             <div class="workflow-project-card__stats">
               <span>分镜 {{ item.storyboardVersionCount }}</span>
+              <span>角色 {{ workflowSummaryCharacterCountLabel(item) }}</span>
               <span>关键帧 {{ item.keyframeVersionCount }}</span>
               <span>视频 {{ item.videoVersionCount }}</span>
             </div>
@@ -202,7 +203,7 @@
             <h2>{{ selectedWorkflow.title }}</h2>
             <div class="workflow-summary__meta">
               <span class="surface-chip">{{ selectedWorkflow.status }}</span>
-              <span class="surface-chip">{{ workflowStageLabel(selectedWorkflow.currentStage) }}</span>
+              <span class="surface-chip">{{ workflowStageLabel(workflowCanvasStageFromCurrent(selectedWorkflow)) }}</span>
               <span class="surface-chip">{{ selectedWorkflow.aspectRatio }}</span>
               <span class="surface-chip">评分 {{ ratingLabel(selectedWorkflow.effectRating) }}</span>
             </div>
@@ -310,14 +311,14 @@
               </div>
             </section>
 
-            <section v-else-if="activeCanvasStage === 'keyframe'" class="workflow-stage-board keyframe-board">
+            <section v-else-if="activeCanvasStage === 'character'" class="workflow-stage-board character-board">
               <div class="stage-board__head">
                 <div>
                   <p class="workflow-eyebrow">Stage 2</p>
-                  <h3>角色 / 关键帧</h3>
+                  <h3>角色三视图</h3>
                 </div>
-                <button class="btn-primary btn-sm" type="button" :disabled="!selectedCanvasClip || busyActionKey === `keyframe-${selectedCanvasClip.clipIndex}`" @click="selectedCanvasClip && handleGenerateKeyframe(selectedCanvasClip.clipIndex)">
-                  {{ selectedCanvasClip && busyActionKey === `keyframe-${selectedCanvasClip.clipIndex}` ? "生成中..." : "生成当前镜头关键帧" }}
+                <button class="btn-primary btn-sm" type="button" :disabled="!missingCharacterSheets.length || busyActionKey === 'character-missing'" @click="handleGenerateMissingCharacterSheets">
+                  {{ busyActionKey === "character-missing" ? "生成中..." : "生成缺失角色" }}
                 </button>
               </div>
 
@@ -348,7 +349,9 @@
                     </div>
                     <div class="character-mini-card__actions">
                       <button class="btn-secondary btn-sm" type="button" :disabled="characterSheetClipIndex(sheet) === null" @click="openCharacterAssetPicker(sheet)">素材库</button>
-                      <button class="btn-ghost btn-sm" type="button" :disabled="characterSheetClipIndex(sheet) === null || busyActionKey === `keyframe-${characterSheetClipIndex(sheet)}`" @click="handleGenerateKeyframe(characterSheetClipIndex(sheet) || 0)">生成</button>
+                      <button class="btn-ghost btn-sm" type="button" :disabled="characterSheetClipIndex(sheet) === null || busyActionKey === 'character-missing' || busyActionKey === `keyframe-${characterSheetClipIndex(sheet)}`" @click="handleGenerateKeyframe(characterSheetClipIndex(sheet) || 0)">
+                        {{ selectedCharacterSheetVersion(sheet) ? "重生" : "生成" }}
+                      </button>
                     </div>
                     <section v-if="isCharacterAssetPickerOpen(sheet)" class="character-asset-picker">
                       <div class="character-asset-picker__head">
@@ -395,6 +398,18 @@
                   </article>
                 </div>
               </section>
+            </section>
+
+            <section v-else-if="activeCanvasStage === 'keyframe'" class="workflow-stage-board keyframe-board">
+              <div class="stage-board__head">
+                <div>
+                  <p class="workflow-eyebrow">Stage 3</p>
+                  <h3>关键帧</h3>
+                </div>
+                <button class="btn-primary btn-sm" type="button" :disabled="!selectedCanvasClip || busyActionKey === `keyframe-${selectedCanvasClip.clipIndex}`" @click="selectedCanvasClip && handleGenerateKeyframe(selectedCanvasClip.clipIndex)">
+                  {{ selectedCanvasClip && busyActionKey === `keyframe-${selectedCanvasClip.clipIndex}` ? "生成中..." : "生成当前镜头关键帧" }}
+                </button>
+              </div>
 
               <section class="clip-workbench">
                 <nav class="clip-timeline" aria-label="镜头列表">
@@ -463,7 +478,7 @@
             <section v-else-if="activeCanvasStage === 'video'" class="workflow-stage-board video-board">
               <div class="stage-board__head">
                 <div>
-                  <p class="workflow-eyebrow">Stage 3</p>
+                  <p class="workflow-eyebrow">Stage 4</p>
                   <h3>视频片段</h3>
                 </div>
                 <button class="btn-primary btn-sm" type="button" :disabled="!selectedCanvasClip || !selectedKeyframeVersion(selectedCanvasClip) || busyActionKey === `video-${selectedCanvasClip.clipIndex}`" @click="selectedCanvasClip && handleGenerateVideo(selectedCanvasClip.clipIndex)">
@@ -685,6 +700,7 @@ import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue"
 import { useRoute, useRouter } from "vue-router";
 import { fetchGenerationOptions } from "@/api/generation";
 import { fetchMaterialAssets, reuseMaterialAsset } from "@/api/material-assets";
+import { requireAuth } from "@/auth/modal";
 import {
   adjustStoryboard,
   createWorkflow,
@@ -722,7 +738,8 @@ import type {
 } from "@/types";
 
 type CreateStageKey = "storyboard" | "keyframe" | "video";
-type CanvasStageKey = CreateStageKey | "final";
+type DetailRouteStageKey = CreateStageKey | "character";
+type CanvasStageKey = DetailRouteStageKey | "final";
 
 interface CreateReviewItem {
   key: string;
@@ -765,7 +782,7 @@ const loadingDetail = ref(false);
 const creatingWorkflow = ref(false);
 const busyActionKey = ref("");
 const workflowSearch = ref("");
-const activeCreateStage = ref<CreateStageKey>("storyboard");
+const activeCreateStage = ref<DetailRouteStageKey>("storyboard");
 const activeCanvasStage = ref<CanvasStageKey>("storyboard");
 const createComposerVisible = ref(false);
 const previewStoryboardVersionId = ref("");
@@ -794,7 +811,7 @@ const imagePreviewState = reactive({
 const workflows = ref<WorkflowSummary[]>([]);
 const selectedWorkflow = ref<WorkflowDetail | null>(null);
 
-const detailStageKeys: CreateStageKey[] = ["storyboard", "keyframe", "video"];
+const detailStageKeys: DetailRouteStageKey[] = ["storyboard", "character", "keyframe", "video"];
 
 const workflowRatingDraft = ref("5");
 const workflowRatingNoteDraft = ref("");
@@ -841,7 +858,7 @@ const selectedWorkflowId = computed(() => {
   return typeof workflowId === "string" ? workflowId : "";
 });
 
-function normalizeDetailStage(value: unknown): CreateStageKey | null {
+function normalizeDetailStage(value: unknown): DetailRouteStageKey | null {
   const rawValue = Array.isArray(value) ? value[0] : value;
   if (typeof rawValue !== "string") {
     return null;
@@ -850,7 +867,7 @@ function normalizeDetailStage(value: unknown): CreateStageKey | null {
   if (normalizedValue === "joined") {
     return "video";
   }
-  return detailStageKeys.includes(normalizedValue as CreateStageKey) ? normalizedValue as CreateStageKey : null;
+  return detailStageKeys.includes(normalizedValue as DetailRouteStageKey) ? normalizedValue as DetailRouteStageKey : null;
 }
 
 function normalizeCanvasStage(value: unknown): CanvasStageKey | null {
@@ -866,6 +883,9 @@ function normalizeCanvasStage(value: unknown): CanvasStageKey | null {
 }
 
 const workflowCharacterSheets = computed(() => selectedWorkflow.value?.characterSheets ?? []);
+const missingCharacterSheets = computed(() =>
+  workflowCharacterSheets.value.filter((sheet) => !selectedCharacterSheetVersion(sheet))
+);
 const imagePreviewCaption = computed(() => imagePreviewState.caption || imagePreviewState.alt || "图片预览");
 const selectedStoryboardVersion = computed(() => {
   const versions = selectedWorkflow.value?.storyboardVersions ?? [];
@@ -890,6 +910,10 @@ const selectedStageVersion = computed(() => {
   if (activeCanvasStage.value === "storyboard") {
     return selectedStoryboardVersion.value;
   }
+  if (activeCanvasStage.value === "character") {
+    const sheet = workflowCharacterSheets.value.find((item) => Boolean(selectedCharacterSheetVersion(item))) ?? workflowCharacterSheets.value[0];
+    return sheet ? selectedCharacterSheetVersion(sheet) ?? characterSheetVersions(sheet)[0] ?? null : null;
+  }
   if (activeCanvasStage.value === "keyframe") {
     const clip = selectedCanvasClip.value;
     return clip ? selectedKeyframeVersion(clip) ?? clip.keyframeVersions[0] ?? null : null;
@@ -913,6 +937,7 @@ const canvasStageItems = computed(() => {
   const storyboardCount = workflow?.storyboardVersions.length ?? 0;
   const keyframeCount = workflow?.clipSlots.reduce((sum, slot) => sum + slot.keyframeVersions.length, 0) ?? 0;
   const videoCount = workflow?.clipSlots.reduce((sum, slot) => sum + slot.videoVersions.length, 0) ?? 0;
+  const selectedCharacterCount = workflowCharacterSheets.value.filter((sheet) => Boolean(selectedCharacterSheetVersion(sheet))).length;
   return [
     {
       key: "storyboard" as const,
@@ -923,16 +948,24 @@ const canvasStageItems = computed(() => {
       ready: storyboardCount > 0,
     },
     {
-      key: "keyframe" as const,
+      key: "character" as const,
       index: 2,
-      label: "角色/关键帧",
-      status: keyframeCount ? "已有关键帧" : (storyboardCount ? "可生成" : "等分镜"),
+      label: "角色三视图",
+      status: selectedCharacterCount ? "已有角色" : (storyboardCount ? "可生成" : "等分镜"),
+      count: `${selectedCharacterCount}/${workflowCharacterSheets.value.length || 0}`,
+      ready: selectedCharacterCount > 0,
+    },
+    {
+      key: "keyframe" as const,
+      index: 3,
+      label: "关键帧",
+      status: keyframeCount ? "已有关键帧" : (storyboardCount ? "可生成" : "等角色"),
       count: `${keyframeCount} 版`,
       ready: keyframeCount > 0,
     },
     {
       key: "video" as const,
-      index: 3,
+      index: 4,
       label: "视频片段",
       status: videoCount ? "已有视频" : (keyframeCount ? "可生成" : "等关键帧"),
       count: `${videoCount} 版`,
@@ -940,7 +973,7 @@ const canvasStageItems = computed(() => {
     },
     {
       key: "final" as const,
-      index: 4,
+      index: 5,
       label: "成片",
       status: workflow?.finalResult ? "已拼接" : (canFinalize.value ? "可拼接" : "未就绪"),
       count: workflow?.finalResult ? "已完成" : `${videoReadiness.value.selected}/${videoReadiness.value.total || 0}`,
@@ -1173,8 +1206,11 @@ function workflowStageLabel(value?: string | null) {
   if (normalized === "storyboard") {
     return "分镜脚本";
   }
+  if (normalized === "character") {
+    return "角色三视图";
+  }
   if (normalized === "keyframe") {
-    return "角色/关键帧";
+    return "关键帧";
   }
   if (normalized === "video") {
     return "视频片段";
@@ -1186,6 +1222,35 @@ function workflowStageLabel(value?: string | null) {
     return "素材中心";
   }
   return value || "未开始";
+}
+
+function workflowCanvasStageFromCurrent(workflow: WorkflowDetail): CanvasStageKey {
+  const normalizedStage = normalizeCanvasStage(workflow.currentStage);
+  if (normalizedStage === "keyframe" && hasMissingCharacterSheets(workflow)) {
+    return "character";
+  }
+  return normalizedStage ?? "storyboard";
+}
+
+function workflowSummaryCanvasStage(workflow: WorkflowSummary): CanvasStageKey {
+  const normalizedStage = normalizeCanvasStage(workflow.currentStage);
+  if (normalizedStage === "keyframe") {
+    const characterTotal = Number(workflow.characterSheetCount ?? 0);
+    const selectedCharacterCount = Number(workflow.selectedCharacterSheetCount ?? 0);
+    if (characterTotal > 0 && selectedCharacterCount < characterTotal) {
+      return "character";
+    }
+  }
+  return normalizedStage ?? "storyboard";
+}
+
+function workflowSummaryCharacterCountLabel(workflow: WorkflowSummary) {
+  const characterTotal = Number(workflow.characterSheetCount ?? 0);
+  const selectedCharacterCount = Number(workflow.selectedCharacterSheetCount ?? workflow.characterSheetVersionCount ?? 0);
+  if (Number.isFinite(characterTotal) && characterTotal > 0) {
+    return `${selectedCharacterCount}/${characterTotal}`;
+  }
+  return Number.isFinite(selectedCharacterCount) ? String(selectedCharacterCount) : "0";
 }
 
 function switchCanvasStage(stage: CanvasStageKey) {
@@ -1505,6 +1570,11 @@ function characterSheetVersions(sheet: WorkflowCharacterSheet) {
   return sheet.versions?.length ? sheet.versions : (sheet.keyframeVersions ?? []);
 }
 
+function hasMissingCharacterSheets(workflow: WorkflowDetail) {
+  const sheets = workflow.characterSheets ?? [];
+  return sheets.some((sheet) => !selectedCharacterSheetVersion(sheet));
+}
+
 function characterSheetPreviewFrames(version: StageVersion): PreviewFrame[] {
   const outputSummary = version.outputSummary ?? {};
   const frames: PreviewFrame[] = [];
@@ -1546,6 +1616,14 @@ function isCharacterAssetPickerOpen(sheet: WorkflowCharacterSheet) {
 }
 
 async function openCharacterAssetPicker(sheet: WorkflowCharacterSheet) {
+  const authenticated = await requireAuth({
+    title: "登录后选择素材",
+    message: "素材库只展示你的个人素材，请先登录或使用邀请码注册。",
+  });
+  if (!authenticated) {
+    detailError.value = "登录后可继续选择素材。";
+    return;
+  }
   characterAssetPicker.openKey = characterSheetKey(sheet);
   characterAssetPicker.keyword = characterSheetTitle(sheet);
   characterAssetPicker.model = "";
@@ -1567,6 +1645,14 @@ function materialAssetModelLabel(asset: MaterialAssetLibraryItem) {
 }
 
 async function loadCharacterAssetCandidates(sheet: WorkflowCharacterSheet) {
+  const authenticated = await requireAuth({
+    title: "登录后搜索素材",
+    message: "素材库只展示你的个人素材，请先登录或使用邀请码注册。",
+  });
+  if (!authenticated) {
+    characterAssetPicker.error = "登录后可搜索素材库。";
+    return;
+  }
   const expectedKey = characterSheetKey(sheet);
   characterAssetPicker.openKey = expectedKey;
   characterAssetPicker.loading = true;
@@ -1795,7 +1881,7 @@ function openWorkflow(workflowId: string, preferredStage?: string | null) {
   });
 }
 
-function switchWorkflowStage(stage: CreateStageKey) {
+function switchWorkflowStage(stage: DetailRouteStageKey) {
   activeCreateStage.value = stage;
   activeCanvasStage.value = stage;
   if (!selectedWorkflowId.value) {
@@ -1847,6 +1933,15 @@ async function loadOptions() {
 }
 
 async function loadWorkflows() {
+  const authenticated = await requireAuth({
+    title: "登录后查看工作流",
+    message: "阶段工作流只展示你的个人数据，请先登录或使用邀请码注册。",
+  });
+  if (!authenticated) {
+    workflows.value = [];
+    listError.value = "登录后可查看阶段工作流。";
+    return;
+  }
   loadingWorkflows.value = true;
   listError.value = "";
   try {
@@ -1864,7 +1959,7 @@ async function loadWorkflowDetail(workflowId: string) {
   try {
     selectedWorkflow.value = await fetchWorkflow(workflowId);
     const routeStage = normalizeDetailStage(route.query.stage);
-    const resolvedStage = routeStage ?? normalizeCanvasStage(selectedWorkflow.value?.currentStage) ?? "storyboard";
+    const resolvedStage = routeStage ?? workflowCanvasStageFromCurrent(selectedWorkflow.value);
     activeCreateStage.value = resolvedStage === "final" ? "video" : resolvedStage;
     activeCanvasStage.value = resolvedStage;
     if (resolvedStage !== "final" && routeStage !== resolvedStage) {
@@ -1946,6 +2041,14 @@ async function handleCreateWorkflow() {
     createError.value = storyboardManualDurationValidationMessage.value;
     return;
   }
+  const authenticated = await requireAuth({
+    title: "登录后创建画布",
+    message: "阶段工作流会保存到你的账号下，请先登录或使用邀请码注册。",
+  });
+  if (!authenticated) {
+    createError.value = "登录后可继续创建画布。";
+    return;
+  }
   creatingWorkflow.value = true;
   try {
     const workflow = await createWorkflow(buildCreatePayload());
@@ -1972,6 +2075,14 @@ function resetTransientStageState() {
 }
 
 async function runAndRefresh(actionKey: string, runner: () => Promise<WorkflowDetail>) {
+  const authenticated = await requireAuth({
+    title: "登录后操作工作流",
+    message: "工作流操作会修改你的个人数据，请先登录或使用邀请码注册。",
+  });
+  if (!authenticated) {
+    detailError.value = "登录后可继续操作工作流。";
+    return false;
+  }
   busyActionKey.value = actionKey;
   detailError.value = "";
   try {
@@ -2027,6 +2138,31 @@ async function handleGenerateKeyframe(clipIndex: number) {
     return;
   }
   await runAndRefresh(`keyframe-${clipIndex}`, () => generateKeyframe(selectedWorkflowId.value, clipIndex));
+}
+
+async function handleGenerateMissingCharacterSheets() {
+  if (!selectedWorkflowId.value) {
+    return;
+  }
+  const pendingClipIndexes = missingCharacterSheets.value
+    .map((sheet) => characterSheetClipIndex(sheet))
+    .filter((clipIndex): clipIndex is number => clipIndex !== null);
+  if (!pendingClipIndexes.length) {
+    return;
+  }
+  busyActionKey.value = "character-missing";
+  detailError.value = "";
+  try {
+    for (const clipIndex of pendingClipIndexes) {
+      selectedWorkflow.value = await generateKeyframe(selectedWorkflowId.value, clipIndex);
+      applyWorkflowDrafts(selectedWorkflow.value);
+    }
+    await loadWorkflows();
+  } catch (error) {
+    detailError.value = error instanceof Error ? error.message : "角色三视图生成失败";
+  } finally {
+    busyActionKey.value = "";
+  }
 }
 
 async function handleGenerateKeyframeFrame(clipIndex: number, frameRole: string) {
@@ -2143,6 +2279,14 @@ function deleteVersionConfirmMessage(version: StageVersion) {
 }
 
 async function handleDeleteWorkflow(workflow: WorkflowSummary) {
+  const authenticated = await requireAuth({
+    title: "登录后删除工作流",
+    message: "删除工作流会修改你的个人数据，请先登录或使用邀请码注册。",
+  });
+  if (!authenticated) {
+    listError.value = "登录后可继续删除工作流。";
+    return;
+  }
   if (!window.confirm(deleteWorkflowConfirmMessage(workflow))) {
     return;
   }
@@ -2167,6 +2311,14 @@ async function handleDeleteWorkflow(workflow: WorkflowSummary) {
 }
 
 async function handleDeleteStageVersion(version: StageVersion) {
+  const authenticated = await requireAuth({
+    title: "登录后删除版本",
+    message: "删除版本会修改你的工作流数据，请先登录或使用邀请码注册。",
+  });
+  if (!authenticated) {
+    detailError.value = "登录后可继续删除版本。";
+    return;
+  }
   if (!selectedWorkflowId.value || !window.confirm(deleteVersionConfirmMessage(version))) {
     return;
   }
@@ -2186,6 +2338,14 @@ async function handleDeleteStageVersion(version: StageVersion) {
 
 async function handleReuseAsset(assetId: string, versionId: string) {
   if (!assetId) {
+    return;
+  }
+  const authenticated = await requireAuth({
+    title: "登录后复用素材",
+    message: "复用素材会创建你的阶段工作流，请先登录或使用邀请码注册。",
+  });
+  if (!authenticated) {
+    detailError.value = "登录后可继续复用素材。";
     return;
   }
   busyActionKey.value = `reuse-${versionId}`;
@@ -2685,7 +2845,7 @@ button:disabled {
 
 .workflow-stage-pipeline {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 10px;
 }
 

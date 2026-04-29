@@ -27,6 +27,10 @@
           <el-icon><UserFilled /></el-icon>
           <span>用户管理</span>
         </el-menu-item>
+        <el-menu-item index="/invites">
+          <el-icon><Ticket /></el-icon>
+          <span>邀请码管理</span>
+        </el-menu-item>
       </el-menu>
 
       <div class="admin-layout__aside-footer">
@@ -78,6 +82,9 @@ const activeMenu = computed(() => {
   }
   if (route.path.startsWith("/users")) {
     return "/users";
+  }
+  if (route.path.startsWith("/invites")) {
+    return "/invites";
   }
   return route.path;
 });

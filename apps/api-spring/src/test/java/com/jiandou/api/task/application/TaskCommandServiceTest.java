@@ -16,6 +16,7 @@ import static org.mockito.Mockito.when;
 
 import com.jiandou.api.config.JiandouStorageProperties;
 import com.jiandou.api.auth.security.CurrentUserPrincipal;
+import com.jiandou.api.common.exception.ApiException;
 import com.jiandou.api.config.JiandouTaskDefaultsProperties;
 import com.jiandou.api.generation.runtime.ModelRuntimePropertiesResolver;
 import com.jiandou.api.task.TaskRecord;
@@ -53,6 +54,7 @@ class TaskCommandServiceTest {
 
     @BeforeEach
     void setUp() {
+        authenticate(88L);
         taskRepository = mock(TaskRepository.class);
         executionCoordinator = mock(TaskExecutionCoordinator.class);
         modelResolver = mock(ModelRuntimePropertiesResolver.class);
@@ -134,17 +136,18 @@ class TaskCommandServiceTest {
 
     @Test
     void createGenerationTaskCapturesAuthenticatedOwnerUserId() {
-        SecurityContextHolder.getContext().setAuthentication(
-            UsernamePasswordAuthenticationToken.authenticated(
-                new CurrentUserPrincipal(88L, "tester", "Tester", "USER", "ACTIVE"),
-                null,
-                List.of()
-            )
-        );
-
         TaskRecord task = service.createGenerationTask(validRequest());
 
         assertEquals(88L, task.ownerUserId());
+    }
+
+    @Test
+    void createGenerationTaskRequiresAuthenticatedOwnerUserId() {
+        SecurityContextHolder.clearContext();
+
+        ApiException ex = assertThrows(ApiException.class, () -> service.createGenerationTask(validRequest()));
+
+        assertEquals("unauthorized", ex.code());
     }
 
     @Test
@@ -317,6 +320,16 @@ class TaskCommandServiceTest {
             null,
             " transcript ",
             false
+        );
+    }
+
+    private void authenticate(Long userId) {
+        SecurityContextHolder.getContext().setAuthentication(
+            UsernamePasswordAuthenticationToken.authenticated(
+                new CurrentUserPrincipal(userId, "tester", "Tester", "USER", "ACTIVE"),
+                null,
+                List.of()
+            )
         );
     }
 }

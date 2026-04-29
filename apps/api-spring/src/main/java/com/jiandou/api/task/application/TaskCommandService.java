@@ -1,6 +1,7 @@
 package com.jiandou.api.task.application;
 
 import com.jiandou.api.auth.security.SecurityCurrentUser;
+import com.jiandou.api.common.exception.ApiException;
 import com.jiandou.api.config.JiandouStorageProperties;
 import com.jiandou.api.config.JiandouTaskDefaultsProperties;
 import com.jiandou.api.generation.runtime.ModelRuntimePropertiesResolver;
@@ -25,6 +26,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
+import org.springframework.http.HttpStatus;
 
 /**
  * 负责任务生命周期中的命令型操作，例如创建、重试、暂停和终止。
@@ -66,6 +68,7 @@ public class TaskCommandService {
      */
     public TaskRecord createGenerationTask(CreateGenerationTaskRequest request) {
         validateGenerationTaskRequest(request);
+        Long ownerUserId = requiredUserId();
         int defaultDurationSeconds = modelResolver.intValue(
             "catalog.defaults",
             "video_duration_seconds",
@@ -74,7 +77,7 @@ public class TaskCommandService {
 
         TaskRecord task = new TaskRecord();
         task.setId("task_" + UUID.randomUUID().toString().replace("-", ""));
-        task.setOwnerUserId(SecurityCurrentUser.currentUserId());
+        task.setOwnerUserId(ownerUserId);
         task.setTitle(trimmed(request.title(), "未命名任务"));
         task.setStatus(TaskStatus.PENDING);
         task.setProgress(0);
@@ -296,6 +299,14 @@ public class TaskCommandService {
             payload.put("reuseStoryboard", true);
         }
         return payload;
+    }
+
+    private Long requiredUserId() {
+        Long userId = SecurityCurrentUser.currentUserId();
+        if (userId == null) {
+            throw new ApiException(HttpStatus.UNAUTHORIZED, "unauthorized", "请先登录");
+        }
+        return userId;
     }
 
     /**

@@ -69,7 +69,7 @@
           />
         </svg>
       </a>
-      <RouterLink class="marketing-topbar__primary" to="/generate">立即开始</RouterLink>
+      <RouterLink class="marketing-topbar__primary" to="/workspace">立即开始</RouterLink>
     </div>
   </header>
 </template>

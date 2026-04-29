@@ -38,6 +38,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -52,6 +53,8 @@ public class WorkflowApplicationService {
     private static final int CHARACTER_SHEET_CLIP_INDEX_BASE = 1000;
     private static final int DEFAULT_WORKFLOW_MIN_DURATION_SECONDS = 5;
     private static final int DEFAULT_WORKFLOW_MAX_DURATION_SECONDS = 12;
+    private static final int MATERIAL_ASSET_PAGE_DEFAULT_LIMIT = 30;
+    private static final int MATERIAL_ASSET_PAGE_MAX_LIMIT = 80;
     private static final String VARIANT_KIND_CHARACTER_SHEET = "character_sheet";
 
     private final WorkflowRepository workflowRepository;
@@ -1155,6 +1158,37 @@ public class WorkflowApplicationService {
             .toList();
     }
 
+    public Map<String, Object> listMaterialAssetPage(
+        String q,
+        String type,
+        Integer minRating,
+        String model,
+        String aspectRatio,
+        Integer clipIndex,
+        String assetType,
+        Integer offset,
+        Integer limit
+    ) {
+        Long ownerUserId = requiredUserId();
+        int normalizedOffset = Math.max(0, intValue(offset, 0));
+        int normalizedLimit = normalizeMaterialAssetPageLimit(limit);
+        if (isSimpleMaterialAssetPageQuery(q, type, minRating, model, aspectRatio, clipIndex, assetType)) {
+            long total = workflowRepository.countMaterialAssets(ownerUserId);
+            List<Map<String, Object>> rows = workflowRepository.listMaterialAssetsPage(ownerUserId, normalizedOffset, normalizedLimit).stream()
+                .map(this::toMaterialAssetRow)
+                .toList();
+            return materialAssetPage(rows, normalizedOffset, normalizedLimit, total);
+        }
+        List<Map<String, Object>> filtered = workflowRepository.listMaterialAssets(ownerUserId).stream()
+            .filter(item -> matchesMaterialFilters(item, q, type, minRating, model, aspectRatio, clipIndex, assetType))
+            .map(this::toMaterialAssetRow)
+            .toList();
+        int total = filtered.size();
+        int fromIndex = Math.min(normalizedOffset, total);
+        int toIndex = Math.min(fromIndex + normalizedLimit, total);
+        return materialAssetPage(filtered.subList(fromIndex, toIndex), normalizedOffset, normalizedLimit, total);
+    }
+
     public Map<String, Object> createMaterialGeneration(CreateMaterialGenerationRequest request) {
         Long ownerUserId = requiredUserId();
         String assetType = normalizeMaterialAssetType(request == null ? "" : request.assetType());
@@ -1510,6 +1544,44 @@ public class WorkflowApplicationService {
         return true;
     }
 
+    private int normalizeMaterialAssetPageLimit(Integer limit) {
+        int value = intValue(limit, MATERIAL_ASSET_PAGE_DEFAULT_LIMIT);
+        if (value <= 0) {
+            return MATERIAL_ASSET_PAGE_DEFAULT_LIMIT;
+        }
+        return Math.min(value, MATERIAL_ASSET_PAGE_MAX_LIMIT);
+    }
+
+    private boolean isSimpleMaterialAssetPageQuery(
+        String q,
+        String type,
+        Integer minRating,
+        String model,
+        String aspectRatio,
+        Integer clipIndex,
+        String assetType
+    ) {
+        return typeValue(q).isBlank()
+            && typeValue(type).isBlank()
+            && minRating == null
+            && typeValue(model).isBlank()
+            && typeValue(aspectRatio).isBlank()
+            && clipIndex == null
+            && typeValue(assetType).isBlank();
+    }
+
+    private Map<String, Object> materialAssetPage(List<Map<String, Object>> items, int offset, int limit, long total) {
+        int nextOffset = offset + items.size();
+        Map<String, Object> page = new LinkedHashMap<>();
+        page.put("items", items);
+        page.put("offset", offset);
+        page.put("limit", limit);
+        page.put("total", total);
+        page.put("hasMore", nextOffset < total);
+        page.put("nextOffset", nextOffset < total ? nextOffset : null);
+        return page;
+    }
+
     private Map<String, Object> toWorkflowSummary(StageWorkflowEntity workflow, List<StageVersionEntity> versions) {
         Map<String, Object> row = new LinkedHashMap<>();
         row.put("id", workflow.getWorkflowId());
@@ -1520,10 +1592,37 @@ public class WorkflowApplicationService {
         row.put("effectRating", workflow.getEffectRating());
         row.put("createdAt", format(workflow.getCreateTime()));
         row.put("updatedAt", format(workflow.getUpdateTime()));
+        long characterSheetVersionCount = versions.stream()
+            .filter(item -> WorkflowConstants.STAGE_KEYFRAME.equals(item.getStageType()))
+            .filter(item -> VARIANT_KIND_CHARACTER_SHEET.equals(stageVariantKind(item)))
+            .count();
+        long keyframeVersionCount = versions.stream()
+            .filter(item -> WorkflowConstants.STAGE_KEYFRAME.equals(item.getStageType()))
+            .filter(item -> !VARIANT_KIND_CHARACTER_SHEET.equals(stageVariantKind(item)))
+            .count();
+        long characterSheetCount = selectedWorkflowStoryboard(versions, workflow)
+            .map(storyboard -> (long) characterSheetSlots(storyboard).size())
+            .orElse(0L);
+        long selectedCharacterSheetCount = versions.stream()
+            .filter(item -> WorkflowConstants.STAGE_KEYFRAME.equals(item.getStageType()))
+            .filter(item -> VARIANT_KIND_CHARACTER_SHEET.equals(stageVariantKind(item)))
+            .filter(item -> intValue(item.getSelected(), 0) == 1)
+            .count();
         row.put("storyboardVersionCount", versions.stream().filter(item -> WorkflowConstants.STAGE_STORYBOARD.equals(item.getStageType())).count());
-        row.put("keyframeVersionCount", versions.stream().filter(item -> WorkflowConstants.STAGE_KEYFRAME.equals(item.getStageType())).count());
+        row.put("characterSheetCount", characterSheetCount);
+        row.put("selectedCharacterSheetCount", selectedCharacterSheetCount);
+        row.put("characterSheetVersionCount", characterSheetVersionCount);
+        row.put("keyframeVersionCount", keyframeVersionCount);
         row.put("videoVersionCount", versions.stream().filter(item -> WorkflowConstants.STAGE_VIDEO.equals(item.getStageType())).count());
         return row;
+    }
+
+    private Optional<StageVersionEntity> selectedWorkflowStoryboard(List<StageVersionEntity> versions, StageWorkflowEntity workflow) {
+        String selectedStoryboardVersionId = trimmed(workflow.getSelectedStoryboardVersionId(), "");
+        return versions.stream()
+            .filter(item -> WorkflowConstants.STAGE_STORYBOARD.equals(item.getStageType()))
+            .filter(item -> selectedStoryboardVersionId.equals(trimmed(item.getStageVersionId(), "")) || intValue(item.getSelected(), 0) == 1)
+            .max(Comparator.comparing(item -> intValue(item.getVersionNo(), 0)));
     }
 
     private Map<String, Object> toWorkflowDetail(

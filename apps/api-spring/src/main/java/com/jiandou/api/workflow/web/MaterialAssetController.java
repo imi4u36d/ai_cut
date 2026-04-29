@@ -39,6 +39,21 @@ public class MaterialAssetController {
         return workflowService.listMaterialAssets(q, type, minRating, model, aspectRatio, clipIndex, assetType);
     }
 
+    @GetMapping(params = { "offset", "limit" })
+    public Map<String, Object> listMaterialAssetPage(
+        @RequestParam(value = "q", required = false) String q,
+        @RequestParam(value = "type", required = false) String type,
+        @RequestParam(value = "minRating", required = false) Integer minRating,
+        @RequestParam(value = "model", required = false) String model,
+        @RequestParam(value = "aspectRatio", required = false) String aspectRatio,
+        @RequestParam(value = "clipIndex", required = false) Integer clipIndex,
+        @RequestParam(value = "assetType", required = false) String assetType,
+        @RequestParam("offset") Integer offset,
+        @RequestParam("limit") Integer limit
+    ) {
+        return workflowService.listMaterialAssetPage(q, type, minRating, model, aspectRatio, clipIndex, assetType, offset, limit);
+    }
+
     @GetMapping("/{assetId}")
     public Map<String, Object> getMaterialAsset(@PathVariable String assetId) {
         return workflowService.getMaterialAsset(assetId);

@@ -3,6 +3,7 @@ package com.jiandou.api.auth.application;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -96,6 +97,31 @@ class UserModelConfigServiceTest {
         )));
 
         assertTrue(validation.valid());
+        verify(repository).saveApiKeys(7L, Map.of("aliyun", "user-secret"));
+    }
+
+    @Test
+    void resetKeysPersistsWithoutReadingUserCredentials() {
+        ModelRuntimePropertiesResolver resolver = mock(ModelRuntimePropertiesResolver.class);
+        MybatisUserModelCredentialRepository repository = mock(MybatisUserModelCredentialRepository.class);
+        UserModelConfigService service = new UserModelConfigService(resolver, repository);
+        when(resolver.listModelsByKind(GenerationModelKinds.TEXT)).thenReturn(List.of(
+            Map.of("value", "qwen-plus", "label", "Qwen Plus", "provider", "qwen", "vendor", "aliyun")
+        ));
+        when(resolver.listModelsByKind(GenerationModelKinds.IMAGE)).thenReturn(List.of());
+        when(resolver.listModelsByKind(GenerationModelKinds.VIDEO)).thenReturn(List.of(
+            Map.of("value", "seedance-v1", "label", "Seedance", "provider", "seedance", "vendor", "volcengine")
+        ));
+        when(resolver.listSections("model.providers")).thenReturn(List.of(
+            new ModelRuntimePropertiesResolver.ConfigSection("qwen", Map.of("provider", "qwen", "vendor", "aliyun")),
+            new ModelRuntimePropertiesResolver.ConfigSection("seedance", Map.of("provider", "seedance", "vendor", "volcengine"))
+        ));
+
+        service.resetKeys(7L, new AdminModelConfigKeyUpdateRequest(List.of(
+            new AdminModelConfigKeyUpdateRequest.ProviderKeyInput("qwen", "user-secret")
+        )));
+
+        verify(repository, never()).findApiKeysByUserId(7L);
         verify(repository).saveApiKeys(7L, Map.of("aliyun", "user-secret"));
     }
 

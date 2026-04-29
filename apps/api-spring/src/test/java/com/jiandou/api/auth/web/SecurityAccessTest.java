@@ -13,6 +13,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.jiandou.api.auth.application.AdminIdentityService;
 import com.jiandou.api.auth.application.AuthApplicationService;
+import com.jiandou.api.auth.application.UserModelConfigService;
 import com.jiandou.api.auth.config.SecurityConfig;
 import com.jiandou.api.auth.infrastructure.mybatis.MybatisAuthRepository;
 import com.jiandou.api.auth.security.SessionUserValidationFilter;
@@ -44,6 +45,9 @@ class SecurityAccessTest {
 
     @MockBean
     private AdminIdentityService adminIdentityService;
+
+    @MockBean
+    private UserModelConfigService userModelConfigService;
 
     @MockBean
     private MybatisAuthRepository authRepository;

@@ -132,21 +132,6 @@ const navItems = [
     `,
   },
   {
-    to: "/material-center",
-    label: "素材中心",
-    icon: `
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-        <path d="M4 6.5h16" />
-        <path d="M6.5 4v5" />
-        <path d="M17.5 4v5" />
-        <rect x="4" y="11" width="7" height="8" rx="1.6" />
-        <rect x="13" y="11" width="7" height="8" rx="1.6" />
-        <path d="m7 16 1.4-1.6 2.1 2.6" />
-        <path d="m16 16 1.1-1.2 1.9 2.2" />
-      </svg>
-    `,
-  },
-  {
     to: "/materials",
     label: "素材库",
     icon: `
@@ -154,16 +139,6 @@ const navItems = [
         <path d="M4 7.5 12 4l8 3.5-8 3.5-8-3.5Z" />
         <path d="M4 12l8 3.5 8-3.5" />
         <path d="M4 16.5 12 20l8-3.5" />
-      </svg>
-    `,
-  },
-  {
-    to: "/settings",
-    label: "设置",
-    icon: `
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-        <circle cx="12" cy="12" r="3.2" />
-        <path d="M19.4 15a1 1 0 0 0 .2 1.1l.1.1a1.2 1.2 0 0 1 0 1.7l-1.2 1.2a1.2 1.2 0 0 1-1.7 0l-.1-.1a1 1 0 0 0-1.1-.2 1 1 0 0 0-.6.9V20a1.2 1.2 0 0 1-1.2 1.2h-1.7A1.2 1.2 0 0 1 11 20v-.2a1 1 0 0 0-.6-.9 1 1 0 0 0-1.1.2l-.1.1a1.2 1.2 0 0 1-1.7 0l-1.2-1.2a1.2 1.2 0 0 1 0-1.7l.1-.1a1 1 0 0 0 .2-1.1 1 1 0 0 0-.9-.6H4A1.2 1.2 0 0 1 2.8 13v-2A1.2 1.2 0 0 1 4 9.8h.2a1 1 0 0 0 .9-.6 1 1 0 0 0-.2-1.1L4.8 8A1.2 1.2 0 0 1 4.8 6.3l1.2-1.2a1.2 1.2 0 0 1 1.7 0l.1.1a1 1 0 0 0 1.1.2 1 1 0 0 0 .6-.9V4A1.2 1.2 0 0 1 10.7 2.8h1.7A1.2 1.2 0 0 1 13.6 4v.2a1 1 0 0 0 .6.9 1 1 0 0 0 1.1-.2l.1-.1a1.2 1.2 0 0 1 1.7 0l1.2 1.2a1.2 1.2 0 0 1 0 1.7l-.1.1a1 1 0 0 0-.2 1.1 1 1 0 0 0 .9.6h.2A1.2 1.2 0 0 1 21.2 11v2a1.2 1.2 0 0 1-1.2 1.2h-.2a1 1 0 0 0-.9.8Z" />
       </svg>
     `,
   },

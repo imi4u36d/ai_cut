@@ -215,6 +215,7 @@ import { computed, onMounted, reactive, ref, watch } from "vue";
 import { useRoute } from "vue-router";
 import { createMaterialGeneration, fetchMaterialAssets, uploadMaterialAsset } from "@/api/material-assets";
 import { fetchGenerationOptions } from "@/api/generation";
+import { requireAuth } from "@/auth/modal";
 import AppSelect from "@/components/common/AppSelect.vue";
 import type { AppSelectOption } from "@/components/common/app-select";
 import type {
@@ -558,6 +559,14 @@ async function copyRemoteUrl(remoteUrl?: string | null) {
 }
 
 async function handleUploadResultAsset(assetId: string) {
+  const authenticated = await requireAuth({
+    title: "登录后上传远端素材",
+    message: "素材上传会更新你的素材记录，请先登录或使用邀请码注册。",
+  });
+  if (!authenticated) {
+    errorMessage.value = "登录后可继续上传素材。";
+    return;
+  }
   busyActionKey.value = `upload-${assetId}`;
   errorMessage.value = "";
   try {
@@ -612,6 +621,15 @@ async function loadOptions() {
 }
 
 async function loadReferenceAssets() {
+  const authenticated = await requireAuth({
+    title: "登录后读取素材库",
+    message: "参考素材来自你的素材库，请先登录或使用邀请码注册。",
+  });
+  if (!authenticated) {
+    referenceLibraryAssets.value = [];
+    referenceLibraryError.value = "登录后可读取素材库参考图。";
+    return;
+  }
   loadingReferenceAssets.value = true;
   referenceLibraryError.value = "";
   try {
@@ -651,6 +669,14 @@ async function handleSubmit() {
     errorMessage.value = "请填写素材标题";
     return;
   }
+  const authenticated = await requireAuth({
+    title: "登录后生成素材",
+    message: "生成的素材会保存到你的素材库，请先登录或使用邀请码注册。",
+  });
+  if (!authenticated) {
+    errorMessage.value = "登录后即可继续生成素材。";
+    return;
+  }
   submitting.value = true;
   errorMessage.value = "";
   result.value = null;
@@ -679,7 +705,6 @@ function resetForm() {
 
 onMounted(async () => {
   await loadOptions();
-  await loadReferenceAssets();
 });
 
 watch(

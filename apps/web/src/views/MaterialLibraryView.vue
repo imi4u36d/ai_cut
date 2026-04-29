@@ -87,7 +87,7 @@
 
     <p v-if="errorMessage" class="material-error">{{ errorMessage }}</p>
 
-    <section v-if="loading" class="material-empty">
+    <section v-if="loading && !assets.length" class="material-empty">
       正在加载素材库...
     </section>
 
@@ -186,9 +186,15 @@
         </div>
       </article>
 
-      <div v-if="!displayedAssets.length" class="material-empty material-empty-inline">
+      <div v-if="!displayedAssets.length && !hasMoreAssets" class="material-empty material-empty-inline">
         <strong>当前没有匹配的素材</strong>
         <span>可以新建素材，或调整顶部分类与筛选条件。</span>
+      </div>
+
+      <div v-else-if="displayedAssets.length || hasMoreAssets" ref="loadMoreTrigger" class="material-load-more">
+        <span v-if="loadingMore">正在加载更多素材...</span>
+        <span v-else-if="hasMoreAssets">继续下滑加载更多</span>
+        <span v-else>已加载全部素材</span>
       </div>
     </section>
 
@@ -214,9 +220,10 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref, watch } from "vue";
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
-import { deleteMaterialAsset, fetchMaterialAssets, rateMaterialAsset, reuseMaterialAsset, uploadMaterialAsset } from "@/api/material-assets";
+import { deleteMaterialAsset, fetchMaterialAssetPage, rateMaterialAsset, reuseMaterialAsset, uploadMaterialAsset } from "@/api/material-assets";
+import { requireAuth } from "@/auth/modal";
 import AppSelect from "@/components/common/AppSelect.vue";
 import type { AppSelectOption } from "@/components/common/app-select";
 import type { MaterialAssetLibraryItem, MaterialAssetQuery, MaterialAssetType } from "@/types";
@@ -225,6 +232,7 @@ import { renderMarkdownToHtml } from "@/utils/markdown";
 const route = useRoute();
 const router = useRouter();
 const loading = ref(false);
+const loadingMore = ref(false);
 const errorMessage = ref("");
 const busyActionKey = ref("");
 const activeLibraryTab = ref("all");
@@ -233,6 +241,12 @@ const batchMode = ref(false);
 const selectedAssetIds = ref<string[]>([]);
 
 const assets = ref<MaterialAssetLibraryItem[]>([]);
+const loadMoreTrigger = ref<HTMLElement | null>(null);
+const assetPageLimit = 30;
+const nextAssetOffset = ref(0);
+const hasMoreAssets = ref(false);
+let loadMoreObserver: IntersectionObserver | null = null;
+let assetLoadRequestId = 0;
 const ratingOptions = [5, 4, 3, 2, 1];
 const libraryTabs = [
   { key: "all", label: "全部", assetType: "" },
@@ -307,6 +321,14 @@ function buildQuery(): MaterialAssetQuery {
     model: filters.model.trim() || undefined,
     aspectRatio: filters.aspectRatio || undefined,
     clipIndex: filters.clipIndex ? Number(filters.clipIndex) : null,
+  };
+}
+
+function buildPageQuery(offset: number): MaterialAssetQuery {
+  return {
+    ...buildQuery(),
+    offset,
+    limit: assetPageLimit,
   };
 }
 
@@ -402,15 +424,69 @@ function toggleAssetSelection(assetId: string) {
 }
 
 async function loadAssets() {
+  const authenticated = await requireAuth({
+    title: "登录后查看素材库",
+    message: "素材库只展示你的个人素材，请先登录或使用邀请码注册。",
+  });
+  if (!authenticated) {
+    assets.value = [];
+    hasMoreAssets.value = false;
+    errorMessage.value = "登录后可查看素材库。";
+    return;
+  }
+  const requestId = ++assetLoadRequestId;
   loading.value = true;
+  loadingMore.value = false;
   errorMessage.value = "";
   try {
-    assets.value = await fetchMaterialAssets(buildQuery());
+    const page = await fetchMaterialAssetPage(buildPageQuery(0));
+    if (requestId !== assetLoadRequestId) {
+      return;
+    }
+    assets.value = page.items;
+    nextAssetOffset.value = page.nextOffset ?? page.items.length;
+    hasMoreAssets.value = page.hasMore;
+    selectedAssetIds.value = selectedAssetIds.value.filter((id) => assets.value.some((asset) => asset.id === id));
     syncDrafts();
   } catch (error) {
-    errorMessage.value = error instanceof Error ? error.message : "素材列表加载失败";
+    if (requestId === assetLoadRequestId) {
+      errorMessage.value = error instanceof Error ? error.message : "素材列表加载失败";
+    }
   } finally {
-    loading.value = false;
+    if (requestId === assetLoadRequestId) {
+      loading.value = false;
+    }
+  }
+}
+
+async function loadMoreAssets() {
+  if (loading.value || loadingMore.value || !hasMoreAssets.value) {
+    return;
+  }
+  const requestId = assetLoadRequestId;
+  loadingMore.value = true;
+  errorMessage.value = "";
+  try {
+    const page = await fetchMaterialAssetPage(buildPageQuery(nextAssetOffset.value));
+    if (requestId !== assetLoadRequestId) {
+      return;
+    }
+    const existingIds = new Set(assets.value.map((asset) => asset.id));
+    assets.value = [
+      ...assets.value,
+      ...page.items.filter((asset) => !existingIds.has(asset.id)),
+    ];
+    nextAssetOffset.value = page.nextOffset ?? assets.value.length;
+    hasMoreAssets.value = page.hasMore;
+    syncDrafts();
+  } catch (error) {
+    if (requestId === assetLoadRequestId) {
+      errorMessage.value = error instanceof Error ? error.message : "更多素材加载失败";
+    }
+  } finally {
+    if (requestId === assetLoadRequestId) {
+      loadingMore.value = false;
+    }
   }
 }
 
@@ -430,6 +506,14 @@ function resetFilters() {
 
 async function handleBatchUpload() {
   if (!selectedAssetIds.value.length) {
+    return;
+  }
+  const authenticated = await requireAuth({
+    title: "登录后批量上传素材",
+    message: "批量上传会更新你的素材记录，请先登录或使用邀请码注册。",
+  });
+  if (!authenticated) {
+    errorMessage.value = "登录后可继续批量上传。";
     return;
   }
   const ids = [...selectedAssetIds.value];
@@ -455,6 +539,14 @@ async function handleBatchDelete() {
   if (!selectedAssetIds.value.length || !window.confirm(`确认删除选中的 ${selectedAssetIds.value.length} 个素材吗？`)) {
     return;
   }
+  const authenticated = await requireAuth({
+    title: "登录后批量删除素材",
+    message: "批量删除会修改你的素材库，请先登录或使用邀请码注册。",
+  });
+  if (!authenticated) {
+    errorMessage.value = "登录后可继续批量删除。";
+    return;
+  }
   const ids = [...selectedAssetIds.value];
   busyActionKey.value = "batch-delete";
   errorMessage.value = "";
@@ -472,6 +564,14 @@ async function handleBatchDelete() {
 }
 
 async function refreshAfterMutation(mutator: () => Promise<unknown>, actionKey: string) {
+  const authenticated = await requireAuth({
+    title: "登录后操作素材",
+    message: "素材操作会修改你的素材库，请先登录或使用邀请码注册。",
+  });
+  if (!authenticated) {
+    errorMessage.value = "登录后可继续操作素材。";
+    return;
+  }
   busyActionKey.value = actionKey;
   errorMessage.value = "";
   try {
@@ -481,6 +581,24 @@ async function refreshAfterMutation(mutator: () => Promise<unknown>, actionKey: 
     errorMessage.value = error instanceof Error ? error.message : "素材操作失败";
   } finally {
     busyActionKey.value = "";
+  }
+}
+
+function setupLoadMoreObserver() {
+  if (typeof IntersectionObserver === "undefined") {
+    return;
+  }
+  loadMoreObserver?.disconnect();
+  loadMoreObserver = new IntersectionObserver(
+    (entries) => {
+      if (entries.some((entry) => entry.isIntersecting)) {
+        void loadMoreAssets();
+      }
+    },
+    { root: null, rootMargin: "360px 0px 520px", threshold: 0.01 }
+  );
+  if (loadMoreTrigger.value) {
+    loadMoreObserver.observe(loadMoreTrigger.value);
   }
 }
 
@@ -519,6 +637,14 @@ async function handleDeleteAsset(asset: MaterialAssetLibraryItem) {
 }
 
 async function handleReuseAsset(assetId: string) {
+  const authenticated = await requireAuth({
+    title: "登录后复用素材",
+    message: "复用素材会创建你的阶段工作流，请先登录或使用邀请码注册。",
+  });
+  if (!authenticated) {
+    errorMessage.value = "登录后可继续复用素材。";
+    return;
+  }
   busyActionKey.value = `reuse-${assetId}`;
   errorMessage.value = "";
   try {
@@ -538,7 +664,13 @@ onMounted(async () => {
     filters.assetType = queryAssetType;
     activeLibraryTab.value = libraryTabs.find((tab) => tab.assetType === queryAssetType)?.key ?? "all";
   }
+  setupLoadMoreObserver();
   await loadAssets();
+});
+
+onBeforeUnmount(() => {
+  loadMoreObserver?.disconnect();
+  loadMoreObserver = null;
 });
 
 watch(activeLibraryTab, (tab) => {
@@ -553,6 +685,13 @@ watch(batchMode, (enabled) => {
     selectedAssetIds.value = [];
   }
 });
+
+watch(
+  loadMoreTrigger,
+  () => {
+    setupLoadMoreObserver();
+  }
+);
 
 watch(
   () => filters.assetType,
@@ -802,6 +941,18 @@ watch(
   grid-template-columns: repeat(auto-fill, minmax(244px, 1fr));
   gap: 18px;
   align-content: start;
+}
+
+.material-load-more {
+  display: grid;
+  place-items: center;
+  min-height: 58px;
+  border: 1px dashed rgba(15, 20, 25, 0.1);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.72);
+  color: var(--text-muted);
+  font-size: 0.84rem;
+  font-weight: 700;
 }
 
 .material-new-tile,

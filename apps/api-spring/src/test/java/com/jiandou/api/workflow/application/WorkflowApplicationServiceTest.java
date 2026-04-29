@@ -112,6 +112,17 @@ class WorkflowApplicationServiceTest {
         });
         when(workflowRepository.findMaterialAssetsByIds(anySet(), anyLong())).thenAnswer(invocation -> findMaterialAssets(invocation.getArgument(0)));
         when(workflowRepository.listMaterialAssets(anyLong())).thenAnswer(invocation -> new ArrayList<>(assets.values()));
+        when(workflowRepository.listMaterialAssetsPage(anyLong(), anyInt(), anyInt())).thenAnswer(invocation -> {
+            int offset = invocation.getArgument(1);
+            int limit = invocation.getArgument(2);
+            List<MaterialAssetEntity> all = new ArrayList<>(assets.values());
+            int fromIndex = Math.min(Math.max(0, offset), all.size());
+            int toIndex = Math.min(fromIndex + Math.max(1, limit), all.size());
+            return all.subList(fromIndex, toIndex);
+        });
+        when(workflowRepository.countMaterialAssets(anyLong())).thenAnswer(invocation -> (long) assets.values().stream()
+            .filter(asset -> intValue(asset.getIsDeleted(), 0) == 0)
+            .count());
         doNothing().when(workflowRepository).saveSystemLog(anyString(), anyString(), anyString(), anyString(), anyString(), anyString(), any());
         doNothing().when(workflowRepository).saveModelCall(anyString(), any());
         doAnswer(invocation -> {
@@ -1237,6 +1248,52 @@ class WorkflowApplicationServiceTest {
         assertEquals(1, rows.size());
         assertEquals(generatedSheet.getMaterialAssetId(), rows.get(0).get("id"));
         assertEquals("character_sheet", rows.get(0).get("assetType"));
+    }
+
+    @Test
+    void listMaterialAssetPageReturnsRequestedSliceAndNextOffset() {
+        MaterialAssetEntity first = asset("", "asset_page_1", WorkflowConstants.STAGE_KEYFRAME, 1001, "https://cdn.example.com/page-1.png", "image/png");
+        MaterialAssetEntity second = asset("", "asset_page_2", WorkflowConstants.STAGE_KEYFRAME, 1002, "https://cdn.example.com/page-2.png", "image/png");
+        MaterialAssetEntity third = asset("", "asset_page_3", WorkflowConstants.STAGE_KEYFRAME, 1003, "https://cdn.example.com/page-3.png", "image/png");
+        first.setMetadataJson(WorkflowJsonSupport.write(Map.of("assetType", "scene")));
+        second.setMetadataJson(WorkflowJsonSupport.write(Map.of("assetType", "scene")));
+        third.setMetadataJson(WorkflowJsonSupport.write(Map.of("assetType", "scene")));
+        assets.put(first.getMaterialAssetId(), first);
+        assets.put(second.getMaterialAssetId(), second);
+        assets.put(third.getMaterialAssetId(), third);
+
+        Map<String, Object> page = service.listMaterialAssetPage(null, null, null, null, null, null, "scene", 1, 1);
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> rows = (List<Map<String, Object>>) page.get("items");
+
+        assertEquals(1, rows.size());
+        assertEquals("asset_page_2", rows.get(0).get("id"));
+        assertEquals(1, page.get("offset"));
+        assertEquals(1, page.get("limit"));
+        assertEquals(3L, page.get("total"));
+        assertEquals(true, page.get("hasMore"));
+        assertEquals(2, page.get("nextOffset"));
+    }
+
+    @Test
+    void listMaterialAssetPageUsesRepositoryPageForUnfilteredQuery() {
+        MaterialAssetEntity first = asset("", "asset_unfiltered_1", WorkflowConstants.STAGE_KEYFRAME, 1001, "https://cdn.example.com/unfiltered-1.png", "image/png");
+        MaterialAssetEntity second = asset("", "asset_unfiltered_2", WorkflowConstants.STAGE_KEYFRAME, 1002, "https://cdn.example.com/unfiltered-2.png", "image/png");
+        MaterialAssetEntity third = asset("", "asset_unfiltered_3", WorkflowConstants.STAGE_KEYFRAME, 1003, "https://cdn.example.com/unfiltered-3.png", "image/png");
+        assets.put(first.getMaterialAssetId(), first);
+        assets.put(second.getMaterialAssetId(), second);
+        assets.put(third.getMaterialAssetId(), third);
+
+        Map<String, Object> page = service.listMaterialAssetPage(null, null, null, null, null, null, null, 0, 2);
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> rows = (List<Map<String, Object>>) page.get("items");
+
+        assertEquals(List.of("asset_unfiltered_1", "asset_unfiltered_2"), rows.stream().map(row -> row.get("id")).toList());
+        assertEquals(3L, page.get("total"));
+        assertEquals(true, page.get("hasMore"));
+        assertEquals(2, page.get("nextOffset"));
+        verify(workflowRepository).listMaterialAssetsPage(USER_ID, 0, 2);
+        verify(workflowRepository).countMaterialAssets(USER_ID);
     }
 
     @Test

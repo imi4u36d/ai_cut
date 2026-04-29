@@ -3,6 +3,7 @@ import { ensureAuthSession, useAuthSessionState } from "@/auth/session";
 import AdminLayout from "@/layouts/AdminLayout.vue";
 import DashboardView from "@/views/DashboardView.vue";
 import ForbiddenView from "@/views/ForbiddenView.vue";
+import InviteManagementView from "@/views/InviteManagementView.vue";
 import LoginView from "@/views/LoginView.vue";
 import TaskManagementView from "@/views/TaskManagementView.vue";
 import UserManagementView from "@/views/UserManagementView.vue";
@@ -61,6 +62,14 @@ const router = createRouter({
           component: UserManagementView,
           meta: {
             title: "用户管理"
+          }
+        },
+        {
+          path: "invites",
+          name: "invites",
+          component: InviteManagementView,
+          meta: {
+            title: "邀请码管理"
           }
         },
         {

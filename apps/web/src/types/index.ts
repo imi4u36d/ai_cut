@@ -1164,6 +1164,9 @@ export interface WorkflowSummary {
   createdAt: string;
   updatedAt: string;
   storyboardVersionCount: number;
+  characterSheetCount?: number;
+  selectedCharacterSheetCount?: number;
+  characterSheetVersionCount?: number;
   keyframeVersionCount: number;
   videoVersionCount: number;
 }
@@ -1214,6 +1217,17 @@ export interface MaterialAssetQuery {
   model?: string;
   aspectRatio?: string;
   clipIndex?: number | null;
+  offset?: number;
+  limit?: number;
+}
+
+export interface MaterialAssetPage {
+  items: MaterialAssetLibraryItem[];
+  offset: number;
+  limit: number;
+  total: number;
+  hasMore: boolean;
+  nextOffset: number | null;
 }
 
 export interface CreateMaterialGenerationRequest {
