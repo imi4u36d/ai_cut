@@ -212,6 +212,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from "vue";
+import { useRoute } from "vue-router";
 import { createMaterialGeneration, fetchMaterialAssets, uploadMaterialAsset } from "@/api/material-assets";
 import { fetchGenerationOptions } from "@/api/generation";
 import AppSelect from "@/components/common/AppSelect.vue";
@@ -224,6 +225,8 @@ import type {
   MaterialAssetType,
   MaterialGenerationResponse,
 } from "@/types";
+
+const route = useRoute();
 
 type MaterialGenerationAssetType = Exclude<MaterialAssetType, "workflow">;
 
@@ -266,7 +269,7 @@ const form = reactive({
   title: "",
   description: "",
   styleKeywords: "",
-  aspectRatio: "9:16",
+  aspectRatio: "16:9",
   imageSize: "",
   textAnalysisModel: "",
   imageModel: "",
@@ -432,6 +435,21 @@ function normalizeImageSize(value: unknown) {
   return String(value ?? "").trim().toLowerCase().replace(/\*/g, "x");
 }
 
+function queryString(value: unknown) {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function applyEntryQuery() {
+  const ratio = queryString(route.query.ratio);
+  if (ratio === "16:9" || ratio === "9:16" || ratio === "1:1") {
+    form.aspectRatio = ratio;
+  }
+  const mode = queryString(route.query.mode);
+  if (mode === "text-to-image" || mode === "image-to-image") {
+    form.assetType = "free";
+  }
+}
+
 function resolveDefaultImageModel(models: GenerationTextAnalysisModelInfo[], current?: string | null) {
   const currentValue = String(current ?? "").trim();
   if (currentValue && models.some((item) => item.value === currentValue)) {
@@ -573,13 +591,18 @@ async function loadOptions() {
   loadingOptions.value = true;
   try {
     const options = await fetchGenerationOptions();
+    applyEntryQuery();
     aspectRatios.value = (options.aspectRatios ?? []).map((item) => ({
       label: item.label || item.value,
       value: item.value,
     }));
     imageModels.value = options.imageModels ?? [];
     imageSizes.value = options.imageSizes ?? [];
-    form.aspectRatio = options.defaultAspectRatio || String(aspectRatioOptions.value[0]?.value || form.aspectRatio);
+    const ratio = queryString(route.query.ratio);
+    form.aspectRatio =
+      ratio === "16:9" || ratio === "9:16" || ratio === "1:1"
+        ? ratio
+        : options.defaultAspectRatio || String(aspectRatioOptions.value[0]?.value || form.aspectRatio);
     form.textAnalysisModel = options.defaultTextAnalysisModel || options.textAnalysisModels?.[0]?.value || form.textAnalysisModel;
     form.imageModel = resolveDefaultImageModel(options.imageModels ?? [], form.imageModel);
     syncImageSizeSelection(options.defaultImageSize);

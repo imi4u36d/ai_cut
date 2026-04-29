@@ -1,49 +1,99 @@
 <template>
   <section class="new-task-view">
     <form class="task-studio" @submit.prevent="submitTask">
-      <aside class="surface-panel surface-panel-compact studio-panel studio-panel-rail">
-        <div class="studio-panel__head">
-          <div>
-            <p class="studio-eyebrow">配置轨道</p>
-            <h2>模型链路</h2>
-          </div>
-          <span class="surface-chip surface-chip-compact">已选 {{ selectedModelCount }}/4</span>
-        </div>
+      <section class="generate-hero">
+        <h1>开启你的 <span>Agent 模式</span> 即刻造梦！</h1>
 
-        <div class="studio-rail-scroll">
-          <label class="studio-field">
+        <section class="composer-card">
+          <button
+            type="button"
+            class="composer-upload"
+            :disabled="uploadingText"
+            @click="textFileInput?.click()"
+          >
+            <span>+</span>
+          </button>
+          <input
+            ref="textFileInput"
+            type="file"
+            accept=".txt,text/plain"
+            class="hidden"
+            @change="handleTextFileChange"
+          />
+
+          <label class="composer-title">
             <span>任务标题</span>
             <input
               v-model="form.title"
-              class="field-input field-input-compact"
               required
               placeholder="例如：悬疑短剧第 12 集预告"
             />
           </label>
 
-          <div class="model-rail">
-            <div class="model-rail__line" aria-hidden="true"></div>
+          <label class="composer-main">
+            <span>小说正文</span>
+            <textarea
+              v-model="form.transcriptText"
+              rows="6"
+              placeholder="上传小说、输入文字，煎豆会自动拆解脚本、关键帧与视频生成链路"
+            ></textarea>
+          </label>
 
+          <label class="composer-prompt">
+            <span>全局创意提示词</span>
+            <textarea
+              v-model="form.creativePrompt"
+              rows="2"
+              placeholder="可选：补充风格、节奏、镜头方向"
+            ></textarea>
+          </label>
+
+          <div class="composer-toolbar">
+            <button type="button" class="tool-pill tool-pill-accent">Agent 模式</button>
+            <button type="button" class="tool-pill">自动</button>
+            <button type="button" class="tool-pill">灵感搜索</button>
+            <button type="button" class="tool-pill">创意设计</button>
+            <span class="composer-count">{{ transcriptCharacterCount > 0 ? `${transcriptCharacterCount} 字` : "等待正文输入" }}</span>
+          </div>
+
+          <button class="composer-submit" type="submit" :disabled="submitting || !isFormReady || loadingOptions" :title="submitLabel">
+            <svg v-if="!submitting" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M12 19V5" />
+              <path d="m5 12 7-7 7 7" />
+            </svg>
+            <span v-else>...</span>
+          </button>
+        </section>
+      </section>
+
+      <section class="studio-section studio-section-models">
+        <div class="studio-section__head">
+          <div>
+            <p class="studio-eyebrow">模型链路</p>
+            <h2>高级参数</h2>
+          </div>
+          <span class="surface-chip surface-chip-compact">已选 {{ selectedModelCount }}/3</span>
+        </div>
+
+        <div class="studio-grid">
+          <div class="model-rail">
             <label class="model-rail__item">
-              <span class="model-rail__dot"></span>
               <span class="model-rail__label">文本模型</span>
               <AppSelect v-model="form.textAnalysisModel" :options="textModelSelectOptions" compact />
             </label>
 
             <label class="model-rail__item">
-              <span class="model-rail__dot"></span>
               <span class="model-rail__label">关键帧模型</span>
               <AppSelect v-model="form.imageModel" :options="imageModelSelectOptions" compact />
             </label>
 
             <label class="model-rail__item">
-              <span class="model-rail__dot"></span>
               <span class="model-rail__label">视频模型</span>
               <AppSelect v-model="form.videoModel" :options="videoModelSelectOptions" compact />
             </label>
           </div>
 
-          <section class="surface-tile surface-tile-compact control-card">
+          <section class="control-card">
             <div class="control-card__head">
               <div>
                 <p class="studio-eyebrow">参数控制</p>
@@ -157,7 +207,7 @@
             </div>
           </section>
 
-          <section class="surface-tile surface-tile-compact seed-library">
+          <section class="seed-library">
             <div class="seed-library__head">
               <div>
                 <p class="studio-eyebrow">种子库</p>
@@ -194,56 +244,6 @@
             <p v-else class="seed-library__empty">当前还没有可复用的高分种子。</p>
           </section>
         </div>
-      </aside>
-
-      <section class="surface-panel surface-panel-compact studio-panel studio-panel-core">
-        <div class="studio-panel__head">
-          <div>
-            <p class="studio-eyebrow">创作核心</p>
-            <h2>提示词与正文内容</h2>
-          </div>
-          <span class="surface-chip surface-chip-compact">{{ transcriptCharacterCount > 0 ? `${transcriptCharacterCount} 字` : "等待正文输入" }}</span>
-        </div>
-
-        <div class="core-topbar">
-          <button
-            type="button"
-            class="btn-secondary btn-sm btn-compact"
-            :disabled="uploadingText"
-            @click="textFileInput?.click()"
-          >
-            {{ uploadingText ? "上传中..." : "上传文本" }}
-          </button>
-          <input
-            ref="textFileInput"
-            type="file"
-            accept=".txt,text/plain"
-            class="hidden"
-            @change="handleTextFileChange"
-          />
-        </div>
-
-        <div class="core-compose">
-          <label class="studio-field core-compose__field core-compose__field-transcript">
-            <span>小说正文</span>
-            <textarea
-              v-model="form.transcriptText"
-              rows="12"
-              class="field-textarea field-textarea-compact core-textarea"
-              placeholder="输入正文"
-            ></textarea>
-          </label>
-
-          <label class="studio-field core-compose__field core-compose__field-prompt">
-            <span>全局创意提示词</span>
-            <textarea
-              v-model="form.creativePrompt"
-              rows="5"
-              class="field-textarea field-textarea-compact core-prompt-textarea"
-              placeholder="输入提示词"
-            ></textarea>
-          </label>
-        </div>
 
         <div class="core-footer">
           <div class="core-actions">
@@ -254,8 +254,8 @@
         </div>
       </section>
 
-      <aside class="surface-panel surface-panel-compact studio-panel studio-panel-trace">
-        <div class="studio-panel__head">
+      <section class="studio-section studio-section-trace">
+        <div class="studio-section__head">
           <div>
             <p class="studio-eyebrow">实时追踪</p>
             <h2>执行监控</h2>
@@ -318,7 +318,7 @@
           </ul>
           <div v-else class="trace-feed__empty"></div>
         </section>
-      </aside>
+      </section>
     </form>
   </section>
 </template>
@@ -328,7 +328,7 @@
  * New任务页面组件。
  */
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
-import { useRouter } from "vue-router";
+import { useRoute, useRouter } from "vue-router";
 import { fetchGenerationOptions } from "@/api/generation";
 import { createGenerationTask, fetchTasks, uploadText } from "@/api/tasks";
 import AppSelect from "@/components/common/AppSelect.vue";
@@ -350,6 +350,7 @@ import type {
 } from "@/types";
 
 const router = useRouter();
+const route = useRoute();
 
 const options = ref<GenerationOptionsResponse | null>(null);
 const loadingOptions = ref(false);
@@ -387,7 +388,7 @@ const {
 const form = ref<CreateGenerationTaskRequest>({
   title: "文本生成任务",
   creativePrompt: "",
-  aspectRatio: "9:16",
+  aspectRatio: "16:9",
   textAnalysisModel: null,
   imageModel: null,
   videoModel: null,
@@ -432,6 +433,15 @@ function parseDurationSeconds(value: unknown): number | null {
     return null;
   }
   return seconds;
+}
+
+function queryString(value: unknown): string {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function queryAspectRatio(): "9:16" | "16:9" | null {
+  const ratio = queryString(route.query.ratio);
+  return ratio === "9:16" || ratio === "16:9" ? ratio : null;
 }
 
 /**
@@ -948,8 +958,8 @@ async function loadOptions() {
   try {
     const result = await fetchGenerationOptions();
     options.value = result;
-    form.value.aspectRatio = (result.defaultAspectRatio as "9:16" | "16:9" | null) || form.value.aspectRatio;
-    form.value.textAnalysisModel = result.textAnalysisModels?.[0]?.value ?? null;
+    form.value.aspectRatio = queryAspectRatio() || (result.defaultAspectRatio as "9:16" | "16:9" | null) || form.value.aspectRatio;
+    form.value.textAnalysisModel = result.defaultTextAnalysisModel || result.textAnalysisModels?.[0]?.value || null;
     form.value.imageModel = result.imageModels?.[0]?.value ?? null;
     form.value.videoModel = result.videoModels?.[0]?.value ?? null;
     form.value.outputCount = "auto";
@@ -1148,53 +1158,180 @@ onUnmounted(() => {
 
 <style scoped>
 .new-task-view {
-  height: 100%;
-  min-height: 0;
-  overflow: hidden;
+  min-height: 100%;
+  color: var(--text-strong);
 }
 
 .task-studio {
   display: grid;
-  gap: 16px;
-  align-items: stretch;
-  height: 100%;
-  min-height: 0;
-  grid-template-columns: 340px minmax(0, 1fr) 300px;
-  grid-template-areas: "rail core trace";
+  gap: 36px;
+  padding: 72px 48px 56px;
 }
 
-.studio-panel {
+.generate-hero {
+  display: grid;
+  justify-items: center;
+  gap: 42px;
+}
+
+.generate-hero h1 {
+  margin: 0;
+  font-size: clamp(1.4rem, 2vw, 1.9rem);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.generate-hero h1 span {
+  color: var(--accent-cyan);
+}
+
+.composer-card {
+  position: relative;
   display: grid;
   gap: 16px;
-  min-width: 0;
-  min-height: 0;
-  max-height: 100%;
-  padding: 16px;
-  overflow: auto;
+  width: min(100%, 1204px);
+  min-height: 258px;
+  padding: 22px 58px 16px 92px;
+  border: 1px solid rgba(15, 20, 25, 0.06);
+  border-radius: 24px;
+  background: #fff;
+  box-shadow: var(--shadow-panel);
 }
 
-.studio-panel-rail {
-  grid-area: rail;
-  grid-template-rows: auto minmax(0, 1fr);
+.composer-upload {
+  position: absolute;
+  left: 24px;
+  top: 24px;
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 64px;
+  border: 0;
+  border-radius: 2px;
+  background: #f0f1f2;
+  color: var(--text-muted);
+  font-size: 1.5rem;
+  transform: rotate(-7deg);
+  cursor: pointer;
 }
 
-.studio-panel-core {
-  grid-area: core;
+.composer-upload:disabled {
+  cursor: not-allowed;
+  opacity: 0.54;
+}
+
+.composer-title,
+.composer-main,
+.composer-prompt {
+  display: grid;
+  gap: 6px;
+}
+
+.composer-title span,
+.composer-main span,
+.composer-prompt span {
+  color: var(--text-muted);
+  font-size: 0.74rem;
+  font-weight: 700;
+}
+
+.composer-title input,
+.composer-main textarea,
+.composer-prompt textarea {
+  width: 100%;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--text-strong);
+}
+
+.composer-title input {
+  font-size: 1.02rem;
+  font-weight: 700;
+}
+
+.composer-main textarea {
+  min-height: 96px;
+  resize: vertical;
+  font-size: 0.95rem;
+  line-height: 1.7;
+}
+
+.composer-prompt textarea {
+  min-height: 44px;
+  resize: vertical;
+  color: var(--text-body);
+  line-height: 1.55;
+}
+
+.composer-toolbar {
   display: flex;
-  flex-direction: column;
-  align-content: normal;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding-top: 6px;
 }
 
-.studio-panel-core > * {
-  flex: 0 0 auto;
-  min-width: 0;
+.tool-pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 36px;
+  padding: 0 14px;
+  border: 1px solid rgba(15, 20, 25, 0.06);
+  border-radius: 9px;
+  background: #fff;
+  color: var(--text-strong);
+  font-size: 0.78rem;
+  font-weight: 650;
+  cursor: default;
 }
 
-.studio-panel-trace {
-  grid-area: trace;
+.tool-pill-accent {
+  color: var(--accent-cyan);
 }
 
-.studio-panel__head {
+.composer-count {
+  margin-left: auto;
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.composer-submit {
+  position: absolute;
+  right: 18px;
+  bottom: 16px;
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--accent-cyan);
+  color: #fff;
+  cursor: pointer;
+  box-shadow: 0 12px 28px rgba(0, 161, 194, 0.24);
+}
+
+.composer-submit:disabled {
+  background: #dce0e4;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.composer-submit svg {
+  width: 18px;
+  height: 18px;
+}
+
+.studio-section {
+  display: grid;
+  gap: 16px;
+  width: min(100%, 1204px);
+  margin: 0 auto;
+}
+
+.studio-section__head {
   display: flex;
   flex-wrap: wrap;
   align-items: flex-start;
@@ -1202,33 +1339,29 @@ onUnmounted(() => {
   gap: 12px;
 }
 
-.studio-panel__head h2,
+.studio-section__head h2,
 .control-card__head h3,
 .seed-library__head h3,
 .trace-feed__head h3 {
   margin: 0.28rem 0 0;
-  font-size: 0.98rem;
-  font-weight: 700;
-  letter-spacing: -0.04em;
-  color: rgba(255, 255, 255, 0.95);
+  font-size: 1rem;
+  font-weight: 800;
+  color: var(--text-strong);
 }
 
 .studio-eyebrow {
   margin: 0;
   font-size: 0.7rem;
   font-weight: 700;
-  letter-spacing: 0.22em;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--text-muted);
 }
 
-.studio-rail-scroll {
-  min-height: 0;
+.studio-grid {
   display: grid;
-  align-content: start;
-  gap: 14px;
-  overflow: auto;
-  padding-right: 2px;
+  grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr) minmax(260px, 0.85fr);
+  gap: 12px;
 }
 
 .studio-field {
@@ -1237,19 +1370,18 @@ onUnmounted(() => {
 }
 
 .studio-field > span {
-  color: rgba(255, 255, 255, 0.74);
+  color: var(--text-body);
   font-size: 0.82rem;
-  font-weight: 600;
+  font-weight: 700;
 }
 
 .model-rail {
   display: grid;
-  gap: 14px;
-  padding-left: 0;
-}
-
-.model-rail__line {
-  display: none;
+  gap: 10px;
+  padding: 16px;
+  border: 1px solid rgba(15, 20, 25, 0.06);
+  border-radius: 20px;
+  background: #fff;
 }
 
 .model-rail__item {
@@ -1257,14 +1389,10 @@ onUnmounted(() => {
   gap: 0.42rem;
 }
 
-.model-rail__dot {
-  display: none;
-}
-
 .model-rail__label {
-  color: rgba(255, 255, 255, 0.86);
+  color: var(--text-body);
   font-size: 0.82rem;
-  font-weight: 600;
+  font-weight: 700;
 }
 
 .control-card,
@@ -1272,7 +1400,10 @@ onUnmounted(() => {
 .core-status {
   display: grid;
   gap: 12px;
-  padding: 14px;
+  padding: 16px;
+  border: 1px solid rgba(15, 20, 25, 0.06);
+  border-radius: 20px;
+  background: #fff;
 }
 
 .control-card__head,
@@ -1293,17 +1424,16 @@ onUnmounted(() => {
 .ratio-toggle__item {
   min-height: 40px;
   border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  background: rgba(255, 255, 255, 0.03);
-  color: rgba(255, 255, 255, 0.74);
+  border: 1px solid rgba(15, 20, 25, 0.08);
+  background: #fff;
+  color: var(--text-body);
   font-weight: 700;
 }
 
 .ratio-toggle__item-active {
-  border-color: rgba(145, 180, 255, 0.4);
-  background: linear-gradient(180deg, rgba(176, 92, 255, 0.18), rgba(78, 219, 255, 0.08));
-  color: #8fc6ff;
-  box-shadow: var(--shadow-glow);
+  border-color: rgba(0, 161, 194, 0.22);
+  background: rgba(0, 161, 194, 0.08);
+  color: var(--accent-cyan);
 }
 
 .control-grid {
@@ -1320,7 +1450,7 @@ onUnmounted(() => {
 
 .control-card__error {
   margin: 0;
-  color: #ff9eb3;
+  color: var(--accent-danger);
   font-size: 0.78rem;
 }
 
@@ -1338,9 +1468,9 @@ onUnmounted(() => {
 }
 
 .seed-control__head > span:first-child {
-  color: rgba(255, 255, 255, 0.86);
+  color: var(--text-body);
   font-size: 0.82rem;
-  font-weight: 600;
+  font-weight: 700;
 }
 
 .seed-auto {
@@ -1374,23 +1504,23 @@ onUnmounted(() => {
   text-align: left;
   padding: 12px;
   border-radius: 14px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(15, 20, 25, 0.06);
+  background: #f8fafb;
   transition: transform 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
 }
 
 .seed-library__item:hover {
   transform: translateY(-1px);
-  border-color: rgba(145, 180, 255, 0.24);
+  border-color: rgba(0, 161, 194, 0.22);
 }
 
 .seed-library__item-active {
-  border-color: rgba(145, 180, 255, 0.4);
-  box-shadow: var(--shadow-glow);
+  border-color: rgba(0, 161, 194, 0.3);
+  background: rgba(0, 161, 194, 0.08);
 }
 
 .seed-library__item strong {
-  color: rgba(255, 255, 255, 0.92);
+  color: var(--text-strong);
   font-size: 0.88rem;
 }
 
@@ -1405,38 +1535,6 @@ onUnmounted(() => {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
-}
-
-.core-topbar {
-  display: flex;
-  align-items: center;
-  justify-content: flex-start;
-  gap: 10px;
-}
-
-.core-textarea {
-  min-height: clamp(320px, 48vh, 560px);
-}
-
-.core-prompt-textarea {
-  min-height: clamp(220px, 34vh, 560px);
-}
-
-.core-compose {
-  min-height: 0;
-  display: grid;
-  grid-template-columns: minmax(0, 1.55fr) minmax(260px, 0.95fr);
-  align-items: stretch;
-  gap: 16px;
-}
-
-.core-compose__field {
-  min-height: 0;
-  grid-template-rows: auto minmax(0, 1fr);
-}
-
-.core-compose__field .field-textarea {
-  height: 100%;
 }
 
 .core-footer {
@@ -1462,20 +1560,8 @@ onUnmounted(() => {
   flex: 0 0 auto;
 }
 
-@media (max-width: 1180px) {
-  .core-compose {
-    grid-template-columns: 1fr;
-  }
-
-  .core-compose__field .field-textarea {
-    height: auto;
-  }
-
-}
-
-.studio-panel-trace {
-  align-self: stretch;
-  grid-template-rows: auto auto auto auto minmax(0, 1fr);
+.studio-section-trace {
+  padding-bottom: 16px;
 }
 
 .trace-stats {
@@ -1489,18 +1575,18 @@ onUnmounted(() => {
   gap: 6px;
   padding: 10px 12px;
   border-radius: 14px;
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(15, 20, 25, 0.06);
+  background: #fff;
 }
 
 .trace-stat span {
-  color: rgba(255, 255, 255, 0.5);
+  color: var(--text-muted);
   font-size: 0.68rem;
   letter-spacing: 0.04em;
 }
 
 .trace-stat strong {
-  color: rgba(255, 255, 255, 0.9);
+  color: var(--text-strong);
   font-size: 0.78rem;
   font-weight: 600;
   white-space: nowrap;
@@ -1518,17 +1604,15 @@ onUnmounted(() => {
 .trace-ring {
   --progress: 0%;
   position: relative;
-  width: min(188px, 100%);
+  width: 160px;
   aspect-ratio: 1;
   border-radius: 50%;
   display: grid;
   place-items: center;
   background:
-    radial-gradient(circle at center, rgba(10, 13, 20, 0.96) 56%, transparent 57%),
-    conic-gradient(from 220deg, rgba(255, 255, 255, 0.1) 0 25%, #b05cff 45%, #8f93ff 70%, #4edbff 100%);
-  box-shadow:
-    inset 0 0 0 1px rgba(255, 255, 255, 0.04),
-    0 14px 28px rgba(0, 0, 0, 0.22);
+    radial-gradient(circle at center, #fff 56%, transparent 57%),
+    conic-gradient(from 220deg, rgba(15, 20, 25, 0.08) 0 25%, #00a1c2 45%, #246bfe 100%);
+  box-shadow: var(--shadow-soft);
 }
 
 .trace-ring::before {
@@ -1537,7 +1621,7 @@ onUnmounted(() => {
   inset: 18px;
   border-radius: 50%;
   background:
-    conic-gradient(from 220deg, rgba(255, 255, 255, 0.08) 0 var(--progress), rgba(255, 255, 255, 0.06) var(--progress) 100%);
+    conic-gradient(from 220deg, rgba(0, 161, 194, 0.16) 0 var(--progress), rgba(15, 20, 25, 0.05) var(--progress) 100%);
   mask: radial-gradient(farthest-side, transparent calc(100% - 16px), #000 calc(100% - 15px));
 }
 
@@ -1553,7 +1637,7 @@ onUnmounted(() => {
 
 .trace-ring__inner p {
   margin: 0;
-  color: rgba(255, 255, 255, 0.7);
+  color: var(--text-body);
   line-height: 1.45;
 }
 
@@ -1561,7 +1645,7 @@ onUnmounted(() => {
   font-size: 2rem;
   line-height: 1;
   letter-spacing: -0.06em;
-  color: rgba(255, 255, 255, 0.98);
+  color: var(--text-strong);
 }
 
 .trace-ring__meta {
@@ -1580,7 +1664,7 @@ onUnmounted(() => {
   margin: 0;
   font-size: 0.84rem;
   font-weight: 700;
-  color: rgba(255, 255, 255, 0.9);
+  color: var(--text-strong);
 }
 
 .trace-preview video {
@@ -1588,8 +1672,8 @@ onUnmounted(() => {
   max-height: 180px;
   object-fit: cover;
   border-radius: 16px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(0, 0, 0, 0.8);
+  border: 1px solid rgba(15, 20, 25, 0.08);
+  background: #eef2f4;
 }
 
 .trace-preview__meta {
@@ -1602,7 +1686,7 @@ onUnmounted(() => {
   display: inline-flex;
   padding: 0.25rem 0.58rem;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.04);
+  background: #f3f6f8;
   color: var(--text-muted);
   font-size: 0.7rem;
 }
@@ -1632,8 +1716,8 @@ onUnmounted(() => {
 .trace-feed__empty {
   padding: 12px;
   border-radius: 14px;
-  background: rgba(0, 0, 0, 0.42);
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: #fff;
+  border: 1px solid rgba(15, 20, 25, 0.06);
 }
 
 .trace-feed__item p,
@@ -1643,7 +1727,7 @@ onUnmounted(() => {
 }
 
 .trace-feed__item p {
-  color: rgba(255, 255, 255, 0.84);
+  color: var(--text-strong);
   font-size: 0.76rem;
   line-height: 1.65;
 }
@@ -1651,7 +1735,7 @@ onUnmounted(() => {
 .trace-feed__item small {
   display: block;
   margin-top: 0.38rem;
-  color: rgba(255, 255, 255, 0.38);
+  color: var(--text-muted);
   font-size: 0.68rem;
 }
 
@@ -1660,28 +1744,18 @@ onUnmounted(() => {
   font-size: 0.82rem;
 }
 
-@media (max-width: 1380px) {
+@media (max-width: 1180px) {
   .task-studio {
-    grid-template-columns: minmax(340px, 0.95fr) minmax(0, 1.05fr);
-    grid-template-areas:
-      "rail core"
-      "trace trace";
-    overflow: auto;
+    padding: 44px 22px 42px;
+  }
+
+  .studio-grid {
+    grid-template-columns: 1fr;
   }
 }
 
 @media (max-width: 900px) {
-  .task-studio {
-    grid-template-columns: 1fr;
-    grid-template-areas:
-      "core"
-      "rail"
-      "trace";
-    overflow: auto;
-  }
-
   .trace-stats,
-  .core-bottom-grid,
   .control-grid {
     grid-template-columns: 1fr;
   }
@@ -1703,12 +1777,30 @@ onUnmounted(() => {
 }
 
 @media (max-width: 640px) {
-  .studio-panel {
-    padding: 14px;
+  .task-studio {
+    padding: 28px 14px 34px;
   }
 
-  .trace-ring {
-    width: min(180px, 100%);
+  .composer-card {
+    padding: 18px 18px 16px;
+  }
+
+  .composer-upload {
+    position: static;
+    transform: rotate(-7deg);
+  }
+
+  .composer-count {
+    width: 100%;
+    margin-left: 0;
+  }
+
+  .core-actions {
+    align-items: stretch;
+  }
+
+  .core-actions > * {
+    width: 100%;
   }
 }
 </style>

@@ -107,18 +107,6 @@ const navItems = [
     `,
   },
   {
-    to: "/generate",
-    label: "一键生成",
-    icon: `
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-        <path d="M7 3.5h7l4 4V20a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 6 20V5A1.5 1.5 0 0 1 7.5 3.5Z" />
-        <path d="M14 3.5V8h4" />
-        <path d="M9 12h6" />
-        <path d="M9 16h6" />
-      </svg>
-    `,
-  },
-  {
     to: "/workflows",
     label: "阶段工作流",
     icon: `

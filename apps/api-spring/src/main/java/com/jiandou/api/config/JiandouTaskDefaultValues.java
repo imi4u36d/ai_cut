@@ -6,7 +6,7 @@ package com.jiandou.api.config;
 public final class JiandouTaskDefaultValues {
 
     public static final String SOURCE_FILE_NAME = "text_prompt";
-    public static final String DEFAULT_ASPECT_RATIO = "9:16";
+    public static final String DEFAULT_ASPECT_RATIO = "16:9";
     public static final int DEFAULT_DURATION_SECONDS = 8;
     public static final String EDITING_MODE = "drama";
     public static final String INTRO_TEMPLATE = "none";

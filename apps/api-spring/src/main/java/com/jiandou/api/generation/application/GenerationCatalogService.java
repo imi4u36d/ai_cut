@@ -15,6 +15,8 @@ import org.springframework.stereotype.Component;
 @Component
 public class GenerationCatalogService {
 
+    private static final String DEFAULT_TEXT_ANALYSIS_MODEL = "gpt-5.4";
+
     private final ModelRuntimePropertiesResolver modelResolver;
     private final GenerationRunSupport support;
 
@@ -34,22 +36,22 @@ public class GenerationCatalogService {
      */
     public Map<String, Object> catalog() {
         String defaultAspectRatio = support.firstNonBlank(
-            modelResolver.value("pipeline", "default_aspect_ratio", "9:16"),
-            "9:16"
+            modelResolver.value("pipeline", "default_aspect_ratio", "16:9"),
+            "16:9"
         );
         String defaultStylePreset = support.firstNonBlank(
             modelResolver.value("catalog.defaults", "style_preset", "cinematic"),
             "cinematic"
         );
         String defaultVideoSize = support.firstNonBlank(
-            modelResolver.value("catalog.defaults", "video_size", "720*1280"),
-            "720*1280"
+            modelResolver.value("catalog.defaults", "video_size", "1280*720"),
+            "1280*720"
         );
         int defaultVideoDurationSeconds = support.firstPositiveInt(
             modelResolver.intValue("catalog.defaults", "video_duration_seconds", 0),
             8
         );
-        String defaultImageSize = modelResolver.value("catalog.defaults", "image_size", "1024x1024");
+        String defaultImageSize = modelResolver.value("catalog.defaults", "image_size", "1824x1024");
         List<Map<String, Object>> textModels = modelResolver.listModelsByKind(GenerationModelKinds.TEXT);
         List<Map<String, Object>> imageModels = modelResolver.listModelsByKind(GenerationModelKinds.IMAGE);
         List<Map<String, Object>> videoModels = modelResolver.listModelsByKind(GenerationModelKinds.VIDEO);
@@ -67,7 +69,7 @@ public class GenerationCatalogService {
         payload.put("stylePresets", stylePresetOptions());
         payload.put("imageSizes", imageSizeOptions(imageModels, imageModelNames));
         payload.put("textAnalysisModels", textModels);
-        payload.put("defaultTextAnalysisModel", null);
+        payload.put("defaultTextAnalysisModel", defaultModelName(textModels, DEFAULT_TEXT_ANALYSIS_MODEL));
         payload.put("imageModels", imageModels);
         payload.put("videoModels", videoModels);
         payload.put("defaultVideoModel", null);
@@ -79,6 +81,19 @@ public class GenerationCatalogService {
         payload.put("defaultVideoDurationSeconds", defaultVideoDurationSeconds);
         payload.put("configSource", modelResolver.configSource());
         return payload;
+    }
+
+    private String defaultModelName(List<Map<String, Object>> models, String preferredModel) {
+        if (preferredModel == null || preferredModel.isBlank()) {
+            return "";
+        }
+        for (Map<String, Object> model : models) {
+            String value = String.valueOf(model.getOrDefault("value", "")).trim();
+            if (preferredModel.equals(value)) {
+                return value;
+            }
+        }
+        return "";
     }
 
     /**
@@ -94,8 +109,8 @@ public class GenerationCatalogService {
             items.add(row);
         }
         if (items.isEmpty()) {
-            items.add(Map.of("value", "9:16", "label", "竖版 9:16"));
             items.add(Map.of("value", "16:9", "label", "横版 16:9"));
+            items.add(Map.of("value", "9:16", "label", "竖版 9:16"));
         }
         return items;
     }
@@ -136,6 +151,7 @@ public class GenerationCatalogService {
             items.add(row);
         }
         if (items.isEmpty()) {
+            items.add(Map.of("value", "1824x1024", "label", "1K 16:9 · 1824x1024", "width", 1824, "height", 1024, "supportedModels", imageModelNames));
             items.add(Map.of("value", "1024x1024", "label", "1:1 · 1024x1024", "width", 1024, "height", 1024, "supportedModels", imageModelNames));
             items.add(Map.of("value", "720x1280", "label", "9:16 · 720x1280", "width", 720, "height", 1280, "supportedModels", imageModelNames));
         }
@@ -160,10 +176,10 @@ public class GenerationCatalogService {
             items.add(row);
         }
         if (items.isEmpty()) {
+            items.add(Map.of("value", "1280*720", "label", "720P · 1280 x 720", "width", 1280, "height", 720, "supportedModels", videoModelNames));
             items.add(Map.of("value", "480*854", "label", "480P · 480 x 854", "width", 480, "height", 854, "supportedModels", videoModelNames));
             items.add(Map.of("value", "854*480", "label", "480P · 854 x 480", "width", 854, "height", 480, "supportedModels", videoModelNames));
             items.add(Map.of("value", "720*1280", "label", "720P · 720 x 1280", "width", 720, "height", 1280, "supportedModels", videoModelNames));
-            items.add(Map.of("value", "1280*720", "label", "720P · 1280 x 720", "width", 1280, "height", 720, "supportedModels", videoModelNames));
             items.add(Map.of("value", "1080*1920", "label", "1080P · 1080 x 1920", "width", 1080, "height", 1920, "supportedModels", videoModelNames));
             items.add(Map.of("value", "1920*1080", "label", "1080P · 1920 x 1080", "width", 1920, "height", 1080, "supportedModels", videoModelNames));
         }

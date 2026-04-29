@@ -28,15 +28,16 @@ class GenerationCatalogServiceTest {
 
         Map<String, Object> payload = service.catalog();
 
-        assertEquals("9:16", payload.get("defaultAspectRatio"));
+        assertEquals("16:9", payload.get("defaultAspectRatio"));
         assertEquals("cinematic", payload.get("defaultStylePreset"));
-        assertEquals("1024x1024", payload.get("defaultImageSize"));
-        assertEquals("720*1280", payload.get("defaultVideoSize"));
+        assertEquals("1824x1024", payload.get("defaultImageSize"));
+        assertEquals("1280*720", payload.get("defaultVideoSize"));
         assertEquals(8, payload.get("defaultVideoDurationSeconds"));
         assertEquals("dir:/workspace/config", payload.get("configSource"));
+        assertEquals("", payload.get("defaultTextAnalysisModel"));
         assertEquals(2, list(payload, "aspectRatios").size());
         assertEquals(2, list(payload, "stylePresets").size());
-        assertEquals(2, list(payload, "imageSizes").size());
+        assertEquals(3, list(payload, "imageSizes").size());
         assertEquals(List.of(), list(payload, "imageSizes").get(0).get("supportedModels"));
         assertEquals(6, list(payload, "videoSizes").size());
         assertEquals(List.of(4, 6, 8, 10, 12), list(payload, "videoDurations").stream().map(item -> item.get("value")).toList());
@@ -46,10 +47,10 @@ class GenerationCatalogServiceTest {
     void catalogUsesConfiguredSectionsAndMatchesVideoCapabilities() {
         ModelRuntimePropertiesResolver modelResolver = mock(ModelRuntimePropertiesResolver.class);
         GenerationCatalogService service = new GenerationCatalogService(modelResolver, new GenerationRunSupport(null, null));
-        when(modelResolver.value("pipeline", "default_aspect_ratio", "9:16")).thenReturn("16:9");
+        when(modelResolver.value("pipeline", "default_aspect_ratio", "16:9")).thenReturn("16:9");
         when(modelResolver.value("catalog.defaults", "style_preset", "cinematic")).thenReturn("neo");
-        when(modelResolver.value("catalog.defaults", "video_size", "720*1280")).thenReturn("720*1280");
-        when(modelResolver.value("catalog.defaults", "image_size", "1024x1024")).thenReturn("1536x1024");
+        when(modelResolver.value("catalog.defaults", "video_size", "1280*720")).thenReturn("720*1280");
+        when(modelResolver.value("catalog.defaults", "image_size", "1824x1024")).thenReturn("1536x1024");
         when(modelResolver.intValue("catalog.defaults", "video_duration_seconds", 0)).thenReturn(8);
         when(modelResolver.listSections("catalog.aspect_ratios")).thenReturn(List.of(
             new ConfigSection("3:4", Map.of("label", "海报 3:4"))
@@ -66,7 +67,10 @@ class GenerationCatalogServiceTest {
         when(modelResolver.listSections("catalog.video_durations")).thenReturn(List.of(
             new ConfigSection("8", Map.of("label", "8 秒"))
         ));
-        when(modelResolver.listModelsByKind(GenerationModelKinds.TEXT)).thenReturn(List.of(Map.of("value", "gpt-4.1")));
+        when(modelResolver.listModelsByKind(GenerationModelKinds.TEXT)).thenReturn(List.of(
+            Map.of("value", "gpt-5.4"),
+            Map.of("value", "gpt-4.1")
+        ));
         when(modelResolver.listModelsByKind(GenerationModelKinds.IMAGE)).thenReturn(List.of(
             Map.of("value", "seedream-3.0", "supportedSizes", List.of("1536x1024")),
             Map.of("value", "gpt-image-2", "supportedSizes", List.of("1280x720"))
@@ -85,6 +89,7 @@ class GenerationCatalogServiceTest {
         assertEquals("720*1280", payload.get("defaultVideoSize"));
         assertEquals(8, payload.get("defaultVideoDurationSeconds"));
         assertEquals("dir:/workspace/config", payload.get("configSource"));
+        assertEquals("gpt-5.4", payload.get("defaultTextAnalysisModel"));
         assertEquals(List.of("seedream-3.0"), list(payload, "imageSizes").get(0).get("supportedModels"));
         assertEquals(List.of("seedance"), list(payload, "videoSizes").get(0).get("supportedModels"));
         assertEquals(List.of("seedance"), list(payload, "videoDurations").get(0).get("supportedModels"));

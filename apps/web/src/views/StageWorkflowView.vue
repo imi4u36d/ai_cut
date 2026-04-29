@@ -1,1393 +1,671 @@
 <template>
-  <section class="workflow-view">
-    <aside class="workflow-rail">
-      <div class="workflow-rail-flip-shell">
-        <div class="workflow-rail-flip" :class="{ 'workflow-rail-flip-active': createReviewFlipped }">
-          <section class="surface-panel workflow-panel workflow-rail-panel workflow-rail-flip__face workflow-rail-flip__face-front">
-            <p v-if="createError" class="workflow-error">{{ createError }}</p>
-
-            <div class="workflow-rail__actions workflow-rail__actions-inline">
-              <button class="btn-secondary btn-sm" type="button" :disabled="loadingWorkflows" @click="loadWorkflows">
-                {{ loadingWorkflows ? "刷新中..." : "刷新" }}
-              </button>
-              <button
-                class="btn-primary btn-sm workflow-submit"
-                type="button"
-                :disabled="creatingWorkflow || loadingOptions"
-                @click="startCreateWorkflow"
-              >
-                {{ creatingWorkflow ? "创建中..." : "新建工作流" }}
-              </button>
-            </div>
-
-            <label class="workflow-rail__search">
-              <span>搜索工作流</span>
-              <input v-model="workflowSearch" class="field-input" type="search" placeholder="按标题、阶段、状态筛选" />
-            </label>
-
-            <div class="workflow-list-shell">
-              <p v-if="listError" class="workflow-error">{{ listError }}</p>
-              <div v-else-if="loadingWorkflows" class="workflow-empty">正在加载工作流...</div>
-              <div v-else-if="!filteredWorkflows.length" class="workflow-empty">
-                {{ workflows.length ? "没有匹配的工作流" : "还没有阶段工作流" }}
-              </div>
-              <div v-else class="workflow-list">
-                <article
-                  v-for="item in filteredWorkflows"
-                  :key="item.id"
-                  class="workflow-list__item"
-                  :class="{ 'workflow-list__item-active': item.id === selectedWorkflowId }"
-                >
-                  <button type="button" class="workflow-list__open" @click="openWorkflow(item.id, item.currentStage)">
-                    <div class="workflow-list__top">
-                      <strong>{{ item.title }}</strong>
-                      <span class="surface-chip">{{ item.currentStage }}</span>
-                    </div>
-                    <div class="workflow-list__meta">
-                      <span>{{ item.aspectRatio }}</span>
-                      <span>分镜 {{ item.storyboardVersionCount }}</span>
-                      <span>关键帧 {{ item.keyframeVersionCount }}</span>
-                      <span>视频 {{ item.videoVersionCount }}</span>
-                    </div>
-                    <div class="workflow-list__meta">
-                      <span>{{ item.status }}</span>
-                      <span>评分 {{ ratingLabel(item.effectRating) }}</span>
-                    </div>
-                    <div class="workflow-list__meta">
-                      <span>{{ formatDateTime(item.updatedAt) }}</span>
-                    </div>
-                  </button>
-                  <div class="workflow-list__actions">
-                    <button
-                      class="btn-danger btn-sm"
-                      type="button"
-                      :disabled="busyActionKey === `delete-workflow-${item.id}`"
-                      @click="handleDeleteWorkflow(item)"
-                    >
-                      {{ busyActionKey === `delete-workflow-${item.id}` ? "删除中..." : "删除" }}
-                    </button>
-                  </div>
-                </article>
-              </div>
-            </div>
-          </section>
-
-          <section class="surface-panel workflow-panel workflow-rail-panel workflow-rail-flip__face workflow-rail-flip__face-back">
-            <div class="workflow-review-card workflow-review-card-rail">
-              <div class="stage-config-card__head workflow-review-card__head">
-                <div>
-                  <h3>创建前检查</h3>
-                </div>
-                <div class="workflow-review-card__status">
-                  <span class="surface-chip">必填完成 {{ createReviewConfiguredCount }} / {{ createReviewRequiredItems.length }}</span>
-                  <span class="surface-chip" :class="{ 'workflow-review-chip-warning': !canSubmitCreateReview }">
-                    {{ canSubmitCreateReview ? "可以保存" : "仍有必填项缺失" }}
-                  </span>
-                </div>
-              </div>
-
-              <p v-if="createError" class="workflow-error">{{ createError }}</p>
-
-              <div class="workflow-review-grid workflow-review-grid-rail">
-                <article v-for="section in createReviewSections" :key="section.key" class="workflow-review-section">
-                  <div class="workflow-review-section__head">
-                    <p class="workflow-eyebrow">{{ section.eyebrow }}</p>
-                    <h4>{{ section.title }}</h4>
-                  </div>
-
-                  <div class="workflow-review-list">
-                    <div v-for="item in section.items" :key="item.key" class="workflow-review-item">
-                      <div>
-                        <strong>{{ item.label }}</strong>
-                        <p>{{ item.valueLabel }}</p>
-                      </div>
-                      <div class="workflow-review-item__meta">
-                        <span class="surface-chip">{{ item.required ? "必填" : "可选" }}</span>
-                        <span
-                          class="surface-chip"
-                          :class="item.configured ? 'workflow-review-chip-success' : (item.required ? 'workflow-review-chip-warning' : 'workflow-review-chip-muted')"
-                        >
-                          {{ item.configured ? "已配置" : (item.required ? "未配置" : "未填写") }}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                </article>
-              </div>
-
-              <div class="workflow-review-actions workflow-review-actions-rail">
-                <button class="btn-secondary btn-sm" type="button" :disabled="creatingWorkflow" @click="closeCreateReview">
-                  取消
-                </button>
-                <button
-                  class="btn-primary btn-sm"
-                  type="button"
-                  :disabled="creatingWorkflow || !canSubmitCreateReview"
-                  @click="handleCreateWorkflow"
-                >
-                  {{ creatingWorkflow ? "保存中..." : "保存工作流" }}
-                </button>
-              </div>
-            </div>
-          </section>
+  <section class="workflow-canvas-view" :class="{ 'workflow-canvas-view-detail': selectedWorkflowId }">
+    <aside class="workflow-project-drawer">
+      <div class="workflow-drawer__head">
+        <div>
+          <p class="workflow-eyebrow">Canvas</p>
+          <h1>创作画布</h1>
         </div>
+        <button class="drawer-icon-button" type="button" :disabled="loadingWorkflows" title="刷新工作流" @click="loadWorkflows">
+          ↻
+        </button>
+      </div>
+
+      <button
+        class="workflow-new-button"
+        type="button"
+        :disabled="creatingWorkflow || loadingOptions"
+        @click="startCreateWorkflow"
+      >
+        <span>+</span>
+        {{ creatingWorkflow ? "创建中..." : "新建画布" }}
+      </button>
+
+      <label class="workflow-search-box">
+        <span>搜索</span>
+        <input v-model="workflowSearch" class="field-input" type="search" placeholder="标题、阶段、状态" />
+      </label>
+
+      <p v-if="listError" class="workflow-error">{{ listError }}</p>
+      <div v-else-if="loadingWorkflows" class="workflow-empty workflow-empty-soft">正在加载工作流...</div>
+      <div v-else-if="!filteredWorkflows.length" class="workflow-empty workflow-empty-soft">
+        {{ workflows.length ? "没有匹配的工作流" : "还没有阶段工作流" }}
+      </div>
+
+      <div v-else class="workflow-project-list">
+        <article
+          v-for="item in filteredWorkflows"
+          :key="item.id"
+          class="workflow-project-card"
+          :class="{ 'workflow-project-card-active': item.id === selectedWorkflowId }"
+        >
+          <button type="button" class="workflow-project-card__open" @click="openWorkflow(item.id, item.currentStage)">
+            <div class="workflow-project-card__title">
+              <strong>{{ item.title }}</strong>
+              <span>{{ workflowStageLabel(item.currentStage) }}</span>
+            </div>
+            <div class="workflow-project-card__stats">
+              <span>分镜 {{ item.storyboardVersionCount }}</span>
+              <span>关键帧 {{ item.keyframeVersionCount }}</span>
+              <span>视频 {{ item.videoVersionCount }}</span>
+            </div>
+            <div class="workflow-project-card__meta">
+              <span>{{ item.aspectRatio }}</span>
+              <span>{{ item.status }}</span>
+              <span>{{ formatDateTime(item.updatedAt) }}</span>
+            </div>
+          </button>
+          <details class="workflow-more-menu">
+            <summary aria-label="更多操作">•••</summary>
+            <button
+              type="button"
+              class="workflow-menu-danger"
+              :disabled="busyActionKey === `delete-workflow-${item.id}`"
+              @click="handleDeleteWorkflow(item)"
+            >
+              {{ busyActionKey === `delete-workflow-${item.id}` ? "删除中..." : "删除工作流" }}
+            </button>
+          </details>
+        </article>
       </div>
     </aside>
 
-    <section class="workflow-main">
-      <section v-if="createComposerVisible" class="surface-panel workflow-panel workflow-create-shell">
-        <div class="workflow-create-shell__grid">
-          <div class="workflow-create-canvas">
-            <form id="workflow-create-form" class="workflow-form workflow-stage-create" @submit.prevent>
-              <section class="surface-tile stage-config-card stage-config-card--base">
-                <div class="stage-config-card__head">
-                  <div class="stage-config-card__title-row">
-                    <div>
-                      <p class="workflow-eyebrow">Workflow Base</p>
-                      <h3>工作流基础信息</h3>
-                    </div>
-
-                    <div class="stage-switch-row">
-                      <button
-                        v-for="stage in createStageOptions"
-                        :key="stage.key"
-                        type="button"
-                        class="stage-switch-btn"
-                        :class="{ 'stage-switch-btn-active': activeCreateStage === stage.key }"
-                        @click="activeCreateStage = stage.key"
-                      >
-                        {{ stage.shortLabel }}
-                      </button>
-                    </div>
-                  </div>
-                </div>
-
-                <div class="stage-config-fields stage-config-fields--single">
-                  <label class="workflow-field stage-config-field-title">
-                    <span>标题</span>
-                    <input v-model="createForm.title" class="field-input" required placeholder="例如：第 12 集阶段拆分版" />
-                  </label>
-
-                  <label class="workflow-field stage-config-field-body">
-                    <span>正文</span>
-                    <textarea
-                      v-model="createForm.transcriptText"
-                      class="field-textarea"
-                      rows="5"
-                      placeholder="输入小说正文或脚本内容"
-                    ></textarea>
-                  </label>
-
-                  <label class="workflow-field stage-config-field-prompt">
-                    <span>全局 Prompt</span>
-                    <textarea
-                      v-model="createForm.globalPrompt"
-                      class="field-textarea"
-                      rows="4"
-                      placeholder="填写这一轮工作流的总体创作要求"
-                    ></textarea>
-                  </label>
-                </div>
-              </section>
-
-              <section class="surface-tile stage-config-card stage-config-card--focus">
-                <div class="stage-config-card__head">
-                  <div>
-                    <p class="workflow-eyebrow">{{ activeCreateStageMeta.label }}</p>
-                    <h3>{{ activeCreateStageMeta.description }}</h3>
-                  </div>
-                  <span class="surface-chip">参数步骤 {{ activeStageFieldIndex + 1 }} / {{ activeStageSteps.length }}</span>
-                </div>
-
-                <div class="stage-progress-form">
-                  <div class="stage-progress-form__rail">
-                    <div class="stage-progress-form__bar">
-                      <span class="stage-progress-form__fill" :style="{ width: `${activeStageProgress}%` }"></span>
-                    </div>
-                    <div class="stage-progress-form__steps">
-                      <button
-                        v-for="(step, index) in activeStageSteps"
-                        :key="step.key"
-                        type="button"
-                        class="stage-progress-form__step"
-                        :class="{
-                          'stage-progress-form__step-active': index === activeStageFieldIndex,
-                          'stage-progress-form__step-done': index < activeStageFieldIndex,
-                        }"
-                        @click="setStageFieldIndex(index)"
-                      >
-                        <span>{{ index + 1 }}</span>
-                        <strong>{{ step.label }}</strong>
-                      </button>
-                    </div>
-                  </div>
-
-                  <div class="stage-progress-form__panel">
-                    <div class="stage-progress-form__panel-head">
-                      <div>
-                        <h4>{{ currentStageField?.label }}</h4>
-                      </div>
-                      <span class="surface-chip">{{ currentStageField?.valueLabel }}</span>
-                    </div>
-
-                    <div v-if="currentStageField?.key === 'textAnalysisModel'" class="stage-progress-form__field">
-                      <span>选择文本分镜模型</span>
-                      <div class="stage-option-grid">
-                        <button
-                          v-for="item in textModelOptions"
-                          :key="item.value"
-                          type="button"
-                          class="stage-option-card"
-                          :class="{ 'stage-option-card-active': createForm.textAnalysisModel === item.value }"
-                          @click="createForm.textAnalysisModel = item.value"
-                        >
-                          <strong>{{ item.label }}</strong>
-                          <span>{{ item.description || item.provider || item.value }}</span>
-                        </button>
-                      </div>
-                    </div>
-
-                    <div v-else-if="currentStageField?.key === 'storyboardDurationSeconds'" class="stage-progress-form__field stage-progress-form__field-slider">
-                      <span>选择镜头时长模式</span>
-                      <div class="stage-toggle-row">
-                        <button
-                          type="button"
-                          class="stage-toggle-chip"
-                          :class="{ 'stage-toggle-chip-active': storyboardDurationMode === 'auto' }"
-                          @click="storyboardDurationMode = 'auto'"
-                        >
-                          自动
-                        </button>
-                        <button
-                          type="button"
-                          class="stage-toggle-chip"
-                          :class="{ 'stage-toggle-chip-active': storyboardDurationMode === 'manual' }"
-                          @click="storyboardDurationMode = 'manual'"
-                        >
-                          手动
-                        </button>
-                      </div>
-                      <p class="stage-progress-form__field-note">
-                        {{ storyboardDurationMode === "auto" ? "自动模式会沿用当前工作流的默认时长策略。" : storyboardManualDurationHint }}
-                      </p>
-                      <template v-if="storyboardDurationMode === 'manual'">
-                        <input
-                          v-model="storyboardManualDurationSeconds"
-                          class="stage-slider__range"
-                          type="range"
-                          :min="STORYBOARD_MANUAL_DURATION_MIN_SECONDS"
-                          :max="STORYBOARD_MANUAL_DURATION_MAX_SECONDS"
-                          step="1"
-                        />
-                        <div class="stage-slider__meta">
-                          <strong>{{ storyboardManualDurationSeconds || String(STORYBOARD_MANUAL_DURATION_MIN_SECONDS) }} 秒</strong>
-                          <input
-                            v-model="storyboardManualDurationSeconds"
-                            class="field-input stage-slider__number"
-                            type="number"
-                            :min="STORYBOARD_MANUAL_DURATION_MIN_SECONDS"
-                            :max="STORYBOARD_MANUAL_DURATION_MAX_SECONDS"
-                            step="1"
-                          />
-                        </div>
-                        <p v-if="storyboardManualDurationValidationMessage" class="stage-progress-form__field-error">
-                          {{ storyboardManualDurationValidationMessage }}
-                        </p>
-                      </template>
-                    </div>
-
-                    <div v-else-if="currentStageField?.key === 'keyframeSeed'" class="stage-progress-form__field stage-progress-form__field-slider">
-                      <span>选择 Seed 模式</span>
-                      <div class="stage-toggle-row">
-                        <button
-                          type="button"
-                          class="stage-toggle-chip"
-                          :class="{ 'stage-toggle-chip-active': createForm.keyframeSeed === '' }"
-                          @click="createForm.keyframeSeed = ''"
-                        >
-                          自动
-                        </button>
-                        <button
-                          type="button"
-                          class="stage-toggle-chip"
-                          :class="{ 'stage-toggle-chip-active': createForm.keyframeSeed !== '' }"
-                          @click="createForm.keyframeSeed = createForm.keyframeSeed || '1024'"
-                        >
-                          固定 Seed
-                        </button>
-                      </div>
-                      <template v-if="createForm.keyframeSeed !== ''">
-                        <input
-                          v-model="createForm.keyframeSeed"
-                          class="stage-slider__range"
-                          type="range"
-                          min="0"
-                          max="9999"
-                          step="1"
-                        />
-                        <div class="stage-slider__meta">
-                          <strong>{{ createForm.keyframeSeed }}</strong>
-                          <input
-                            v-model="createForm.keyframeSeed"
-                            class="field-input stage-slider__number"
-                            type="number"
-                            min="0"
-                            max="9999"
-                            step="1"
-                          />
-                        </div>
-                      </template>
-                    </div>
-
-                    <div v-else-if="currentStageField?.key === 'imageModel'" class="stage-progress-form__field">
-                      <span>选择关键帧模型</span>
-                      <div class="stage-option-grid">
-                        <button
-                          v-for="item in imageModelOptions"
-                          :key="item.value"
-                          type="button"
-                          class="stage-option-card"
-                          :class="{ 'stage-option-card-active': createForm.imageModel === item.value }"
-                          @click="createForm.imageModel = item.value"
-                        >
-                          <strong>{{ item.label }}</strong>
-                          <span>{{ item.description || item.provider || item.value }}</span>
-                        </button>
-                      </div>
-                    </div>
-
-                    <div v-else-if="currentStageField?.key === 'stylePreset'" class="stage-progress-form__field">
-                      <span>选择视觉风格</span>
-                      <div class="stage-option-grid">
-                        <button
-                          v-for="item in stylePresetOptions"
-                          :key="item.key"
-                          type="button"
-                          class="stage-option-card"
-                          :class="{ 'stage-option-card-active': createForm.stylePreset === item.key }"
-                          @click="createForm.stylePreset = item.key"
-                        >
-                          <strong>{{ item.label }}</strong>
-                          <span>{{ item.description || item.key }}</span>
-                        </button>
-                      </div>
-                    </div>
-
-                    <div v-else-if="currentStageField?.key === 'aspectRatio'" class="stage-progress-form__field">
-                      <span>选择画面比例</span>
-                      <div class="stage-option-grid stage-option-grid--compact">
-                        <button
-                          v-for="item in aspectRatioOptions"
-                          :key="item.value"
-                          type="button"
-                          class="stage-option-card"
-                          :class="{ 'stage-option-card-active': createForm.aspectRatio === item.value }"
-                          @click="createForm.aspectRatio = item.value"
-                        >
-                          <strong>{{ item.label }}</strong>
-                          <span>输出画面比例</span>
-                        </button>
-                      </div>
-                    </div>
-
-                    <div v-else-if="currentStageField?.key === 'videoModel'" class="stage-progress-form__field">
-                      <span>选择视频模型</span>
-                      <div class="stage-option-grid">
-                        <button
-                          v-for="item in videoModelOptions"
-                          :key="item.value"
-                          type="button"
-                          class="stage-option-card"
-                          :class="{ 'stage-option-card-active': createForm.videoModel === item.value }"
-                          @click="createForm.videoModel = item.value"
-                        >
-                          <strong>{{ item.label }}</strong>
-                          <span>{{ item.description || item.provider || item.value }}</span>
-                        </button>
-                      </div>
-                    </div>
-
-                    <div v-else-if="currentStageField?.key === 'videoSize'" class="stage-progress-form__field">
-                      <span>选择输出尺寸</span>
-                      <div class="stage-option-grid stage-option-grid--compact">
-                        <button
-                          v-for="item in videoSizeOptions"
-                          :key="item.value"
-                          type="button"
-                          class="stage-option-card"
-                          :class="{ 'stage-option-card-active': createForm.videoSize === item.value }"
-                          @click="createForm.videoSize = item.value"
-                        >
-                          <strong>{{ item.label }}</strong>
-                          <span>{{ item.width && item.height ? `${item.width} × ${item.height}` : item.value }}</span>
-                        </button>
-                      </div>
-                    </div>
-
-                    <div v-else-if="currentStageField?.key === 'videoSeed'" class="stage-progress-form__field stage-progress-form__field-slider">
-                      <span>选择 Seed 模式</span>
-                      <div class="stage-toggle-row">
-                        <button
-                          type="button"
-                          class="stage-toggle-chip"
-                          :class="{ 'stage-toggle-chip-active': createForm.videoSeed === '' }"
-                          @click="createForm.videoSeed = ''"
-                        >
-                          自动
-                        </button>
-                        <button
-                          type="button"
-                          class="stage-toggle-chip"
-                          :class="{ 'stage-toggle-chip-active': createForm.videoSeed !== '' }"
-                          @click="createForm.videoSeed = createForm.videoSeed || '1024'"
-                        >
-                          固定 Seed
-                        </button>
-                      </div>
-                      <template v-if="createForm.videoSeed !== ''">
-                        <input
-                          v-model="createForm.videoSeed"
-                          class="stage-slider__range"
-                          type="range"
-                          min="0"
-                          max="9999"
-                          step="1"
-                        />
-                        <div class="stage-slider__meta">
-                          <strong>{{ createForm.videoSeed }}</strong>
-                          <input
-                            v-model="createForm.videoSeed"
-                            class="field-input stage-slider__number"
-                            type="number"
-                            min="0"
-                            max="9999"
-                            step="1"
-                          />
-                        </div>
-                      </template>
-                    </div>
-
-                    <div class="stage-progress-form__actions">
-                      <button
-                        class="btn-secondary btn-sm"
-                        type="button"
-                        :disabled="activeStageFieldIndex === 0"
-                        @click="previousStageField"
-                      >
-                        上一步
-                      </button>
-                      <button class="btn-secondary btn-sm" type="button" @click="nextStageField">
-                        {{ activeStageFieldIndex >= activeStageSteps.length - 1 ? "回到第一项" : "下一步" }}
-                      </button>
-                    </div>
-                  </div>
-
-                  <div class="stage-progress-form__summary">
-                    <button
-                      v-for="(step, index) in activeStageSteps"
-                      :key="`${activeCreateStage}-${step.key}`"
-                      type="button"
-                      class="stage-summary-card"
-                      :class="{ 'stage-summary-card-active': index === activeStageFieldIndex }"
-                      @click="setStageFieldIndex(index)"
-                    >
-                      <span>{{ step.label }}</span>
-                      <strong>{{ step.valueLabel }}</strong>
-                    </button>
-                  </div>
-                </div>
-              </section>
-            </form>
+    <section class="workflow-canvas-main">
+      <section v-if="createComposerVisible" class="workflow-create-board">
+        <div class="workflow-create-composer">
+          <div class="workflow-create-title">
+            <p class="workflow-eyebrow">New Canvas</p>
+            <h2>把正文放进画布，开始阶段创作</h2>
           </div>
+
+          <form class="workflow-composer-card" @submit.prevent="handleCreateWorkflow">
+            <label class="workflow-composer-title-field">
+              <span>标题</span>
+              <input v-model="createForm.title" required placeholder="例如：第 12 集阶段拆分版" />
+            </label>
+            <label class="workflow-composer-body-field">
+              <span>正文</span>
+              <textarea v-model="createForm.transcriptText" rows="10" placeholder="输入小说正文或脚本内容"></textarea>
+            </label>
+            <label class="workflow-composer-prompt-field">
+              <span>全局 Prompt</span>
+              <textarea v-model="createForm.globalPrompt" rows="4" placeholder="可选：补充整体风格、节奏、镜头要求"></textarea>
+            </label>
+
+            <div class="workflow-composer-toolbar">
+              <span class="tool-pill tool-pill-accent">阶段画布</span>
+              <span class="tool-pill">分镜</span>
+              <span class="tool-pill">关键帧</span>
+              <span class="tool-pill">视频</span>
+              <span class="composer-required-count">必填 {{ createReviewConfiguredCount }} / {{ createReviewRequiredItems.length }}</span>
+              <button
+                class="workflow-composer-submit"
+                type="submit"
+                :disabled="creatingWorkflow || !canSubmitCreateReview"
+                :title="canSubmitCreateReview ? '创建画布' : '请先补全必填项'"
+              >
+                <span v-if="creatingWorkflow">...</span>
+                <span v-else>↑</span>
+              </button>
+            </div>
+          </form>
         </div>
+
+        <aside class="workflow-inspector workflow-create-inspector">
+          <div class="inspector-section">
+            <div class="inspector-section__head">
+              <p class="workflow-eyebrow">Advanced</p>
+              <h3>高级参数</h3>
+            </div>
+            <div class="workflow-settings-stack">
+              <label class="workflow-field">
+                <span>文本模型</span>
+                <select v-model="createForm.textAnalysisModel" class="field-input">
+                  <option v-for="item in textModelOptions" :key="item.value" :value="item.value">{{ item.label }}</option>
+                </select>
+              </label>
+              <label class="workflow-field">
+                <span>关键帧模型</span>
+                <select v-model="createForm.imageModel" class="field-input">
+                  <option v-for="item in imageModelOptions" :key="item.value" :value="item.value">{{ item.label }}</option>
+                </select>
+              </label>
+              <label class="workflow-field">
+                <span>视频模型</span>
+                <select v-model="createForm.videoModel" class="field-input">
+                  <option v-for="item in videoModelOptions" :key="item.value" :value="item.value">{{ item.label }}</option>
+                </select>
+              </label>
+              <label class="workflow-field">
+                <span>视觉风格</span>
+                <select v-model="createForm.stylePreset" class="field-input">
+                  <option v-for="item in stylePresetOptions" :key="item.key" :value="item.key">{{ item.label }}</option>
+                </select>
+              </label>
+              <label class="workflow-field">
+                <span>画幅</span>
+                <select v-model="createForm.aspectRatio" class="field-input">
+                  <option v-for="item in aspectRatioOptions" :key="item.value" :value="item.value">{{ item.label }}</option>
+                </select>
+              </label>
+              <label class="workflow-field">
+                <span>输出尺寸</span>
+                <select v-model="createForm.videoSize" class="field-input">
+                  <option v-for="item in videoSizeOptions" :key="item.value" :value="item.value">{{ item.label }}</option>
+                </select>
+              </label>
+              <div class="workflow-field">
+                <span>镜头时长</span>
+                <div class="stage-toggle-row">
+                  <button type="button" class="stage-toggle-chip" :class="{ 'stage-toggle-chip-active': storyboardDurationMode === 'auto' }" @click="storyboardDurationMode = 'auto'">自动</button>
+                  <button type="button" class="stage-toggle-chip" :class="{ 'stage-toggle-chip-active': storyboardDurationMode === 'manual' }" @click="storyboardDurationMode = 'manual'">手动</button>
+                </div>
+              </div>
+              <label v-if="storyboardDurationMode === 'manual'" class="workflow-field">
+                <span>固定秒数</span>
+                <input v-model="storyboardManualDurationSeconds" class="field-input" type="number" :min="STORYBOARD_MANUAL_DURATION_MIN_SECONDS" :max="STORYBOARD_MANUAL_DURATION_MAX_SECONDS" step="1" />
+              </label>
+              <label class="workflow-field">
+                <span>关键帧 Seed</span>
+                <input v-model="createForm.keyframeSeed" class="field-input" type="number" min="0" placeholder="自动" />
+              </label>
+              <label class="workflow-field">
+                <span>视频 Seed</span>
+                <input v-model="createForm.videoSeed" class="field-input" type="number" min="0" placeholder="自动" />
+              </label>
+            </div>
+            <p v-if="storyboardManualDurationValidationMessage" class="workflow-error">{{ storyboardManualDurationValidationMessage }}</p>
+            <p v-if="createError" class="workflow-error">{{ createError }}</p>
+            <div class="workflow-inspector-actions">
+              <button class="btn-secondary btn-sm" type="button" :disabled="creatingWorkflow" @click="closeCreateReview">取消</button>
+              <button class="btn-primary btn-sm" type="button" :disabled="creatingWorkflow || !canSubmitCreateReview" @click="handleCreateWorkflow">
+                {{ creatingWorkflow ? "保存中..." : "创建画布" }}
+              </button>
+            </div>
+          </div>
+        </aside>
       </section>
 
-      <div v-if="detailError" class="surface-panel workflow-banner workflow-banner-error">
+      <div v-else-if="detailError" class="surface-panel workflow-banner workflow-banner-error">
         <p>{{ detailError }}</p>
         <button class="btn-secondary btn-sm" type="button" :disabled="loadingDetail" @click="reloadCurrentWorkflow">重新加载</button>
       </div>
 
-      <div v-if="loadingDetail" class="surface-panel workflow-empty">
+      <div v-else-if="loadingDetail" class="surface-panel workflow-empty workflow-empty-large">
         正在加载工作流详情...
       </div>
 
       <template v-else-if="selectedWorkflow">
-        <section class="surface-panel workflow-settings-panel">
-          <div class="workflow-settings-panel__head">
-            <div>
-              <p class="workflow-eyebrow">Workflow Settings</p>
-              <h2>工作流设置</h2>
-              <div class="workflow-summary__meta">
-                <span class="surface-chip">{{ valueOptionLabel(aspectRatioOptions, selectedWorkflow.aspectRatio, selectedWorkflow.aspectRatio || "未设置") }}</span>
-                <span class="surface-chip">{{ keyOptionLabel(stylePresetOptions, selectedWorkflow.stylePreset, selectedWorkflow.stylePreset || "未设置") }}</span>
-                <span class="surface-chip">{{ valueOptionLabel(catalogVideoSizeOptions, selectedWorkflow.videoSize, selectedWorkflow.videoSize || "未设置") }}</span>
-              </div>
+        <header class="workflow-canvas-header">
+          <div>
+            <p class="workflow-eyebrow">Creative Canvas</p>
+            <h2>{{ selectedWorkflow.title }}</h2>
+            <div class="workflow-summary__meta">
+              <span class="surface-chip">{{ selectedWorkflow.status }}</span>
+              <span class="surface-chip">{{ workflowStageLabel(selectedWorkflow.currentStage) }}</span>
+              <span class="surface-chip">{{ selectedWorkflow.aspectRatio }}</span>
+              <span class="surface-chip">评分 {{ ratingLabel(selectedWorkflow.effectRating) }}</span>
             </div>
-            <button class="btn-secondary btn-sm" type="button" @click="workflowSettingsOpen = !workflowSettingsOpen">
-              {{ workflowSettingsOpen ? "收起设置" : "编辑设置" }}
-            </button>
           </div>
+          <button class="btn-secondary btn-sm" type="button" @click="workflowSettingsOpen = !workflowSettingsOpen">
+            {{ workflowSettingsOpen ? "收起参数" : "参数" }}
+          </button>
+        </header>
 
-          <form v-if="workflowSettingsOpen" class="workflow-settings-form" @submit.prevent="handleUpdateWorkflowSettings">
-            <label class="workflow-field workflow-settings-field-model">
-              <span>文本模型</span>
-              <select v-model="workflowSettingsDraft.textAnalysisModel" class="field-input">
-                <option v-for="item in textModelOptions" :key="item.value" :value="item.value">{{ item.label }}</option>
-              </select>
-            </label>
-            <label class="workflow-field workflow-settings-field-model">
-              <span>关键帧模型</span>
-              <select v-model="workflowSettingsDraft.imageModel" class="field-input">
-                <option v-for="item in imageModelOptions" :key="item.value" :value="item.value">{{ item.label }}</option>
-              </select>
-            </label>
-            <label class="workflow-field workflow-settings-field-model">
-              <span>视频模型</span>
-              <select v-model="workflowSettingsDraft.videoModel" class="field-input">
-                <option v-for="item in videoModelOptions" :key="item.value" :value="item.value">{{ item.label }}</option>
-              </select>
-            </label>
-            <label class="workflow-field workflow-settings-field-compact">
-              <span>视觉风格</span>
-              <select v-model="workflowSettingsDraft.stylePreset" class="field-input">
-                <option v-for="item in stylePresetOptions" :key="item.key" :value="item.key">{{ item.label }}</option>
-              </select>
-            </label>
-            <label class="workflow-field workflow-settings-field-short">
-              <span>长宽比</span>
-              <select v-model="workflowSettingsDraft.aspectRatio" class="field-input">
-                <option v-for="item in aspectRatioOptions" :key="item.value" :value="item.value">{{ item.label }}</option>
-              </select>
-            </label>
-            <label class="workflow-field workflow-settings-field-short">
-              <span>关键帧 Seed</span>
-              <input v-model="workflowSettingsDraft.keyframeSeed" class="field-input" type="number" min="0" max="999999999" placeholder="自动" />
-            </label>
-            <label class="workflow-field workflow-settings-field-compact">
-              <span>输出尺寸</span>
-              <select v-model="workflowSettingsDraft.videoSize" class="field-input">
-                <option v-for="item in workflowSettingsVideoSizeOptions" :key="item.value" :value="item.value">{{ item.label }}</option>
-              </select>
-            </label>
-            <label class="workflow-field workflow-settings-field-short">
-              <span>视频 Seed</span>
-              <input v-model="workflowSettingsDraft.videoSeed" class="field-input" type="number" min="0" max="999999999" placeholder="自动" />
-            </label>
-            <div class="workflow-field workflow-settings-field-mode">
-              <span>镜头时长模式</span>
-              <div class="stage-toggle-row">
-                <button
-                  type="button"
-                  class="stage-toggle-chip"
-                  :class="{ 'stage-toggle-chip-active': workflowSettingsDraft.durationMode === 'auto' }"
-                  @click="workflowSettingsDraft.durationMode = 'auto'"
-                >
-                  自动
-                </button>
-                <button
-                  type="button"
-                  class="stage-toggle-chip"
-                  :class="{ 'stage-toggle-chip-active': workflowSettingsDraft.durationMode === 'manual' }"
-                  @click="workflowSettingsDraft.durationMode = 'manual'"
-                >
-                  手动
-                </button>
-              </div>
-            </div>
-            <label class="workflow-field workflow-settings-field-duration">
-              <span>最小时长</span>
-              <input v-model="workflowSettingsDraft.minDurationSeconds" class="field-input" type="number" min="1" max="60" step="1" :disabled="workflowSettingsDraft.durationMode === 'auto'" />
-            </label>
-            <label class="workflow-field workflow-settings-field-duration">
-              <span>最大时长</span>
-              <input v-model="workflowSettingsDraft.maxDurationSeconds" class="field-input" type="number" min="1" max="60" step="1" :disabled="workflowSettingsDraft.durationMode === 'auto'" />
-            </label>
-            <div class="workflow-settings-form__actions">
-              <span v-if="workflowSettingsValidationMessage" class="stage-progress-form__field-error">{{ workflowSettingsValidationMessage }}</span>
-              <button class="btn-primary btn-sm" type="submit" :disabled="busyActionKey === 'workflow-settings' || Boolean(workflowSettingsValidationMessage)">
-                {{ busyActionKey === "workflow-settings" ? "保存中..." : "保存设置" }}
-              </button>
-            </div>
-          </form>
-        </section>
+        <nav class="workflow-stage-pipeline" aria-label="阶段流水线">
+          <button
+            v-for="stage in canvasStageItems"
+            :key="stage.key"
+            type="button"
+            class="workflow-stage-step"
+            :class="{
+              'workflow-stage-step-active': activeCanvasStage === stage.key,
+              'workflow-stage-step-ready': stage.ready,
+            }"
+            @click="switchCanvasStage(stage.key)"
+          >
+            <span class="workflow-stage-step__index">{{ stage.index }}</span>
+            <span class="workflow-stage-step__text">
+              <strong>{{ stage.label }}</strong>
+              <small>{{ stage.status }}</small>
+            </span>
+            <span class="workflow-stage-step__count">{{ stage.count }}</span>
+          </button>
+        </nav>
 
-        <section v-if="activeCreateStage === 'storyboard'" class="surface-panel workflow-panel workflow-stage-panel">
-          <div class="workflow-panel__head">
-            <div>
-              <p class="workflow-eyebrow">Stage 1</p>
-              <h2>文本分镜模块</h2>
-              <div class="workflow-summary__meta">
-                <span class="surface-chip">{{ selectedWorkflow.title }}</span>
-                <span class="surface-chip">{{ selectedWorkflow.status }}</span>
-                <span class="surface-chip">{{ selectedWorkflow.currentStage }}</span>
-                <span class="surface-chip">{{ selectedWorkflow.aspectRatio }}</span>
-              </div>
-            </div>
-            <div class="workflow-stage-panel__actions">
-              <div class="stage-switch-row">
-                <button
-                  v-for="stage in createStageOptions"
-                  :key="`detail-${stage.key}`"
-                  type="button"
-                  class="stage-switch-btn"
-                  :class="{ 'stage-switch-btn-active': activeCreateStage === stage.key }"
-                  @click="switchWorkflowStage(stage.key)"
-                >
-                  {{ stage.shortLabel }}
-                </button>
-              </div>
-              <div class="workflow-summary__actions">
+        <section class="workflow-canvas-grid">
+          <main class="workflow-stage-canvas">
+            <section v-if="activeCanvasStage === 'storyboard'" class="workflow-stage-board storyboard-board">
+              <div class="stage-board__head">
+                <div>
+                  <p class="workflow-eyebrow">Stage 1</p>
+                  <h3>分镜脚本</h3>
+                </div>
                 <button class="btn-primary btn-sm" type="button" :disabled="busyActionKey === 'storyboard'" @click="handleGenerateStoryboard">
                   {{ busyActionKey === "storyboard" ? "生成中..." : "生成分镜版本" }}
                 </button>
-                <span class="surface-chip">{{ selectedWorkflow.storyboardVersions.length }} 个版本</span>
               </div>
-            </div>
-          </div>
 
-          <section class="workflow-stage-content">
-            <div v-if="!selectedWorkflow.storyboardVersions.length" class="workflow-empty">
-              还没有分镜版本，先执行一次分镜生成。
-            </div>
-            <div v-else>
-              <div v-if="selectedWorkflow.storyboardVersions.length > 1" class="workflow-scroll-hint">
-                向下滚动选择分镜版本
+              <div v-if="!selectedWorkflow.storyboardVersions.length" class="workflow-empty workflow-empty-large">
+                还没有分镜版本，先执行一次分镜生成。
               </div>
-              <div class="version-grid storyboard-version-list">
-                <article v-for="version in selectedWorkflow.storyboardVersions" :key="version.id" class="surface-tile version-card">
-                  <div class="version-card__head">
+              <div v-else class="storyboard-layout">
+                <article class="storyboard-preview-card">
+                  <div class="storyboard-preview-card__head">
                     <div>
-                      <h3>{{ version.title }}</h3>
-                      <div class="version-card__meta">
-                        <span class="surface-chip">V{{ version.versionNo }}</span>
-                        <span class="surface-chip">{{ version.status }}</span>
-                        <span v-if="version.selected" class="surface-chip">当前选中</span>
-                      </div>
+                      <span class="surface-chip">当前分镜</span>
+                      <h4>{{ selectedStoryboardVersion?.title || "未选择分镜" }}</h4>
                     </div>
-                    <button class="btn-secondary btn-sm" type="button" :disabled="version.selected || busyActionKey === version.id" @click="handleSelectStoryboard(version.id)">
-                      {{ busyActionKey === version.id ? "处理中..." : (version.selected ? "已选中" : "设为当前") }}
+                    <button
+                      v-if="selectedStoryboardVersion && !selectedStoryboardVersion.selected"
+                      class="btn-secondary btn-sm"
+                      type="button"
+                      :disabled="busyActionKey === selectedStoryboardVersion.id"
+                      @click="handleSelectStoryboard(selectedStoryboardVersion.id)"
+                    >
+                      {{ busyActionKey === selectedStoryboardVersion.id ? "处理中..." : "设为当前" }}
                     </button>
                   </div>
+                  <div v-if="selectedStoryboardVersion" class="version-card__markdown storyboard-preview-markdown" v-html="storyboardPreviewHtml(selectedStoryboardVersion)"></div>
+                </article>
 
-                  <div class="version-card__text version-card__markdown" v-html="storyboardPreviewHtml(version)"></div>
-
-                  <div class="storyboard-adjust-row">
-                    <input
-                      v-model="storyboardAdjustmentDrafts[version.id]"
-                      class="field-input storyboard-adjust-row__input"
-                      type="text"
-                      placeholder="输入调整要求，留空则自动审查"
-                    />
+                <aside class="version-side-panel">
+                  <div class="version-side-panel__head">
+                    <strong>版本历史</strong>
+                    <span class="surface-chip">{{ selectedWorkflow.storyboardVersions.length }} 个版本</span>
+                  </div>
+                  <div class="compact-version-list">
+                    <article
+                      v-for="version in selectedWorkflow.storyboardVersions"
+                      :key="version.id"
+                      class="compact-version-card"
+                      :class="{ 'compact-version-card-active': selectedStoryboardVersion?.id === version.id }"
+                    >
+                      <button type="button" class="compact-version-card__main" @click="setPreviewStoryboardVersion(version.id)">
+                        <strong>V{{ version.versionNo }} · {{ version.title }}</strong>
+                        <span>{{ version.status }} · 评分 {{ ratingLabel(version.rating) }}</span>
+                      </button>
+                      <details class="workflow-more-menu compact-version-menu">
+                        <summary aria-label="版本操作">•••</summary>
+                        <button type="button" :disabled="version.selected || busyActionKey === version.id" @click="handleSelectStoryboard(version.id)">
+                          {{ version.selected ? "已选中" : "设为当前" }}
+                        </button>
+                        <button type="button" :disabled="!version.asset || busyActionKey === `reuse-${version.id}`" @click="handleReuseAsset(version.asset?.id || '', version.id)">复制为新工作流</button>
+                        <button type="button" class="workflow-menu-danger" :disabled="busyActionKey === `delete-${version.id}`" @click="handleDeleteStageVersion(version)">删除版本</button>
+                      </details>
+                    </article>
+                  </div>
+                  <div v-if="selectedStoryboardVersion" class="storyboard-adjust-panel">
+                    <input v-model="storyboardAdjustmentDrafts[selectedStoryboardVersion.id]" class="field-input" type="text" placeholder="输入调整要求，留空则自动审查" />
                     <button
                       class="btn-primary btn-sm"
                       type="button"
-                      :disabled="busyActionKey === `storyboard-adjust-${version.id}` || version.status !== 'SUCCEEDED'"
-                      @click="handleAdjustStoryboard(version.id)"
+                      :disabled="busyActionKey === `storyboard-adjust-${selectedStoryboardVersion.id}` || selectedStoryboardVersion.status !== 'SUCCEEDED'"
+                      @click="handleAdjustStoryboard(selectedStoryboardVersion.id)"
                     >
-                      {{ busyActionKey === `storyboard-adjust-${version.id}` ? "调整中..." : "调整" }}
+                      {{ busyActionKey === `storyboard-adjust-${selectedStoryboardVersion.id}` ? "调整中..." : "调整分镜" }}
                     </button>
                   </div>
-
-                  <div class="rating-row">
-                    <button
-                      v-for="score in ratingOptions"
-                      :key="`${version.id}-${score}`"
-                      type="button"
-                      class="rating-pill"
-                      :class="{ 'rating-pill-active': Number(stageRatingDrafts[version.id] || version.rating || 0) === score }"
-                      @click="setStageRatingDraft(version.id, score)"
-                    >
-                      {{ score }}
-                    </button>
-                  </div>
-                  <textarea
-                    v-model="stageNoteDrafts[version.id]"
-                    class="field-textarea version-card__textarea"
-                    rows="3"
-                    placeholder="分镜评价"
-                  ></textarea>
-
-                  <div class="version-card__actions">
-                    <button class="btn-secondary btn-sm" type="button" :disabled="busyActionKey === `rate-${version.id}`" @click="handleRateStageVersion(version)">
-                      {{ busyActionKey === `rate-${version.id}` ? "保存中..." : "保存评分" }}
-                    </button>
-                    <button
-                      class="btn-ghost btn-sm"
-                      type="button"
-                      :disabled="!version.asset || busyActionKey === `reuse-${version.id}`"
-                      @click="handleReuseAsset(version.asset?.id || '', version.id)"
-                    >
-                      {{ busyActionKey === `reuse-${version.id}` ? "复制中..." : "复制为新工作流" }}
-                    </button>
-                    <button class="btn-danger btn-sm" type="button" :disabled="busyActionKey === `delete-${version.id}`" @click="handleDeleteStageVersion(version)">
-                      {{ busyActionKey === `delete-${version.id}` ? "删除中..." : "删除版本" }}
-                    </button>
-                  </div>
-
-                </article>
-              </div>
-            </div>
-          </section>
-        </section>
-
-        <section v-else-if="activeCreateStage === 'keyframe'" class="surface-panel workflow-panel workflow-stage-panel">
-          <div class="workflow-panel__head">
-            <div>
-              <p class="workflow-eyebrow">Stage 2 / 3</p>
-              <h2>关键帧模块</h2>
-              <div class="workflow-summary__meta">
-                <span class="surface-chip">{{ valueOptionLabel(imageModelOptions, selectedWorkflow.imageModel, selectedWorkflow.imageModel || "未设置") }}</span>
-                <span class="surface-chip">{{ keyOptionLabel(stylePresetOptions, selectedWorkflow.stylePreset, selectedWorkflow.stylePreset || "未设置") }}</span>
-                <span class="surface-chip">{{ selectedWorkflow.aspectRatio }}</span>
-                <span class="surface-chip">关键帧 Seed {{ seedLabel(selectedWorkflow.keyframeSeed) }}</span>
-              </div>
-            </div>
-            <div class="workflow-stage-panel__actions">
-              <div class="stage-switch-row">
-                <button
-                  v-for="stage in createStageOptions"
-                  :key="`detail-${stage.key}`"
-                  type="button"
-                  class="stage-switch-btn"
-                  :class="{ 'stage-switch-btn-active': activeCreateStage === stage.key }"
-                  @click="switchWorkflowStage(stage.key)"
-                >
-                  {{ stage.shortLabel }}
-                </button>
-              </div>
-              <div class="workflow-summary__actions">
-                <span class="surface-chip">{{ selectedWorkflow.clipSlots.length }} 个镜头</span>
-              </div>
-            </div>
-          </div>
-
-          <div v-if="!workflowCharacterSheets.length && !selectedWorkflow.clipSlots.length" class="workflow-empty">
-            选中分镜版本后，这里会展开角色三视图与镜头列表。
-          </div>
-
-          <div v-else class="clip-stack">
-            <section class="surface-tile clip-card clip-card-character-sheet-section">
-              <div class="clip-card__head">
-                <div>
-                  <p class="workflow-eyebrow">Character Sheets</p>
-                  <h3>角色三视图</h3>
-                  <p class="clip-card__desc">首次进入关键帧阶段时，先为每个角色生成多版本三视图，再选中继续。</p>
-                </div>
-                <div class="clip-card__meta">
-                  <span class="surface-chip">{{ workflowCharacterSheets.length }} 个角色</span>
-                </div>
-              </div>
-
-              <div v-if="!workflowCharacterSheets.length" class="workflow-empty workflow-empty-nested">
-                当前工作流还没有角色三视图。
-              </div>
-              <div v-else class="character-sheet-stack">
-                <article v-for="sheet in workflowCharacterSheets" :key="characterSheetKey(sheet)" class="character-sheet-card">
-                  <div class="clip-card__head">
-                    <div>
-                      <p class="workflow-eyebrow">Character {{ characterSheetClipIndex(sheet) ?? "-" }}</p>
-                      <h3>{{ characterSheetTitle(sheet) }}</h3>
-                      <p class="clip-card__desc">{{ characterSheetAppearanceSummary(sheet) }}</p>
-                    </div>
-                    <div class="clip-card__meta">
-                      <span v-if="selectedCharacterSheetVersion(sheet)" class="surface-chip">
-                        {{ selectedCharacterSheetVersion(sheet)?.title }}
-                      </span>
-                      <button
-                        class="btn-primary btn-sm"
-                        type="button"
-                        :disabled="characterSheetClipIndex(sheet) === null"
-                        @click="openCharacterAssetPicker(sheet)"
-                      >
-                        从素材库选择
-                      </button>
-                      <button
-                        class="btn-ghost btn-sm"
-                        type="button"
-                        :disabled="characterSheetClipIndex(sheet) === null || busyActionKey === `keyframe-${characterSheetClipIndex(sheet)}`"
-                        @click="handleGenerateKeyframe(characterSheetClipIndex(sheet) || 0)"
-                      >
-                        {{ busyActionKey === `keyframe-${characterSheetClipIndex(sheet)}` ? "生成中..." : "生成三视图" }}
-                      </button>
-                    </div>
-                  </div>
-
-                  <section v-if="isCharacterAssetPickerOpen(sheet)" class="character-asset-picker">
-                    <div class="character-asset-picker__head">
-                      <div>
-                        <p class="workflow-eyebrow">Material Library</p>
-                        <h4>选择 {{ characterSheetTitle(sheet) }} 的三视图素材</h4>
-                      </div>
-                      <button class="btn-secondary btn-sm" type="button" @click="closeCharacterAssetPicker">
-                        收起
-                      </button>
-                    </div>
-
-                    <div class="character-asset-picker__filters">
-                      <label class="workflow-field">
-                        <span>关键词</span>
-                        <input
-                          v-model="characterAssetPicker.keyword"
-                          class="field-input"
-                          type="search"
-                          placeholder="按角色名、标题搜索"
-                          @keyup.enter="loadCharacterAssetCandidates(sheet)"
-                        />
-                      </label>
-                      <label class="workflow-field">
-                        <span>模型</span>
-                        <input
-                          v-model="characterAssetPicker.model"
-                          class="field-input"
-                          type="search"
-                          placeholder="按模型筛选"
-                          @keyup.enter="loadCharacterAssetCandidates(sheet)"
-                        />
-                      </label>
-                      <button
-                        class="btn-secondary btn-sm character-asset-picker__search"
-                        type="button"
-                        :disabled="characterAssetPicker.loading"
-                        @click="loadCharacterAssetCandidates(sheet)"
-                      >
-                        {{ characterAssetPicker.loading ? "搜索中..." : "搜索素材" }}
-                      </button>
-                    </div>
-
-                    <p v-if="characterAssetPicker.error" class="workflow-error">{{ characterAssetPicker.error }}</p>
-                    <div v-else-if="characterAssetPicker.loading" class="workflow-empty workflow-empty-nested">
-                      正在加载三视图素材...
-                    </div>
-                    <div v-else-if="!characterAssetPicker.assets.length" class="workflow-empty workflow-empty-nested">
-                      没有匹配的角色三视图素材。
-                    </div>
-                    <div v-else class="character-asset-grid">
-                      <article v-for="asset in characterAssetPicker.assets" :key="asset.id" class="character-asset-card">
-                        <button
-                          type="button"
-                          class="character-asset-card__preview"
-                          :aria-label="`查看${asset.title}素材预览`"
-                          @click="openImagePreview(materialAssetPreviewUrl(asset), asset.title)"
-                        >
-                          <img :src="materialAssetPreviewUrl(asset)" :alt="asset.title" />
-                        </button>
-                        <div class="character-asset-card__body">
-                          <strong>{{ asset.title }}</strong>
-                          <div class="character-asset-card__meta">
-                            <span class="surface-chip surface-chip-quiet">{{ materialAssetModelLabel(asset) }}</span>
-                            <span class="surface-chip surface-chip-quiet">评分 {{ ratingLabel(asset.userRating) }}</span>
-                          </div>
-                        </div>
-                        <button
-                          class="btn-primary btn-sm"
-                          type="button"
-                          :disabled="busyActionKey === `character-sheet-asset-${characterSheetClipIndex(sheet)}`"
-                          @click="handleSelectCharacterSheetAsset(sheet, asset.id)"
-                        >
-                          {{ busyActionKey === `character-sheet-asset-${characterSheetClipIndex(sheet)}` ? "选择中..." : "选择此素材" }}
-                        </button>
-                      </article>
-                    </div>
-                  </section>
-
-                  <div v-if="!characterSheetVersions(sheet).length" class="workflow-empty workflow-empty-nested">
-                    还没有角色三视图版本。
-                  </div>
-                  <div v-else>
-                    <div v-if="characterSheetVersions(sheet).length > 1" class="workflow-scroll-hint workflow-scroll-hint-nested">
-                      左右滑动选择角色三视图版本
-                    </div>
-                    <div class="clip-version-list clip-version-list-grid">
-                      <article v-for="version in characterSheetVersions(sheet)" :key="version.id" class="version-card version-card-compact">
-                        <div class="version-card__head">
-                          <div class="version-card__meta">
-                            <strong>{{ version.title }}</strong>
-                            <span class="surface-chip">角色三视图</span>
-                            <span class="surface-chip">Seed {{ seedLabel(versionSeed(version) ?? selectedWorkflow.keyframeSeed) }}</span>
-                            <span class="surface-chip" v-if="version.selected">当前选中</span>
-                          </div>
-                          <button
-                            class="btn-secondary btn-sm"
-                            type="button"
-                            :disabled="version.selected || characterSheetClipIndex(sheet) === null || busyActionKey === version.id"
-                            @click="handleSelectKeyframe(characterSheetClipIndex(sheet) || 0, version.id)"
-                          >
-                            {{ busyActionKey === version.id ? "处理中..." : "选中继续" }}
-                          </button>
-                        </div>
-
-                        <div
-                          v-if="characterSheetPreviewFrames(version).length"
-                          class="keyframe-frame-grid character-sheet-frame-grid"
-                          :class="{ 'character-sheet-frame-grid-single': characterSheetPreviewFrames(version).length === 1 }"
-                        >
-                          <article
-                            v-for="frame in characterSheetPreviewFrames(version)"
-                            :key="`${version.id}-${frame.role}`"
-                            class="keyframe-frame-card keyframe-frame-card-compact"
-                            :class="{ 'character-sheet-frame-card-single': characterSheetPreviewFrames(version).length === 1 }"
-                          >
-                            <div class="keyframe-frame-card__head">
-                              <span class="surface-chip surface-chip-quiet">{{ frame.label }}</span>
-                            </div>
-                            <button
-                              type="button"
-                              class="character-sheet-preview-trigger"
-                              :aria-label="`查看${characterSheetTitle(sheet)}${frame.label}原图`"
-                              @click="openImagePreview(frame.url, `${characterSheetTitle(sheet)}${frame.label}`)"
-                            >
-                              <img
-                                class="version-card__image keyframe-frame-card__image character-sheet-frame-card__image"
-                                :class="{ 'character-sheet-frame-card__image-single': characterSheetPreviewFrames(version).length === 1 }"
-                                :src="frame.url"
-                                :alt="`${characterSheetTitle(sheet)}${frame.label}`"
-                              />
-                            </button>
-                          </article>
-                        </div>
-                        <div v-else class="workflow-empty workflow-empty-nested">
-                          当前版本还没有可预览的角色三视图。
-                        </div>
-
-                        <div class="rating-row">
-                          <button
-                            v-for="score in ratingOptions"
-                            :key="`${version.id}-${score}`"
-                            type="button"
-                            class="rating-pill"
-                            :class="{ 'rating-pill-active': Number(stageRatingDrafts[version.id] || version.rating || 0) === score }"
-                            @click="setStageRatingDraft(version.id, score)"
-                          >
-                            {{ score }}
-                          </button>
-                        </div>
-
-                        <textarea
-                          v-model="stageNoteDrafts[version.id]"
-                          class="field-textarea version-card__textarea"
-                          rows="2"
-                          placeholder="记录这组三视图的评价"
-                        ></textarea>
-
-                        <div class="version-card__actions">
-                          <button class="btn-secondary btn-sm" type="button" :disabled="busyActionKey === `rate-${version.id}`" @click="handleRateStageVersion(version)">
-                            {{ busyActionKey === `rate-${version.id}` ? "保存中..." : "保存评分" }}
-                          </button>
-                          <button
-                            class="btn-ghost btn-sm"
-                            type="button"
-                            :disabled="!version.asset || busyActionKey === `reuse-${version.id}`"
-                            @click="handleReuseAsset(version.asset?.id || '', version.id)"
-                          >
-                            {{ busyActionKey === `reuse-${version.id}` ? "复制为新工作流" : "复用" }}
-                          </button>
-                          <button class="btn-danger btn-sm" type="button" :disabled="busyActionKey === `delete-${version.id}`" @click="handleDeleteStageVersion(version)">
-                            {{ busyActionKey === `delete-${version.id}` ? "删除中..." : "删除版本" }}
-                          </button>
-                        </div>
-                      </article>
-                    </div>
-                  </div>
-                </article>
+                </aside>
               </div>
             </section>
 
-            <article v-for="slot in selectedWorkflow.clipSlots" :key="slot.clipIndex" class="surface-tile clip-card">
-              <div class="clip-card__head">
-                <div class="clip-card__main">
-                  <p class="workflow-eyebrow">Clip {{ slot.clipIndex }}</p>
-                  <div class="clip-card__title-row">
-                    <h3>{{ slot.shotLabel || `镜头 #${slot.clipIndex}` }}</h3>
-                    <HintBell
-                      class="clip-card__bell"
-                      title="完整分镜内容"
-                      :text="clipSceneText(slot)"
-                      :max-width="560"
-                      align="left"
-                    />
-                  </div>
-                  <p class="clip-card__desc">{{ clipSceneSummary(slot) }}</p>
-                  <div v-if="slot.matchedCharacters?.length" class="clip-card__meta clip-card__meta-inline">
-                    <span
-                      v-for="character in slot.matchedCharacters"
-                      :key="`${slot.clipIndex}-${character.clipIndex}-${character.characterName}`"
-                      class="surface-chip surface-chip-quiet clip-card__character-chip"
-                    >
-                      {{ character.characterName }}
-                    </span>
-                  </div>
+            <section v-else-if="activeCanvasStage === 'keyframe'" class="workflow-stage-board keyframe-board">
+              <div class="stage-board__head">
+                <div>
+                  <p class="workflow-eyebrow">Stage 2</p>
+                  <h3>角色 / 关键帧</h3>
                 </div>
-                <div class="clip-card__meta clip-card__side-actions">
-                  <span class="surface-chip clip-card__duration-chip">{{ slot.durationHint || `${slot.targetDurationSeconds || 0}s` }}</span>
-                  <button class="btn-secondary btn-sm clip-card__action-button" type="button" :disabled="busyActionKey === `keyframe-${slot.clipIndex}`" @click="handleGenerateKeyframe(slot.clipIndex)">
-                    {{ busyActionKey === `keyframe-${slot.clipIndex}` ? "生成中..." : "生成关键帧" }}
-                  </button>
-                </div>
+                <button class="btn-primary btn-sm" type="button" :disabled="!selectedCanvasClip || busyActionKey === `keyframe-${selectedCanvasClip.clipIndex}`" @click="selectedCanvasClip && handleGenerateKeyframe(selectedCanvasClip.clipIndex)">
+                  {{ selectedCanvasClip && busyActionKey === `keyframe-${selectedCanvasClip.clipIndex}` ? "生成中..." : "生成当前镜头关键帧" }}
+                </button>
               </div>
 
-              <div v-if="!slot.keyframeVersions.length" class="workflow-empty workflow-empty-nested">
-                还没有关键帧版本。
-              </div>
-              <div v-else>
-                <div v-if="slot.keyframeVersions.length > 1" class="workflow-scroll-hint workflow-scroll-hint-nested">
-                  左右滑动选择关键帧版本（含首帧与尾帧）
+              <section class="character-strip">
+                <div class="character-strip__head">
+                  <strong>角色三视图</strong>
+                  <span class="surface-chip">{{ workflowCharacterSheets.length }} 个角色</span>
                 </div>
-                <div class="clip-version-list clip-version-list-grid">
-                <article
-                  v-for="version in slot.keyframeVersions"
-                  :key="version.id"
-                  class="version-card version-card-compact"
-                  :class="{ 'version-card-keyframe-landscape': isLandscapeKeyframeVersion(version) }"
-                >
-                  <div class="version-card__head">
-                    <div class="version-card__meta">
-                      <strong>{{ version.title }}</strong>
-                      <span class="surface-chip">首尾帧</span>
-                      <span class="surface-chip">Seed {{ seedLabel(versionSeed(version) ?? selectedWorkflow.keyframeSeed) }}</span>
-                      <span class="surface-chip" v-if="version.selected">当前选中</span>
+                <div v-if="!workflowCharacterSheets.length" class="workflow-empty workflow-empty-nested">当前工作流还没有角色三视图。</div>
+                <div v-else class="character-strip__list">
+                  <article v-for="sheet in workflowCharacterSheets" :key="characterSheetKey(sheet)" class="character-mini-card">
+                    <div>
+                      <strong>{{ characterSheetTitle(sheet) }}</strong>
+                      <p>{{ characterSheetAppearanceSummary(sheet) }}</p>
                     </div>
-                    <button class="btn-secondary btn-sm" type="button" :disabled="version.selected || busyActionKey === version.id" @click="handleSelectKeyframe(slot.clipIndex, version.id)">
-                      {{ busyActionKey === version.id ? "处理中..." : "选中继续" }}
-                    </button>
-                  </div>
+                    <div v-if="selectedCharacterSheetVersion(sheet)" class="character-mini-card__frames">
+                      <button
+                        v-for="frame in characterSheetPreviewFrames(selectedCharacterSheetVersion(sheet)!)"
+                        :key="`${characterSheetKey(sheet)}-${frame.role}`"
+                        type="button"
+                        class="character-mini-frame"
+                        :aria-label="`查看${characterSheetTitle(sheet)}${frame.label}`"
+                        @click="openImagePreview(frame.url, `${characterSheetTitle(sheet)} ${frame.label}`)"
+                      >
+                        <img :src="frame.url" :alt="`${characterSheetTitle(sheet)} ${frame.label}`" />
+                        <span>{{ frame.label }}</span>
+                      </button>
+                    </div>
+                    <div class="character-mini-card__actions">
+                      <button class="btn-secondary btn-sm" type="button" :disabled="characterSheetClipIndex(sheet) === null" @click="openCharacterAssetPicker(sheet)">素材库</button>
+                      <button class="btn-ghost btn-sm" type="button" :disabled="characterSheetClipIndex(sheet) === null || busyActionKey === `keyframe-${characterSheetClipIndex(sheet)}`" @click="handleGenerateKeyframe(characterSheetClipIndex(sheet) || 0)">生成</button>
+                    </div>
+                    <section v-if="isCharacterAssetPickerOpen(sheet)" class="character-asset-picker">
+                      <div class="character-asset-picker__head">
+                        <div>
+                          <p class="workflow-eyebrow">Material Library</p>
+                          <h4>选择 {{ characterSheetTitle(sheet) }} 的三视图素材</h4>
+                        </div>
+                        <button class="btn-secondary btn-sm" type="button" @click="closeCharacterAssetPicker">收起</button>
+                      </div>
+                      <div class="character-asset-picker__filters">
+                        <label class="workflow-field">
+                          <span>关键词</span>
+                          <input v-model="characterAssetPicker.keyword" class="field-input" type="search" placeholder="按角色名、标题搜索" @keyup.enter="loadCharacterAssetCandidates(sheet)" />
+                        </label>
+                        <label class="workflow-field">
+                          <span>模型</span>
+                          <input v-model="characterAssetPicker.model" class="field-input" type="search" placeholder="按模型筛选" @keyup.enter="loadCharacterAssetCandidates(sheet)" />
+                        </label>
+                        <button class="btn-secondary btn-sm character-asset-picker__search" type="button" :disabled="characterAssetPicker.loading" @click="loadCharacterAssetCandidates(sheet)">
+                          {{ characterAssetPicker.loading ? "搜索中..." : "搜索素材" }}
+                        </button>
+                      </div>
+                      <p v-if="characterAssetPicker.error" class="workflow-error">{{ characterAssetPicker.error }}</p>
+                      <div v-else-if="characterAssetPicker.loading" class="workflow-empty workflow-empty-nested">正在加载三视图素材...</div>
+                      <div v-else-if="!characterAssetPicker.assets.length" class="workflow-empty workflow-empty-nested">没有匹配的角色三视图素材。</div>
+                      <div v-else class="character-asset-grid">
+                        <article v-for="asset in characterAssetPicker.assets" :key="asset.id" class="character-asset-card">
+                          <button type="button" class="character-asset-card__preview" :aria-label="`查看${asset.title}素材预览`" @click="openImagePreview(materialAssetPreviewUrl(asset), asset.title)">
+                            <img :src="materialAssetPreviewUrl(asset)" :alt="asset.title" />
+                          </button>
+                          <div class="character-asset-card__body">
+                            <strong>{{ asset.title }}</strong>
+                            <div class="character-asset-card__meta">
+                              <span class="surface-chip surface-chip-quiet">{{ materialAssetModelLabel(asset) }}</span>
+                              <span class="surface-chip surface-chip-quiet">评分 {{ ratingLabel(asset.userRating) }}</span>
+                            </div>
+                          </div>
+                          <button class="btn-primary btn-sm" type="button" :disabled="busyActionKey === `character-sheet-asset-${characterSheetClipIndex(sheet)}`" @click="handleSelectCharacterSheetAsset(sheet, asset.id)">
+                            {{ busyActionKey === `character-sheet-asset-${characterSheetClipIndex(sheet)}` ? "选择中..." : "选择此素材" }}
+                          </button>
+                        </article>
+                      </div>
+                    </section>
+                  </article>
+                </div>
+              </section>
 
-                  <div
-                    v-if="keyframePreviewFrames(version, slot).length"
-                    class="keyframe-frame-grid"
-                    :class="{ 'keyframe-frame-grid-landscape': isLandscapeKeyframeVersion(version) }"
+              <section class="clip-workbench">
+                <nav class="clip-timeline" aria-label="镜头列表">
+                  <button
+                    v-for="slot in selectedWorkflow.clipSlots"
+                    :key="slot.clipIndex"
+                    type="button"
+                    class="clip-timeline__item"
+                    :class="{ 'clip-timeline__item-active': selectedCanvasClip?.clipIndex === slot.clipIndex }"
+                    @click="selectCanvasClip(slot.clipIndex)"
                   >
-                    <article v-for="frame in keyframePreviewFrames(version, slot)" :key="`${version.id}-${frame.role}`" class="keyframe-frame-card">
+                    <strong>{{ slot.shotLabel || `镜头 #${slot.clipIndex}` }}</strong>
+                    <span>{{ slot.keyframeVersions.length ? `${slot.keyframeVersions.length} 版` : '未生成' }}</span>
+                  </button>
+                </nav>
+
+                <article v-if="selectedCanvasClip" class="clip-detail-card">
+                  <div class="clip-detail-card__head">
+                    <div>
+                      <p class="workflow-eyebrow">Clip {{ selectedCanvasClip.clipIndex }}</p>
+                      <h4>{{ selectedCanvasClip.shotLabel || `镜头 #${selectedCanvasClip.clipIndex}` }}</h4>
+                      <p>{{ clipSceneSummary(selectedCanvasClip) }}</p>
+                    </div>
+                    <span class="surface-chip">{{ selectedCanvasClip.durationHint || `${selectedCanvasClip.targetDurationSeconds || 0}s` }}</span>
+                  </div>
+                  <div v-if="selectedKeyframeVersion(selectedCanvasClip)" class="keyframe-frame-grid">
+                    <article v-for="frame in keyframePreviewFrames(selectedKeyframeVersion(selectedCanvasClip)!, selectedCanvasClip)" :key="`${selectedCanvasClip.clipIndex}-${frame.role}`" class="keyframe-frame-card">
                       <div class="keyframe-frame-card__head">
                         <span class="surface-chip surface-chip-quiet">{{ frame.label }}</span>
                         <span v-if="frame.selected" class="surface-chip">已选中</span>
                       </div>
-                      <button
-                        v-if="frame.url"
-                        type="button"
-                        class="character-sheet-preview-trigger"
-                        :aria-label="`查看${version.title}${frame.label}原图`"
-                        @click="openKeyframeImagePreview(version, frame)"
-                      >
-                        <img
-                          class="version-card__image keyframe-frame-card__image"
-                          :class="{ 'keyframe-frame-card__image-landscape': isLandscapeKeyframeVersion(version) }"
-                          :src="frame.url"
-                          :alt="`${version.title}${frame.label}`"
-                        />
+                      <button v-if="frame.url" type="button" class="character-sheet-preview-trigger" :aria-label="`查看${frame.label}原图`" @click="openKeyframeImagePreview(selectedKeyframeVersion(selectedCanvasClip)!, frame)">
+                        <img class="version-card__image keyframe-frame-card__image" :src="frame.url" :alt="frame.label" />
                       </button>
                       <div v-else class="keyframe-frame-card__failure">
                         <strong>{{ frame.label }}生成失败</strong>
                         <span>{{ frame.errorMessage || "请单独重生此帧" }}</span>
                       </div>
                       <div class="keyframe-frame-card__actions">
-                        <button
-                          class="btn-secondary btn-sm"
-                          type="button"
-                          :disabled="frame.selected || busyActionKey === `${version.id}-${frame.role}`"
-                          @click="handleSelectKeyframeFrame(slot.clipIndex, version.id, frame.role)"
-                        >
-                          {{ busyActionKey === `${version.id}-${frame.role}` ? "处理中..." : "选中此帧" }}
-                        </button>
-                        <button
-                          class="btn-ghost btn-sm"
-                          type="button"
-                          :disabled="!frame.regenerable || busyActionKey === `keyframe-${slot.clipIndex}-${frame.role}`"
-                          :title="frame.regenerable ? `单独重生${frame.label}` : '该首帧由上一镜头尾帧承接，请重生上一镜头尾帧'"
-                          @click="handleGenerateKeyframeFrame(slot.clipIndex, frame.role)"
-                        >
-                          {{ busyActionKey === `keyframe-${slot.clipIndex}-${frame.role}` ? "生成中..." : "重生此帧" }}
-                        </button>
+                        <button class="btn-secondary btn-sm" type="button" :disabled="frame.selected || busyActionKey === `${selectedKeyframeVersion(selectedCanvasClip)!.id}-${frame.role}`" @click="handleSelectKeyframeFrame(selectedCanvasClip.clipIndex, selectedKeyframeVersion(selectedCanvasClip)!.id, frame.role)">选中此帧</button>
+                        <button class="btn-ghost btn-sm" type="button" :disabled="!frame.regenerable || busyActionKey === `keyframe-${selectedCanvasClip.clipIndex}-${frame.role}`" @click="handleGenerateKeyframeFrame(selectedCanvasClip.clipIndex, frame.role)">重生此帧</button>
                       </div>
                     </article>
                   </div>
-                  <div v-else class="workflow-empty workflow-empty-nested">
-                    当前版本还没有可预览的首尾帧。
-                  </div>
+                  <div v-else class="workflow-empty workflow-empty-nested">当前镜头还没有选中的关键帧。</div>
 
-                  <div class="rating-row">
-                    <button
-                      v-for="score in ratingOptions"
-                      :key="`${version.id}-${score}`"
-                      type="button"
-                      class="rating-pill"
-                      :class="{ 'rating-pill-active': Number(stageRatingDrafts[version.id] || version.rating || 0) === score }"
-                      @click="setStageRatingDraft(version.id, score)"
-                    >
-                      {{ score }}
-                    </button>
-                  </div>
-
-                  <textarea
-                    v-model="stageNoteDrafts[version.id]"
-                    class="field-textarea version-card__textarea"
-                    rows="2"
-                    placeholder="记录这组首尾帧的评价"
-                  ></textarea>
-
-                  <div class="version-card__actions">
-                    <button class="btn-secondary btn-sm" type="button" :disabled="busyActionKey === `rate-${version.id}`" @click="handleRateStageVersion(version)">
-                      {{ busyActionKey === `rate-${version.id}` ? "保存中..." : "保存评分" }}
-                    </button>
-                    <button
-                      class="btn-ghost btn-sm"
-                      type="button"
-                      :disabled="!version.asset || busyActionKey === `reuse-${version.id}`"
-                      @click="handleReuseAsset(version.asset?.id || '', version.id)"
-                    >
-                      {{ busyActionKey === `reuse-${version.id}` ? "复制为新工作流" : "复用" }}
-                    </button>
-                    <button class="btn-danger btn-sm" type="button" :disabled="busyActionKey === `delete-${version.id}`" @click="handleDeleteStageVersion(version)">
-                      {{ busyActionKey === `delete-${version.id}` ? "删除中..." : "删除版本" }}
-                    </button>
+                  <div class="compact-version-list horizontal-version-list">
+                    <article v-for="version in selectedCanvasClip.keyframeVersions" :key="version.id" class="compact-version-card">
+                      <button type="button" class="compact-version-card__main" @click="handleSelectKeyframe(selectedCanvasClip.clipIndex, version.id)">
+                        <strong>V{{ version.versionNo }} · {{ version.title }}</strong>
+                        <span>{{ version.status }} · Seed {{ seedLabel(versionSeed(version) ?? selectedWorkflow.keyframeSeed) }}</span>
+                      </button>
+                      <details class="workflow-more-menu compact-version-menu">
+                        <summary aria-label="版本操作">•••</summary>
+                        <button type="button" :disabled="version.selected || busyActionKey === version.id" @click="handleSelectKeyframe(selectedCanvasClip.clipIndex, version.id)">选中继续</button>
+                        <button type="button" :disabled="!version.asset || busyActionKey === `reuse-${version.id}`" @click="handleReuseAsset(version.asset?.id || '', version.id)">复用</button>
+                        <button type="button" class="workflow-menu-danger" :disabled="busyActionKey === `delete-${version.id}`" @click="handleDeleteStageVersion(version)">删除版本</button>
+                      </details>
+                    </article>
                   </div>
                 </article>
-                </div>
-              </div>
-            </article>
-          </div>
-        </section>
+                <div v-else class="workflow-empty workflow-empty-large">选中分镜版本后，这里会展开镜头列表。</div>
+              </section>
+            </section>
 
-        <section v-else class="surface-panel workflow-panel workflow-stage-panel">
-          <div class="workflow-panel__head">
-            <div>
-              <p class="workflow-eyebrow">Stage 3 / Finalize</p>
-              <h2>视频生成模块</h2>
-              <div class="workflow-summary__meta">
-                <span class="surface-chip">{{ valueOptionLabel(videoModelOptions, selectedWorkflow.videoModel, selectedWorkflow.videoModel || "未设置") }}</span>
-                <span class="surface-chip">{{ valueOptionLabel(catalogVideoSizeOptions, selectedWorkflow.videoSize, selectedWorkflow.videoSize || "未设置") }}</span>
-                <span class="surface-chip">视频 Seed {{ seedLabel(selectedWorkflow.videoSeed) }}</span>
-              </div>
-            </div>
-            <div class="workflow-stage-panel__actions">
-              <div class="stage-switch-row">
-                <button
-                  v-for="stage in createStageOptions"
-                  :key="`detail-${stage.key}`"
-                  type="button"
-                  class="stage-switch-btn"
-                  :class="{ 'stage-switch-btn-active': activeCreateStage === stage.key }"
-                  @click="switchWorkflowStage(stage.key)"
-                >
-                  {{ stage.shortLabel }}
+            <section v-else-if="activeCanvasStage === 'video'" class="workflow-stage-board video-board">
+              <div class="stage-board__head">
+                <div>
+                  <p class="workflow-eyebrow">Stage 3</p>
+                  <h3>视频片段</h3>
+                </div>
+                <button class="btn-primary btn-sm" type="button" :disabled="!selectedCanvasClip || !selectedKeyframeVersion(selectedCanvasClip) || busyActionKey === `video-${selectedCanvasClip.clipIndex}`" @click="selectedCanvasClip && handleGenerateVideo(selectedCanvasClip.clipIndex)">
+                  {{ selectedCanvasClip && busyActionKey === `video-${selectedCanvasClip.clipIndex}` ? "生成中..." : "生成当前镜头视频" }}
                 </button>
               </div>
-              <div class="workflow-summary__actions">
-                <span class="surface-chip">{{ selectedWorkflow.clipSlots.length }} 个镜头</span>
-              </div>
-            </div>
-          </div>
 
-          <div class="workflow-stage-grid">
-            <section class="surface-tile workflow-summary-card workflow-summary-card-compact">
-              <h3>最终结果与评分</h3>
+              <div class="readiness-strip">
+                <span>总镜头 {{ videoReadiness.total }}</span>
+                <span>已生成 {{ videoReadiness.generated }}</span>
+                <span>已选中 {{ videoReadiness.selected }}</span>
+                <span>{{ canFinalize ? "可拼接" : `还差 ${videoReadiness.missing.length} 个镜头` }}</span>
+              </div>
+
+              <section class="clip-workbench">
+                <nav class="clip-timeline" aria-label="视频镜头列表">
+                  <button
+                    v-for="slot in selectedWorkflow.clipSlots"
+                    :key="`video-tab-${slot.clipIndex}`"
+                    type="button"
+                    class="clip-timeline__item"
+                    :class="{ 'clip-timeline__item-active': selectedCanvasClip?.clipIndex === slot.clipIndex }"
+                    @click="selectCanvasClip(slot.clipIndex)"
+                  >
+                    <strong>{{ slot.shotLabel || `镜头 #${slot.clipIndex}` }}</strong>
+                    <span>{{ slot.videoVersions.some((version) => version.selected) ? '已选中' : (slot.videoVersions.length ? '待选择' : '未生成') }}</span>
+                  </button>
+                </nav>
+
+                <article v-if="selectedCanvasClip" class="clip-detail-card video-clip-detail">
+                  <div class="clip-detail-card__head">
+                    <div>
+                      <p class="workflow-eyebrow">Clip {{ selectedCanvasClip.clipIndex }}</p>
+                      <h4>{{ selectedCanvasClip.shotLabel || `镜头 #${selectedCanvasClip.clipIndex}` }}</h4>
+                      <p>{{ clipSceneSummary(selectedCanvasClip) }}</p>
+                    </div>
+                    <span class="surface-chip">{{ selectedKeyframeVersion(selectedCanvasClip)?.title || "未选择关键帧" }}</span>
+                  </div>
+
+                  <div v-if="selectedKeyframePreviewFrames(selectedCanvasClip).length" class="keyframe-thumb-list">
+                    <article v-for="frame in selectedKeyframePreviewFrames(selectedCanvasClip)" :key="`video-input-${selectedCanvasClip.clipIndex}-${frame.role}`" class="keyframe-thumb-card">
+                      <img class="keyframe-thumb-card__image" :src="frame.url" :alt="frame.label" />
+                      <span class="surface-chip surface-chip-quiet">{{ frame.label }}</span>
+                    </article>
+                  </div>
+
+                  <div v-if="!selectedCanvasClip.videoVersions.length" class="workflow-empty workflow-empty-nested">还没有视频版本。</div>
+                  <div v-else class="video-version-grid">
+                    <article v-for="version in selectedCanvasClip.videoVersions" :key="version.id" class="video-version-card" :class="{ 'video-version-card-active': version.selected }">
+                      <div class="video-version-card__head">
+                        <strong>{{ version.title }}</strong>
+                        <span v-if="version.selected" class="surface-chip">当前选中</span>
+                      </div>
+                      <video v-if="version.previewUrl" class="version-card__video" :src="version.previewUrl" controls playsinline preload="metadata"></video>
+                      <div class="version-card__actions">
+                        <button class="btn-secondary btn-sm" type="button" :disabled="version.selected || busyActionKey === version.id" @click="handleSelectVideo(selectedCanvasClip.clipIndex, version.id)">选中继续</button>
+                        <details class="workflow-more-menu compact-version-menu">
+                          <summary aria-label="版本操作">•••</summary>
+                          <button type="button" :disabled="!version.asset || busyActionKey === `reuse-${version.id}`" @click="handleReuseAsset(version.asset?.id || '', version.id)">复用</button>
+                          <a v-if="version.downloadUrl" :href="version.downloadUrl" download target="_blank" rel="noopener noreferrer">下载</a>
+                          <button type="button" class="workflow-menu-danger" :disabled="busyActionKey === `delete-${version.id}`" @click="handleDeleteStageVersion(version)">删除版本</button>
+                        </details>
+                      </div>
+                    </article>
+                  </div>
+                </article>
+              </section>
+            </section>
+
+            <section v-else class="workflow-stage-board final-board">
+              <div class="stage-board__head">
+                <div>
+                  <p class="workflow-eyebrow">Final</p>
+                  <h3>成片</h3>
+                </div>
+                <button class="btn-primary btn-sm" type="button" :disabled="!canFinalize || busyActionKey === 'finalize'" @click="handleFinalize">
+                  {{ busyActionKey === "finalize" ? "拼接中..." : finalizeButtonLabel }}
+                </button>
+              </div>
+
+              <div class="readiness-strip readiness-strip-final">
+                <span>总镜头 {{ videoReadiness.total }}</span>
+                <span>已选中 {{ videoReadiness.selected }}</span>
+                <span>{{ finalizeHint }}</span>
+              </div>
+
+              <article v-if="selectedWorkflow.finalResult" class="final-result-card-v2">
+                <video v-if="selectedWorkflow.finalResult.previewUrl" class="final-result-card__video" :src="selectedWorkflow.finalResult.previewUrl" controls playsinline preload="metadata"></video>
+                <div class="final-result-card-v2__meta">
+                  <h4>{{ selectedWorkflow.finalResult.title }}</h4>
+                  <div class="workflow-kv">
+                    <div class="workflow-kv__row"><span>时长</span><strong>{{ durationLabel(selectedWorkflow.finalResult.durationSeconds) }}</strong></div>
+                    <div class="workflow-kv__row"><span>评分</span><strong>{{ ratingLabel(selectedWorkflow.effectRating) }}</strong></div>
+                  </div>
+                  <a class="btn-primary btn-sm" :href="selectedWorkflow.finalResult.fileUrl" download target="_blank" rel="noopener noreferrer">下载结果视频</a>
+                </div>
+              </article>
+              <div v-else class="workflow-empty workflow-empty-large">
+                {{ canFinalize ? "可以拼接完整视频。" : `还有 ${videoReadiness.missing.length} 个镜头未选中视频版本。` }}
+              </div>
+
+              <section v-if="videoReadiness.missing.length" class="missing-clip-list">
+                <strong>阻塞镜头</strong>
+                <button v-for="slot in videoReadiness.missing" :key="`missing-${slot.clipIndex}`" type="button" class="missing-clip-card" @click="selectCanvasClip(slot.clipIndex); switchCanvasStage('video')">
+                  {{ slot.shotLabel || `镜头 #${slot.clipIndex}` }}
+                </button>
+              </section>
+            </section>
+          </main>
+
+          <aside class="workflow-inspector">
+            <section class="inspector-section">
+              <div class="inspector-section__head">
+                <p class="workflow-eyebrow">Inspector</p>
+                <h3>参数与操作</h3>
+              </div>
+              <div class="inspector-kv-list">
+                <div><span>文本模型</span><strong>{{ valueOptionLabel(textModelOptions, selectedWorkflow.textAnalysisModel, selectedWorkflow.textAnalysisModel) }}</strong></div>
+                <div><span>关键帧模型</span><strong>{{ valueOptionLabel(imageModelOptions, selectedWorkflow.imageModel, selectedWorkflow.imageModel) }}</strong></div>
+                <div><span>视频模型</span><strong>{{ valueOptionLabel(videoModelOptions, selectedWorkflow.videoModel, selectedWorkflow.videoModel) }}</strong></div>
+                <div><span>画幅</span><strong>{{ selectedWorkflow.aspectRatio }}</strong></div>
+                <div><span>尺寸</span><strong>{{ valueOptionLabel(catalogVideoSizeOptions, selectedWorkflow.videoSize, selectedWorkflow.videoSize || '未设置') }}</strong></div>
+                <div><span>关键帧 Seed</span><strong>{{ seedLabel(selectedWorkflow.keyframeSeed) }}</strong></div>
+                <div><span>视频 Seed</span><strong>{{ seedLabel(selectedWorkflow.videoSeed) }}</strong></div>
+              </div>
+            </section>
+
+            <section v-if="workflowSettingsOpen" class="inspector-section inspector-settings-form">
+              <div class="inspector-section__head">
+                <p class="workflow-eyebrow">Settings</p>
+                <h3>编辑参数</h3>
+              </div>
+              <form class="workflow-settings-stack" @submit.prevent="handleUpdateWorkflowSettings">
+                <label class="workflow-field"><span>文本模型</span><select v-model="workflowSettingsDraft.textAnalysisModel" class="field-input"><option v-for="item in textModelOptions" :key="item.value" :value="item.value">{{ item.label }}</option></select></label>
+                <label class="workflow-field"><span>关键帧模型</span><select v-model="workflowSettingsDraft.imageModel" class="field-input"><option v-for="item in imageModelOptions" :key="item.value" :value="item.value">{{ item.label }}</option></select></label>
+                <label class="workflow-field"><span>视频模型</span><select v-model="workflowSettingsDraft.videoModel" class="field-input"><option v-for="item in videoModelOptions" :key="item.value" :value="item.value">{{ item.label }}</option></select></label>
+                <label class="workflow-field"><span>视觉风格</span><select v-model="workflowSettingsDraft.stylePreset" class="field-input"><option v-for="item in stylePresetOptions" :key="item.key" :value="item.key">{{ item.label }}</option></select></label>
+                <label class="workflow-field"><span>长宽比</span><select v-model="workflowSettingsDraft.aspectRatio" class="field-input"><option v-for="item in aspectRatioOptions" :key="item.value" :value="item.value">{{ item.label }}</option></select></label>
+                <label class="workflow-field"><span>输出尺寸</span><select v-model="workflowSettingsDraft.videoSize" class="field-input"><option v-for="item in workflowSettingsVideoSizeOptions" :key="item.value" :value="item.value">{{ item.label }}</option></select></label>
+                <label class="workflow-field"><span>关键帧 Seed</span><input v-model="workflowSettingsDraft.keyframeSeed" class="field-input" type="number" min="0" placeholder="自动" /></label>
+                <label class="workflow-field"><span>视频 Seed</span><input v-model="workflowSettingsDraft.videoSeed" class="field-input" type="number" min="0" placeholder="自动" /></label>
+                <div class="workflow-field"><span>镜头时长</span><div class="stage-toggle-row"><button type="button" class="stage-toggle-chip" :class="{ 'stage-toggle-chip-active': workflowSettingsDraft.durationMode === 'auto' }" @click="workflowSettingsDraft.durationMode = 'auto'">自动</button><button type="button" class="stage-toggle-chip" :class="{ 'stage-toggle-chip-active': workflowSettingsDraft.durationMode === 'manual' }" @click="workflowSettingsDraft.durationMode = 'manual'">手动</button></div></div>
+                <label class="workflow-field"><span>最小时长</span><input v-model="workflowSettingsDraft.minDurationSeconds" class="field-input" type="number" min="1" max="60" step="1" :disabled="workflowSettingsDraft.durationMode === 'auto'" /></label>
+                <label class="workflow-field"><span>最大时长</span><input v-model="workflowSettingsDraft.maxDurationSeconds" class="field-input" type="number" min="1" max="60" step="1" :disabled="workflowSettingsDraft.durationMode === 'auto'" /></label>
+                <p v-if="workflowSettingsValidationMessage" class="workflow-error">{{ workflowSettingsValidationMessage }}</p>
+                <button class="btn-primary btn-sm" type="submit" :disabled="busyActionKey === 'workflow-settings' || Boolean(workflowSettingsValidationMessage)">
+                  {{ busyActionKey === "workflow-settings" ? "保存中..." : "保存设置" }}
+                </button>
+              </form>
+            </section>
+
+            <section v-if="selectedStageVersion" class="inspector-section">
+              <div class="inspector-section__head">
+                <p class="workflow-eyebrow">Version</p>
+                <h3>当前版本评价</h3>
+              </div>
+              <div class="inspector-kv-list">
+                <div><span>版本</span><strong>{{ selectedStageVersion.title }}</strong></div>
+                <div><span>状态</span><strong>{{ selectedStageVersion.status }}</strong></div>
+                <div><span>评分</span><strong>{{ ratingLabel(selectedStageVersion.rating) }}</strong></div>
+              </div>
               <div class="rating-row">
                 <button
                   v-for="score in ratingOptions"
-                  :key="score"
+                  :key="`${selectedStageVersion.id}-${score}`"
                   type="button"
                   class="rating-pill"
-                  :class="{ 'rating-pill-active': Number(workflowRatingDraft) === score }"
-                  @click="workflowRatingDraft = String(score)"
+                  :class="{ 'rating-pill-active': Number(stageRatingDrafts[selectedStageVersion.id] || selectedStageVersion.rating || 0) === score }"
+                  @click="setStageRatingDraft(selectedStageVersion.id, score)"
                 >
                   {{ score }}
                 </button>
               </div>
-              <textarea
-                v-model="workflowRatingNoteDraft"
-                class="field-textarea"
-                rows="4"
-                placeholder="记录最终成片评价"
-              ></textarea>
+              <textarea v-model="stageNoteDrafts[selectedStageVersion.id]" class="field-textarea" rows="3" placeholder="记录当前版本评价"></textarea>
+              <button class="btn-secondary btn-sm" type="button" :disabled="busyActionKey === `rate-${selectedStageVersion.id}`" @click="handleRateStageVersion(selectedStageVersion)">
+                {{ busyActionKey === `rate-${selectedStageVersion.id}` ? "保存中..." : "保存版本评分" }}
+              </button>
+            </section>
+
+            <section class="inspector-section">
+              <div class="inspector-section__head">
+                <p class="workflow-eyebrow">Rating</p>
+                <h3>当前工作流评价</h3>
+              </div>
+              <div class="rating-row">
+                <button v-for="score in ratingOptions" :key="score" type="button" class="rating-pill" :class="{ 'rating-pill-active': Number(workflowRatingDraft) === score }" @click="workflowRatingDraft = String(score)">
+                  {{ score }}
+                </button>
+              </div>
+              <textarea v-model="workflowRatingNoteDraft" class="field-textarea" rows="3" placeholder="记录最终成片评价"></textarea>
               <button class="btn-secondary btn-sm" type="button" :disabled="busyActionKey === 'workflow-rating'" @click="handleRateWorkflow">
                 {{ busyActionKey === "workflow-rating" ? "保存中..." : "保存评分" }}
               </button>
-
-              <div class="workflow-finalize-box">
-                <button
-                  class="btn-primary btn-sm workflow-finalize-box__button"
-                  type="button"
-                  :disabled="!canFinalize || busyActionKey === 'finalize'"
-                  @click="handleFinalize"
-                >
-                  {{ busyActionKey === "finalize" ? "拼接中..." : finalizeButtonLabel }}
-                </button>
-                <p class="workflow-finalize-box__hint">
-                  {{ finalizeHint }}
-                </p>
-              </div>
-
-              <div v-if="selectedWorkflow.finalResult" class="workflow-final-compact">
-                <video
-                  v-if="selectedWorkflow.finalResult.previewUrl"
-                  class="final-result-card__video"
-                  :src="selectedWorkflow.finalResult.previewUrl"
-                  controls
-                  playsinline
-                  preload="metadata"
-                ></video>
-                <div class="workflow-kv">
-                  <div class="workflow-kv__row">
-                    <span>标题</span>
-                    <strong>{{ selectedWorkflow.finalResult.title }}</strong>
-                  </div>
-                  <div class="workflow-kv__row">
-                    <span>时长</span>
-                    <strong>{{ durationLabel(selectedWorkflow.finalResult.durationSeconds) }}</strong>
-                  </div>
-                </div>
-                <div class="version-card__actions">
-                  <a
-                    class="btn-primary btn-sm"
-                    :href="selectedWorkflow.finalResult.fileUrl"
-                    download
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  >
-                    下载结果视频
-                  </a>
-                </div>
-              </div>
             </section>
-
-            <section class="workflow-stage-content">
-              <div v-if="!selectedWorkflow.clipSlots.length" class="workflow-empty">
-                选中分镜版本后，这里会展开视频生成列表。
-              </div>
-              <div v-else class="clip-stack">
-                <article v-for="slot in selectedWorkflow.clipSlots" :key="`video-${slot.clipIndex}`" class="surface-tile clip-card">
-                  <div class="clip-card__head">
-                    <div class="clip-card__main">
-                      <p class="workflow-eyebrow">Clip {{ slot.clipIndex }}</p>
-                      <div class="clip-card__title-row">
-                        <h3>{{ slot.shotLabel || `镜头 #${slot.clipIndex}` }}</h3>
-                        <HintBell
-                          class="clip-card__bell"
-                          title="完整分镜内容"
-                          :text="clipSceneText(slot)"
-                          :max-width="560"
-                          align="left"
-                        />
-                      </div>
-                      <p class="clip-card__desc">{{ clipSceneSummary(slot) }}</p>
-                    </div>
-                    <div class="clip-card__meta clip-card__side-actions clip-card__side-actions-video">
-                      <span class="surface-chip clip-card__selection-chip">
-                        {{ selectedKeyframeVersion(slot)?.title || "未选择关键帧" }}
-                      </span>
-                      <button
-                        class="btn-primary btn-sm clip-card__action-button"
-                        type="button"
-                        :disabled="!selectedKeyframeVersion(slot) || busyActionKey === `video-${slot.clipIndex}`"
-                        @click="handleGenerateVideo(slot.clipIndex)"
-                      >
-                        {{ busyActionKey === `video-${slot.clipIndex}` ? "生成中..." : "生成视频" }}
-                      </button>
-                    </div>
-                  </div>
-
-                  <div v-if="selectedKeyframeVersion(slot) && selectedKeyframePreviewFrames(slot).length" class="clip-card__selected-keyframes">
-                    <div class="clip-card__selected-keyframes-head">
-                      <strong>当前视频输入帧</strong>
-                      <span class="surface-chip surface-chip-quiet">{{ selectedKeyframeVersion(slot)?.title }}</span>
-                    </div>
-                    <div class="keyframe-thumb-list">
-                      <article
-                        v-for="frame in selectedKeyframePreviewFrames(slot)"
-                        :key="`selected-${slot.clipIndex}-${frame.role}`"
-                        class="keyframe-thumb-card"
-                      >
-                        <img class="keyframe-thumb-card__image" :src="frame.url" :alt="`${slot.shotLabel || `镜头 #${slot.clipIndex}`}${frame.label}`" />
-                        <div class="keyframe-thumb-card__meta">
-                          <span class="surface-chip surface-chip-quiet">{{ frame.label }}</span>
-                        </div>
-                      </article>
-                    </div>
-                  </div>
-
-                  <div v-if="!slot.videoVersions.length" class="workflow-empty workflow-empty-nested">
-                    还没有视频版本。
-                  </div>
-                  <div v-else>
-                    <div v-if="slot.videoVersions.length > 1" class="workflow-scroll-hint workflow-scroll-hint-nested">
-                      左右滑动选择视频版本
-                    </div>
-                    <div class="clip-version-list clip-version-list-grid">
-                    <article v-for="version in slot.videoVersions" :key="version.id" class="version-card version-card-compact">
-                      <div class="version-card__head">
-                        <div class="version-card__meta">
-                          <strong>{{ version.title }}</strong>
-                          <span class="surface-chip">Seed {{ seedLabel(versionSeed(version) ?? selectedWorkflow.videoSeed) }}</span>
-                          <span class="surface-chip" v-if="version.selected">当前选中</span>
-                        </div>
-                        <button class="btn-secondary btn-sm" type="button" :disabled="version.selected || busyActionKey === version.id" @click="handleSelectVideo(slot.clipIndex, version.id)">
-                          {{ busyActionKey === version.id ? "处理中..." : "选中继续" }}
-                        </button>
-                      </div>
-
-                      <video v-if="version.previewUrl" class="version-card__video" :src="version.previewUrl" controls playsinline preload="metadata"></video>
-
-                      <div class="rating-row">
-                        <button
-                          v-for="score in ratingOptions"
-                          :key="`${version.id}-${score}`"
-                          type="button"
-                          class="rating-pill"
-                          :class="{ 'rating-pill-active': Number(stageRatingDrafts[version.id] || version.rating || 0) === score }"
-                          @click="setStageRatingDraft(version.id, score)"
-                        >
-                          {{ score }}
-                        </button>
-                      </div>
-
-                      <textarea
-                        v-model="stageNoteDrafts[version.id]"
-                        class="field-textarea version-card__textarea"
-                        rows="2"
-                        placeholder="视频评价"
-                      ></textarea>
-
-                      <div class="version-card__actions">
-                        <button class="btn-secondary btn-sm" type="button" :disabled="busyActionKey === `rate-${version.id}`" @click="handleRateStageVersion(version)">
-                          {{ busyActionKey === `rate-${version.id}` ? "保存中..." : "保存评分" }}
-                        </button>
-                        <button
-                          class="btn-ghost btn-sm"
-                          type="button"
-                          :disabled="!version.asset || busyActionKey === `reuse-${version.id}`"
-                          @click="handleReuseAsset(version.asset?.id || '', version.id)"
-                        >
-                          {{ busyActionKey === `reuse-${version.id}` ? "复制为新工作流" : "复用" }}
-                        </button>
-                        <a
-                          v-if="version.downloadUrl"
-                          class="btn-ghost btn-sm"
-                          :href="version.downloadUrl"
-                          download
-                          target="_blank"
-                          rel="noopener noreferrer"
-                        >
-                          下载
-                        </a>
-                        <button class="btn-danger btn-sm" type="button" :disabled="busyActionKey === `delete-${version.id}`" @click="handleDeleteStageVersion(version)">
-                          {{ busyActionKey === `delete-${version.id}` ? "删除中..." : "删除版本" }}
-                        </button>
-                      </div>
-                    </article>
-                    </div>
-                  </div>
-                </article>
-              </div>
-            </section>
-          </div>
+          </aside>
         </section>
       </template>
 
-      <section v-else-if="!createComposerVisible" class="surface-panel workflow-panel workflow-empty-large workflow-empty-prompt">
-        <h2>请新建工作流或选择一个工作流来查看</h2>
+      <section v-else class="surface-panel workflow-panel workflow-empty-large workflow-empty-prompt">
+        <h2>请新建画布或选择一个工作流来查看</h2>
         <div class="workflow-empty-prompt__actions">
-          <button class="btn-primary btn-sm" type="button" :disabled="creatingWorkflow || loadingOptions" @click="startCreateWorkflow">
-            新建工作流
-          </button>
+          <button class="btn-primary btn-sm" type="button" :disabled="creatingWorkflow || loadingOptions" @click="startCreateWorkflow">新建画布</button>
         </div>
       </section>
     </section>
@@ -1398,13 +676,10 @@
       <strong>{{ imagePreviewCaption }}</strong>
       <span v-if="imagePreviewState.gallery.length > 1">按 ← / → 切换首尾帧</span>
     </div>
-    <button type="button" class="image-preview-close" aria-label="关闭原图预览" @click="closeImagePreview">
-      关闭
-    </button>
+    <button type="button" class="image-preview-close" aria-label="关闭原图预览" @click="closeImagePreview">关闭</button>
     <img class="image-preview-full" :src="imagePreviewState.url" :alt="imagePreviewState.alt" />
   </div>
 </template>
-
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
@@ -1431,7 +706,6 @@ import {
   selectVideo,
   updateWorkflowSettings,
 } from "@/api/workflows";
-import HintBell from "@/components/HintBell.vue";
 import { renderMarkdownToHtml } from "@/utils/markdown";
 import type {
   CreateWorkflowRequest,
@@ -1448,13 +722,7 @@ import type {
 } from "@/types";
 
 type CreateStageKey = "storyboard" | "keyframe" | "video";
-
-interface StageFieldStep {
-  key: string;
-  label: string;
-  description: string;
-  valueLabel: string;
-}
+type CanvasStageKey = CreateStageKey | "final";
 
 interface CreateReviewItem {
   key: string;
@@ -1498,13 +766,10 @@ const creatingWorkflow = ref(false);
 const busyActionKey = ref("");
 const workflowSearch = ref("");
 const activeCreateStage = ref<CreateStageKey>("storyboard");
-const createReviewFlipped = ref(false);
+const activeCanvasStage = ref<CanvasStageKey>("storyboard");
 const createComposerVisible = ref(false);
-const stageFieldIndexMap = reactive<Record<CreateStageKey, number>>({
-  storyboard: 0,
-  keyframe: 0,
-  video: 0,
-});
+const previewStoryboardVersionId = ref("");
+const selectedCanvasClipIndex = ref<number | null>(null);
 
 const listError = ref("");
 const detailError = ref("");
@@ -1529,26 +794,6 @@ const imagePreviewState = reactive({
 const workflows = ref<WorkflowSummary[]>([]);
 const selectedWorkflow = ref<WorkflowDetail | null>(null);
 
-const createStageOptions = [
-  {
-    key: "storyboard" as const,
-    label: "文本分镜卡片",
-    shortLabel: "分镜脚本",
-    description: "文本模型、镜头时长",
-  },
-  {
-    key: "keyframe" as const,
-    label: "关键帧卡片",
-    shortLabel: "关键帧",
-    description: "图片模型、风格、关键帧 Seed",
-  },
-  {
-    key: "video" as const,
-    label: "视频生成卡片",
-    shortLabel: "视频生成",
-    description: "视频模型、视频 Seed",
-  },
-];
 const detailStageKeys: CreateStageKey[] = ["storyboard", "keyframe", "video"];
 
 const workflowRatingDraft = ref("5");
@@ -1558,7 +803,7 @@ const stageNoteDrafts = reactive<Record<string, string>>({});
 const storyboardAdjustmentDrafts = reactive<Record<string, string>>({});
 const workflowSettingsOpen = ref(false);
 const workflowSettingsDraft = reactive({
-  aspectRatio: "9:16",
+  aspectRatio: "16:9",
   stylePreset: "",
   textAnalysisModel: "",
   imageModel: "",
@@ -1579,7 +824,7 @@ const createForm = reactive({
   title: "",
   transcriptText: "",
   globalPrompt: "",
-  aspectRatio: "9:16",
+  aspectRatio: "16:9",
   stylePreset: "",
   textAnalysisModel: "",
   imageModel: "",
@@ -1608,8 +853,101 @@ function normalizeDetailStage(value: unknown): CreateStageKey | null {
   return detailStageKeys.includes(normalizedValue as CreateStageKey) ? normalizedValue as CreateStageKey : null;
 }
 
+function normalizeCanvasStage(value: unknown): CanvasStageKey | null {
+  const rawValue = Array.isArray(value) ? value[0] : value;
+  if (typeof rawValue !== "string") {
+    return null;
+  }
+  const normalizedValue = rawValue.trim().toLowerCase();
+  if (normalizedValue === "joined" || normalizedValue === "final") {
+    return "final";
+  }
+  return normalizeDetailStage(normalizedValue);
+}
+
 const workflowCharacterSheets = computed(() => selectedWorkflow.value?.characterSheets ?? []);
 const imagePreviewCaption = computed(() => imagePreviewState.caption || imagePreviewState.alt || "图片预览");
+const selectedStoryboardVersion = computed(() => {
+  const versions = selectedWorkflow.value?.storyboardVersions ?? [];
+  if (!versions.length) {
+    return null;
+  }
+  return (
+    versions.find((version) => version.id === previewStoryboardVersionId.value)
+    ?? versions.find((version) => version.selected)
+    ?? versions[0]
+  );
+});
+const selectedCanvasClip = computed(() => {
+  const slots = selectedWorkflow.value?.clipSlots ?? [];
+  if (!slots.length) {
+    return null;
+  }
+  return slots.find((slot) => slot.clipIndex === selectedCanvasClipIndex.value) ?? slots[0];
+});
+const selectedVideoVersion = computed(() => selectedCanvasClip.value?.videoVersions.find((version) => version.selected) ?? selectedCanvasClip.value?.videoVersions[0] ?? null);
+const selectedStageVersion = computed(() => {
+  if (activeCanvasStage.value === "storyboard") {
+    return selectedStoryboardVersion.value;
+  }
+  if (activeCanvasStage.value === "keyframe") {
+    const clip = selectedCanvasClip.value;
+    return clip ? selectedKeyframeVersion(clip) ?? clip.keyframeVersions[0] ?? null : null;
+  }
+  if (activeCanvasStage.value === "video") {
+    return selectedVideoVersion.value;
+  }
+  return null;
+});
+const videoReadiness = computed(() => {
+  const slots = selectedWorkflow.value?.clipSlots ?? [];
+  return {
+    total: slots.length,
+    generated: slots.filter((slot) => slot.videoVersions.length > 0).length,
+    selected: slots.filter((slot) => slot.videoVersions.some((version) => version.selected)).length,
+    missing: slots.filter((slot) => !slot.videoVersions.some((version) => version.selected)),
+  };
+});
+const canvasStageItems = computed(() => {
+  const workflow = selectedWorkflow.value;
+  const storyboardCount = workflow?.storyboardVersions.length ?? 0;
+  const keyframeCount = workflow?.clipSlots.reduce((sum, slot) => sum + slot.keyframeVersions.length, 0) ?? 0;
+  const videoCount = workflow?.clipSlots.reduce((sum, slot) => sum + slot.videoVersions.length, 0) ?? 0;
+  return [
+    {
+      key: "storyboard" as const,
+      index: 1,
+      label: "分镜脚本",
+      status: storyboardCount ? "已有版本" : "待生成",
+      count: `${storyboardCount} 版`,
+      ready: storyboardCount > 0,
+    },
+    {
+      key: "keyframe" as const,
+      index: 2,
+      label: "角色/关键帧",
+      status: keyframeCount ? "已有关键帧" : (storyboardCount ? "可生成" : "等分镜"),
+      count: `${keyframeCount} 版`,
+      ready: keyframeCount > 0,
+    },
+    {
+      key: "video" as const,
+      index: 3,
+      label: "视频片段",
+      status: videoCount ? "已有视频" : (keyframeCount ? "可生成" : "等关键帧"),
+      count: `${videoCount} 版`,
+      ready: videoCount > 0,
+    },
+    {
+      key: "final" as const,
+      index: 4,
+      label: "成片",
+      status: workflow?.finalResult ? "已拼接" : (canFinalize.value ? "可拼接" : "未就绪"),
+      count: workflow?.finalResult ? "已完成" : `${videoReadiness.value.selected}/${videoReadiness.value.total || 0}`,
+      ready: Boolean(workflow?.finalResult || canFinalize.value),
+    },
+  ];
+});
 
 const filteredWorkflows = computed(() => {
   const keyword = workflowSearch.value.trim().toLowerCase();
@@ -1626,10 +964,6 @@ const filteredWorkflows = computed(() => {
     return haystack.includes(keyword);
   });
 });
-
-const activeCreateStageMeta = computed(() =>
-  createStageOptions.find((item) => item.key === activeCreateStage.value) ?? createStageOptions[0]
-);
 
 const aspectRatioOptions = computed(() => options.value?.aspectRatios ?? [
   { value: "9:16", label: "9:16" },
@@ -1699,92 +1033,6 @@ const workflowSettingsValidationMessage = computed(() => {
     return "最大时长不能小于最小时长";
   }
   return "";
-});
-
-const activeStageSteps = computed<StageFieldStep[]>(() => {
-  switch (activeCreateStage.value) {
-    case "storyboard":
-      return [
-        {
-          key: "textAnalysisModel",
-          label: "文本模型",
-          description: "选择这一轮文本分镜所使用的分析模型。",
-          valueLabel: valueOptionLabel(textModelOptions.value, createForm.textAnalysisModel, "未设置"),
-        },
-        {
-          key: "storyboardDurationSeconds",
-          label: "镜头时长",
-          description: "统一设置镜头时长，可切换自动或手动固定时长。",
-          valueLabel: storyboardDurationMode.value === "auto"
-            ? "自动"
-            : (normalizedStoryboardManualDurationSeconds.value === null ? "未设置" : `${normalizedStoryboardManualDurationSeconds.value} 秒`),
-        },
-      ];
-    case "keyframe":
-      return [
-        {
-          key: "imageModel",
-          label: "关键帧模型",
-          description: "选择生成关键帧的图片模型。",
-          valueLabel: valueOptionLabel(imageModelOptions.value, createForm.imageModel, "未设置"),
-        },
-        {
-          key: "stylePreset",
-          label: "风格预设",
-          description: "控制关键帧整体画风和镜头气质。",
-          valueLabel: keyOptionLabel(stylePresetOptions.value, createForm.stylePreset, "未设置"),
-        },
-        {
-          key: "aspectRatio",
-          label: "长宽比",
-          description: "决定关键帧与后续视频的画面比例。",
-          valueLabel: valueOptionLabel(aspectRatioOptions.value, createForm.aspectRatio, "未设置"),
-        },
-        {
-          key: "keyframeSeed",
-          label: "关键帧 Seed",
-          description: "可选，固定关键帧阶段的随机种子，便于稳定复现画面。",
-          valueLabel: createForm.keyframeSeed === "" ? "自动" : createForm.keyframeSeed,
-        },
-      ];
-    default:
-      return [
-        {
-          key: "videoModel",
-          label: "视频模型",
-          description: "选择最终视频片段的生成模型。",
-          valueLabel: valueOptionLabel(videoModelOptions.value, createForm.videoModel, "未设置"),
-        },
-        {
-          key: "videoSize",
-          label: "输出尺寸",
-          description: "控制视频输出分辨率与尺寸基线。",
-          valueLabel: valueOptionLabel(videoSizeOptions.value, createForm.videoSize, "未设置"),
-        },
-        {
-          key: "videoSeed",
-          label: "视频 Seed",
-          description: "可选，固定视频阶段的随机种子，避免与关键帧阶段互相干扰。",
-          valueLabel: createForm.videoSeed === "" ? "自动" : createForm.videoSeed,
-        },
-      ];
-  }
-});
-
-const activeStageFieldIndex = computed(() => {
-  const maxIndex = Math.max(activeStageSteps.value.length - 1, 0);
-  return Math.min(stageFieldIndexMap[activeCreateStage.value] ?? 0, maxIndex);
-});
-
-const currentStageField = computed(
-  () => activeStageSteps.value[activeStageFieldIndex.value] ?? activeStageSteps.value[0] ?? null
-);
-
-const activeStageProgress = computed(() => {
-  if (!activeStageSteps.value.length) {
-    return 0;
-  }
-  return ((activeStageFieldIndex.value + 1) / activeStageSteps.value.length) * 100;
 });
 
 const createReviewSections = computed<CreateReviewSection[]>(() => [
@@ -1918,6 +1166,42 @@ const canSubmitCreateReview = computed(() =>
 
 function ratingLabel(value?: number | null) {
   return typeof value === "number" && value > 0 ? `${value}/5` : "未评分";
+}
+
+function workflowStageLabel(value?: string | null) {
+  const normalized = String(value ?? "").trim().toLowerCase();
+  if (normalized === "storyboard") {
+    return "分镜脚本";
+  }
+  if (normalized === "keyframe") {
+    return "角色/关键帧";
+  }
+  if (normalized === "video") {
+    return "视频片段";
+  }
+  if (normalized === "joined" || normalized === "final") {
+    return "成片";
+  }
+  if (normalized === "material_center") {
+    return "素材中心";
+  }
+  return value || "未开始";
+}
+
+function switchCanvasStage(stage: CanvasStageKey) {
+  activeCanvasStage.value = stage;
+  if (stage === "final") {
+    return;
+  }
+  switchWorkflowStage(stage);
+}
+
+function setPreviewStoryboardVersion(versionId: string) {
+  previewStoryboardVersionId.value = versionId;
+}
+
+function selectCanvasClip(clipIndex: number) {
+  selectedCanvasClipIndex.value = clipIndex;
 }
 
 function valueOptionLabel<T extends { value: string; label: string }>(options: T[], value?: string | null, fallback = "-") {
@@ -2407,9 +1691,6 @@ function selectedKeyframePreviewFrames(slot: WorkflowClipSlot) {
 }
 
 const normalizedStoryboardManualDurationSeconds = computed(() => parseStoryboardDurationSeconds(storyboardManualDurationSeconds.value));
-const storyboardManualDurationHint = computed(() =>
-  `手动模式下镜头时长限制为 ${STORYBOARD_MANUAL_DURATION_MIN_SECONDS}-${STORYBOARD_MANUAL_DURATION_MAX_SECONDS} 秒。`
-);
 const storyboardManualDurationValidationMessage = computed(() => {
   if (storyboardDurationMode.value === "auto") {
     return "";
@@ -2435,37 +1716,8 @@ const isStoryboardDurationConfigured = computed(() => {
   return Boolean(normalizedStoryboardManualDurationSeconds.value !== null && !storyboardManualDurationValidationMessage.value);
 });
 
-function setStageFieldIndex(index: number) {
-  const maxIndex = Math.max(activeStageSteps.value.length - 1, 0);
-  stageFieldIndexMap[activeCreateStage.value] = Math.min(Math.max(index, 0), maxIndex);
-}
-
-function nextStageField() {
-  if (!activeStageSteps.value.length) {
-    return;
-  }
-  if (activeStageFieldIndex.value >= activeStageSteps.value.length - 1) {
-    setStageFieldIndex(0);
-    return;
-  }
-  setStageFieldIndex(activeStageFieldIndex.value + 1);
-}
-
-function previousStageField() {
-  if (!activeStageSteps.value.length) {
-    return;
-  }
-  setStageFieldIndex(activeStageFieldIndex.value - 1);
-}
-
-function openCreateReview() {
-  createError.value = "";
-  createReviewFlipped.value = true;
-}
-
 async function closeCreateReview() {
   createError.value = "";
-  createReviewFlipped.value = false;
   createComposerVisible.value = false;
   selectedWorkflow.value = null;
   if (selectedWorkflowId.value) {
@@ -2476,7 +1728,6 @@ async function closeCreateReview() {
 function startCreateWorkflow() {
   createError.value = "";
   createComposerVisible.value = true;
-  createReviewFlipped.value = true;
 }
 
 function syncWorkflowSettingsDraft(workflow: WorkflowDetail) {
@@ -2532,8 +1783,12 @@ function applyWorkflowDrafts(workflow: WorkflowDetail | null) {
 
 function openWorkflow(workflowId: string, preferredStage?: string | null) {
   createComposerVisible.value = false;
-  createReviewFlipped.value = false;
-  const nextStage = normalizeDetailStage(preferredStage) ?? normalizeDetailStage(route.query.stage) ?? activeCreateStage.value;
+  const nextStage = normalizeCanvasStage(preferredStage) ?? normalizeDetailStage(route.query.stage) ?? activeCreateStage.value;
+  activeCanvasStage.value = nextStage;
+  if (nextStage === "final") {
+    void router.push(`/workflows/${workflowId}`);
+    return;
+  }
   void router.push({
     path: `/workflows/${workflowId}`,
     query: { stage: nextStage },
@@ -2542,6 +1797,7 @@ function openWorkflow(workflowId: string, preferredStage?: string | null) {
 
 function switchWorkflowStage(stage: CreateStageKey) {
   activeCreateStage.value = stage;
+  activeCanvasStage.value = stage;
   if (!selectedWorkflowId.value) {
     return;
   }
@@ -2583,7 +1839,7 @@ async function loadOptions() {
       syncVideoSizeSelection(createForm, result.defaultVideoSize);
     }
     if (!createForm.aspectRatio) {
-      createForm.aspectRatio = (result.defaultAspectRatio as "9:16" | "16:9" | null) || "9:16";
+      createForm.aspectRatio = (result.defaultAspectRatio as "9:16" | "16:9" | null) || "16:9";
     }
   } finally {
     loadingOptions.value = false;
@@ -2608,9 +1864,10 @@ async function loadWorkflowDetail(workflowId: string) {
   try {
     selectedWorkflow.value = await fetchWorkflow(workflowId);
     const routeStage = normalizeDetailStage(route.query.stage);
-    const resolvedStage = routeStage ?? normalizeDetailStage(selectedWorkflow.value?.currentStage) ?? "storyboard";
-    activeCreateStage.value = resolvedStage;
-    if (routeStage !== resolvedStage) {
+    const resolvedStage = routeStage ?? normalizeCanvasStage(selectedWorkflow.value?.currentStage) ?? "storyboard";
+    activeCreateStage.value = resolvedStage === "final" ? "video" : resolvedStage;
+    activeCanvasStage.value = resolvedStage;
+    if (resolvedStage !== "final" && routeStage !== resolvedStage) {
       await router.replace({
         path: route.path,
         query: {
@@ -2620,6 +1877,18 @@ async function loadWorkflowDetail(workflowId: string) {
       });
     }
     applyWorkflowDrafts(selectedWorkflow.value);
+    previewStoryboardVersionId.value =
+      selectedWorkflow.value.storyboardVersions.find((version) => version.selected)?.id
+      ?? selectedWorkflow.value.storyboardVersions[0]?.id
+      ?? "";
+    if (selectedWorkflow.value.clipSlots.length) {
+      const currentClipExists = selectedWorkflow.value.clipSlots.some((slot) => slot.clipIndex === selectedCanvasClipIndex.value);
+      if (!currentClipExists) {
+        selectedCanvasClipIndex.value = selectedWorkflow.value.clipSlots[0].clipIndex;
+      }
+    } else {
+      selectedCanvasClipIndex.value = null;
+    }
   } catch (error) {
     detailError.value = error instanceof Error ? error.message : "工作流详情加载失败";
     selectedWorkflow.value = null;
@@ -2675,7 +1944,6 @@ async function handleCreateWorkflow() {
   createError.value = "";
   if (storyboardDurationMode.value === "manual" && storyboardManualDurationValidationMessage.value) {
     createError.value = storyboardManualDurationValidationMessage.value;
-    createReviewFlipped.value = false;
     return;
   }
   creatingWorkflow.value = true;
@@ -2689,12 +1957,10 @@ async function handleCreateWorkflow() {
     storyboardDurationMode.value = "auto";
     storyboardManualDurationSeconds.value = "8";
     createComposerVisible.value = false;
-    createReviewFlipped.value = false;
     await loadWorkflows();
     openWorkflow(workflow.id, workflow.currentStage);
   } catch (error) {
     createError.value = error instanceof Error ? error.message : "创建工作流失败";
-    createReviewFlipped.value = false;
   } finally {
     creatingWorkflow.value = false;
   }
@@ -2958,6 +2224,7 @@ watch(
     const resolvedStage = normalizeDetailStage(stage);
     if (resolvedStage && resolvedStage !== activeCreateStage.value) {
       activeCreateStage.value = resolvedStage;
+      activeCanvasStage.value = resolvedStage;
     }
   }
 );
@@ -2988,1856 +2255,1059 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
-.workflow-view {
+.workflow-canvas-view {
   display: grid;
-  grid-template-columns: 340px minmax(0, 1fr);
-  gap: 20px;
+  grid-template-columns: 320px minmax(0, 1fr);
+  gap: 18px;
   height: 100%;
   min-height: 0;
   padding: 22px;
   color: var(--text-strong);
+  background: var(--bg-base);
 }
 
-.workflow-rail,
-.workflow-main {
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-  min-height: 0;
-}
-
-.workflow-rail {
-  overflow: hidden;
-}
-
-.workflow-rail-flip-shell {
-  flex: 1 1 auto;
-  min-height: 0;
-  perspective: 2200px;
-}
-
-.workflow-rail-flip {
-  display: grid;
-  min-height: 100%;
-  transform-style: preserve-3d;
-  transition: transform 0.72s cubic-bezier(0.22, 0.8, 0.2, 1);
-}
-
-.workflow-rail-flip-active {
-  transform: rotateY(180deg);
-}
-
-.workflow-rail-flip__face {
-  grid-area: 1 / 1;
-  backface-visibility: hidden;
-  -webkit-backface-visibility: hidden;
-  transform-style: preserve-3d;
-}
-
-.workflow-rail-flip__face-front {
-  transform: rotateY(0deg);
-}
-
-.workflow-rail-flip__face-back {
-  transform: rotateY(180deg);
-}
-
-.workflow-rail-flip__face-back.workflow-rail-panel {
-  padding-top: 18px;
-}
-
-.workflow-rail-flip-active .workflow-rail-flip__face-front {
-  pointer-events: none;
-}
-
-.workflow-rail-flip:not(.workflow-rail-flip-active) .workflow-rail-flip__face-back {
-  pointer-events: none;
-}
-
-.workflow-panel {
-  padding: 22px;
-  min-height: 0;
-}
-
-.workflow-rail-panel {
-  position: sticky;
-  top: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  height: calc(100vh - 132px);
-  min-height: 0;
-  max-height: calc(100vh - 132px);
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  padding-top: 28px;
-}
-
-.workflow-rail__hero {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-
-.workflow-rail__title-row {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 12px;
-  flex-wrap: wrap;
-}
-
-.workflow-rail__title-row h2 {
-  margin: 0;
-}
-
-.workflow-rail__actions {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 10px;
-}
-
-.workflow-rail__actions-inline {
-  justify-content: flex-start;
-}
-
-.workflow-rail__search {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.workflow-rail__search span {
-  font-size: 0.84rem;
-  color: var(--text-body);
-}
-
-.workflow-list-shell {
-  flex: 1 0 auto;
-  min-height: 0;
-  overflow: visible;
-  padding-right: 4px;
-}
-
-.workflow-create-shell {
-  display: flex;
-  flex-direction: column;
-  gap: 0;
-  padding: 14px 24px 24px;
-  border-radius: 28px;
+.workflow-project-drawer,
+.workflow-canvas-main,
+.workflow-inspector,
+.workflow-stage-board,
+.workflow-composer-card,
+.workflow-create-inspector,
+.workflow-canvas-header,
+.workflow-stage-pipeline,
+.workflow-project-card,
+.character-mini-card,
+.clip-detail-card,
+.storyboard-preview-card,
+.version-side-panel,
+.final-result-card-v2,
+.inspector-section {
+  border: 1px solid rgba(15, 20, 25, 0.07);
   background: #fff;
-  border: 1px solid rgba(15, 20, 25, 0.06);
-}
-
-.workflow-main {
-  overflow-y: auto;
-  padding-right: 4px;
-}
-
-.workflow-main > * {
-  flex: 0 0 auto;
-}
-
-.workflow-create-shell__grid {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 0;
-}
-
-.workflow-create-canvas {
-  display: block;
-}
-
-.workflow-review-card {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  min-height: 100%;
-}
-
-.workflow-review-card__head {
-  align-items: flex-start;
-}
-
-.workflow-review-card-rail {
-  height: 100%;
-}
-
-.workflow-review-card__status {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: 8px;
-}
-
-.workflow-review-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 14px;
-}
-
-.workflow-review-grid-rail {
-  grid-template-columns: 1fr;
-  overflow-y: auto;
-  padding-right: 4px;
-}
-
-.workflow-review-section {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  padding: 16px;
-  border-radius: 20px;
-  border: 1px solid rgba(15, 20, 25, 0.06);
-  background: #fff;
-}
-
-.workflow-review-section__head h4 {
-  margin: 6px 0 0;
-}
-
-.workflow-review-list {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.workflow-review-item {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 14px;
-  padding: 14px;
-  border-radius: 16px;
-  background: #f8fafb;
-  border: 1px solid rgba(15, 20, 25, 0.06);
-}
-
-.workflow-review-item strong {
-  display: block;
-  margin-bottom: 6px;
-}
-
-.workflow-review-item p {
-  margin: 0;
-  color: var(--text-body);
-  line-height: 1.5;
-}
-
-.workflow-review-item__meta {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: 8px;
-}
-
-.workflow-review-chip-success {
-  border-color: rgba(88, 212, 136, 0.38);
-  background: rgba(88, 212, 136, 0.12);
-  color: #1b9f63;
-}
-
-.workflow-review-chip-warning {
-  border-color: rgba(255, 180, 92, 0.46);
-  background: rgba(255, 180, 92, 0.14);
-  color: #9a6100;
-}
-
-.workflow-review-chip-muted {
-  border-color: rgba(15, 20, 25, 0.08);
-  background: #f8fafb;
-  color: var(--text-muted);
-}
-
-.surface-chip-quiet {
-  border-color: rgba(15, 20, 25, 0.08);
-  background: #f8fafb;
-  color: var(--text-body);
-}
-
-.workflow-review-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 12px;
-  margin-top: 8px;
-}
-
-.workflow-review-actions-rail {
-  margin-top: auto;
-}
-
-.workflow-stage-create {
-  display: grid;
-  grid-template-columns: 1fr;
-  grid-template-areas:
-    "base"
-    "focus";
-  gap: 16px;
-  align-items: start;
-}
-
-.stage-config-card {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  padding: 18px;
-  border-radius: 22px;
-  background: #fff;
-  border: 1px solid rgba(15, 20, 25, 0.06);
   box-shadow: var(--shadow-soft);
 }
 
-.stage-config-card--base {
-  grid-area: base;
-}
-
-.stage-config-card--focus {
-  grid-area: focus;
-}
-
-.stage-config-card__head {
+.workflow-project-drawer {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-}
-
-.stage-config-card__title-row {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
-}
-
-.stage-config-card__head h3 {
-  margin: 0;
-  font-size: 1.08rem;
-}
-
-.stage-progress-copy {
-  margin: 8px 0 0;
-  max-width: 620px;
-  color: var(--text-body);
-  line-height: 1.6;
-}
-
-.stage-config-card__head :deep(.surface-chip) {
-  width: fit-content;
-}
-
-.stage-switch-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  justify-content: flex-end;
-}
-
-.stage-switch-btn {
-  min-height: 40px;
-  padding: 0 16px;
-  border-radius: 999px;
-  border: 1px solid rgba(15, 20, 25, 0.08);
-  background: #fff;
-  color: var(--text-body);
-  font-size: 0.88rem;
-  font-weight: 700;
-  transition: border-color 0.2s ease, background 0.2s ease, transform 0.2s ease, color 0.2s ease;
-}
-
-.stage-switch-btn:hover,
-.stage-switch-btn-active {
-  border-color: rgba(255, 180, 92, 0.54);
-  background: rgba(255, 180, 92, 0.12);
-  color: #9a6100;
-  transform: translateY(-1px);
-}
-
-.workflow-view :deep(.surface-panel),
-.workflow-view :deep(.surface-tile),
-.workflow-view :deep(.surface-chip),
-.workflow-view :deep(.status-pill),
-.workflow-view :deep(.action-chip) {
-  border-color: rgba(15, 20, 25, 0.08);
-  background: #fff;
-  color: var(--text-body);
-  box-shadow: var(--shadow-soft);
-}
-
-.workflow-view :deep(.field-input),
-.workflow-view :deep(.field-textarea),
-.workflow-view :deep(.field-select) {
-  border-color: rgba(15, 20, 25, 0.08);
-  background: #fff;
-  color: var(--text-strong);
-}
-
-.workflow-view :deep(.field-input::placeholder),
-.workflow-view :deep(.field-textarea::placeholder) {
-  color: #9aa5ad;
-}
-
-.workflow-view :deep(.btn-secondary),
-.workflow-view :deep(.btn-ghost),
-.workflow-view :deep(.shell-icon-btn) {
-  border-color: rgba(15, 20, 25, 0.08);
-  background: #fff;
-  color: var(--text-strong);
-  box-shadow: none;
-}
-
-.workflow-view :deep(.btn-primary) {
-  background: var(--bg-accent);
-  color: #fff;
-}
-
-.stage-config-fields {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
-}
-
-.stage-config-fields--single {
-  grid-template-columns: minmax(280px, 0.92fr) minmax(0, 1.08fr);
-  grid-template-areas:
-    "title title"
-    "prompt body";
-  align-items: start;
-}
-
-.stage-config-field-title {
-  grid-area: title;
-}
-
-.stage-config-field-body {
-  grid-area: body;
-}
-
-.stage-config-field-prompt {
-  grid-area: prompt;
-}
-
-.stage-config-card--focus {
-  min-width: 0;
-}
-
-.stage-progress-form {
-  display: grid;
-  grid-template-columns: minmax(0, 1.4fr) minmax(220px, 0.7fr);
-  gap: 16px;
-  align-items: start;
-}
-
-.stage-progress-form__rail,
-.stage-progress-form__panel,
-.stage-progress-form__summary {
-  border-radius: 20px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(255, 255, 255, 0.03);
-}
-
-.stage-progress-form__rail {
-  grid-column: 1 / -1;
-  padding: 16px;
-}
-
-.stage-progress-form__bar {
-  position: relative;
-  width: 100%;
-  height: 8px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.08);
+  gap: 14px;
+  min-height: 0;
+  padding: 18px;
+  border-radius: 24px;
   overflow: hidden;
 }
 
-.stage-progress-form__fill {
-  display: block;
-  height: 100%;
-  border-radius: inherit;
-  background: linear-gradient(90deg, rgba(255, 180, 92, 0.92), rgba(89, 208, 255, 0.82));
-}
-
-.stage-progress-form__steps {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-  gap: 10px;
-  margin-top: 14px;
-}
-
-.stage-progress-form__step {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-height: 48px;
-  padding: 10px 12px;
-  border-radius: 16px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(255, 255, 255, 0.03);
-  color: rgba(255, 255, 255, 0.78);
-  text-align: left;
-  transition: border-color 0.2s ease, background 0.2s ease, transform 0.2s ease;
-}
-
-.stage-progress-form__step span {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.08);
-  font-size: 0.82rem;
-  font-weight: 700;
-}
-
-.stage-progress-form__step-active,
-.stage-progress-form__step:hover {
-  border-color: rgba(255, 180, 92, 0.56);
-  background: rgba(255, 180, 92, 0.12);
-  transform: translateY(-1px);
-}
-
-.stage-progress-form__step-done span,
-.stage-progress-form__step-active span {
-  background: rgba(255, 180, 92, 0.2);
-  color: #fff0d2;
-}
-
-.stage-progress-form__panel {
-  padding: 18px;
-}
-
-.stage-progress-form__panel-head {
+.workflow-drawer__head,
+.workflow-canvas-header,
+.stage-board__head,
+.inspector-section__head,
+.character-strip__head,
+.version-side-panel__head,
+.clip-detail-card__head,
+.workflow-create-title,
+.workflow-project-card__title,
+.video-version-card__head,
+.final-result-card-v2__meta {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: 14px;
-  margin-bottom: 18px;
 }
 
-.stage-progress-form__panel-head h4 {
-  margin: 6px 0 8px;
-  font-size: 1.06rem;
-}
-
-.stage-progress-form__panel-head p:last-child {
+.workflow-drawer__head h1,
+.workflow-canvas-header h2,
+.stage-board__head h3,
+.inspector-section__head h3,
+.workflow-create-title h2,
+.storyboard-preview-card h4,
+.clip-detail-card h4,
+.final-result-card-v2 h4 {
   margin: 0;
-  color: rgba(255, 255, 255, 0.64);
-  line-height: 1.6;
-}
-
-.stage-progress-form__field {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.stage-progress-form__field > span {
-  color: rgba(255, 255, 255, 0.74);
-  font-size: 0.9rem;
-}
-
-.stage-progress-form__field-note,
-.stage-progress-form__field-error {
-  margin: 0;
-  font-size: 0.86rem;
-  line-height: 1.5;
-}
-
-.stage-progress-form__field-note {
-  color: rgba(255, 255, 255, 0.58);
-}
-
-.stage-progress-form__field-error {
-  color: #ffb4b4;
-}
-
-.stage-progress-form__field-slider {
-  max-width: 520px;
-}
-
-.stage-option-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 10px;
-}
-
-.stage-option-grid--compact {
-  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-}
-
-.stage-option-card {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  min-height: 84px;
-  padding: 14px;
-  border-radius: 18px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(255, 255, 255, 0.03);
-  color: rgba(255, 255, 255, 0.82);
-  text-align: left;
-  transition: border-color 0.2s ease, background 0.2s ease, transform 0.2s ease;
-}
-
-.stage-option-card span {
-  color: rgba(255, 255, 255, 0.56);
-  font-size: 0.82rem;
-  line-height: 1.5;
-}
-
-.stage-option-card:hover,
-.stage-option-card-active {
-  border-color: rgba(255, 180, 92, 0.56);
-  background: rgba(255, 180, 92, 0.12);
-  transform: translateY(-1px);
-}
-
-.stage-slider__range {
-  width: 100%;
-  accent-color: rgba(255, 180, 92, 0.96);
-}
-
-.stage-slider__meta {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.stage-slider__number {
-  width: 120px;
-}
-
-.stage-toggle-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-}
-
-.stage-toggle-chip {
-  min-height: 38px;
-  padding: 0 14px;
-  border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(255, 255, 255, 0.03);
-  color: rgba(255, 255, 255, 0.76);
-  transition: border-color 0.2s ease, background 0.2s ease;
-}
-
-.stage-toggle-chip-active,
-.stage-toggle-chip:hover {
-  border-color: rgba(255, 180, 92, 0.56);
-  background: rgba(255, 180, 92, 0.12);
-  color: #fff0d2;
-}
-
-.stage-progress-form__actions {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  margin-top: 18px;
-}
-
-.stage-progress-form__summary {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: 16px;
-}
-
-.stage-summary-card {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 14px;
-  border-radius: 16px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(255, 255, 255, 0.03);
-  color: rgba(255, 255, 255, 0.8);
-  text-align: left;
-  transition: border-color 0.2s ease, background 0.2s ease, transform 0.2s ease;
-}
-
-.stage-summary-card span {
-  font-size: 0.8rem;
-  color: rgba(255, 255, 255, 0.54);
-}
-
-.stage-summary-card-active,
-.stage-summary-card:hover {
-  border-color: rgba(89, 208, 255, 0.44);
-  background: rgba(89, 208, 255, 0.1);
-  transform: translateY(-1px);
-}
-
-.stage-config-field-body .field-textarea,
-.stage-config-field-prompt .field-textarea {
-  min-height: 220px;
-}
-
-.workflow-panel__head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
-  margin-bottom: 18px;
-}
-
-.workflow-panel__head h2 {
-  margin: 6px 0 0;
-  font-size: 1.2rem;
-  font-weight: 700;
-}
-
-.workflow-panel__head-spread {
-  align-items: center;
-}
-
-.workflow-stage-panel__actions {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 10px;
-}
-
-.workflow-settings-panel {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-.workflow-settings-panel__head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
-}
-
-.workflow-settings-panel__head h2 {
-  margin: 6px 0 0;
-  font-size: 1.1rem;
-}
-
-.workflow-settings-form {
-  display: grid;
-  grid-template-columns: repeat(12, minmax(0, 1fr));
-  gap: 14px 18px;
-  align-items: end;
-}
-
-.workflow-settings-field-model {
-  grid-column: span 3;
-}
-
-.workflow-settings-field-compact {
-  grid-column: span 3;
-}
-
-.workflow-settings-field-short,
-.workflow-settings-field-mode,
-.workflow-settings-field-duration {
-  grid-column: span 2;
-}
-
-.workflow-settings-form__actions {
-  grid-column: span 6;
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 12px;
-  min-height: 42px;
-  align-self: end;
-}
-
-.workflow-settings-form__actions .btn-primary {
-  min-width: 132px;
+  color: var(--text-strong);
+  letter-spacing: -0.02em;
 }
 
 .workflow-eyebrow {
-  margin: 0;
-  font-size: 0.72rem;
-  letter-spacing: 0.16em;
+  margin: 0 0 6px;
+  color: var(--text-muted);
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.56);
 }
 
-.workflow-form__grid,
-.workflow-list,
-.workflow-summary-grid,
-.clip-stack,
-.clip-version-list,
-.version-grid {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-
-.workflow-form {
-  gap: 14px;
-}
-
-.workflow-form__grid {
+.drawer-icon-button,
+.workflow-composer-submit {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-
-.workflow-form__footer {
-  display: flex;
-  justify-content: flex-end;
-}
-
-.workflow-field {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.workflow-field-span-2 {
-  grid-column: span 2;
-}
-
-.workflow-field span {
-  font-size: 0.86rem;
-  color: rgba(255, 255, 255, 0.72);
-}
-
-.workflow-submit {
-  justify-content: center;
-}
-
-.workflow-list__item {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: 14px;
-  border-radius: 18px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(255, 255, 255, 0.04);
-  text-align: left;
-  transition: border-color 0.2s ease, transform 0.2s ease, background 0.2s ease;
-}
-
-.workflow-list__open {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  width: 100%;
-  padding: 0;
+  place-items: center;
   border: 0;
-  background: transparent;
-  color: inherit;
-  text-align: left;
+  border-radius: 50%;
+  cursor: pointer;
 }
 
-.workflow-list__item:hover,
-.workflow-list__item-active {
-  border-color: rgba(255, 180, 92, 0.5);
-  background: rgba(255, 180, 92, 0.08);
-  transform: translateY(-1px);
+.drawer-icon-button {
+  width: 34px;
+  height: 34px;
+  background: #f3f6f8;
+  color: var(--text-body);
 }
 
-.workflow-list__top,
-.workflow-list__meta,
-.workflow-list__actions,
-.workflow-summary__meta,
-.workflow-summary__actions,
-.rating-row,
-.version-card__actions,
-.clip-card__meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.workflow-list__actions {
-  justify-content: flex-end;
-}
-
-.workflow-list__meta,
-.clip-card__desc {
-  color: rgba(255, 255, 255, 0.68);
-  font-size: 0.88rem;
-}
-
-.clip-card__desc {
-  display: -webkit-box;
-  min-height: 3.1em;
-  max-width: 100%;
-  overflow: hidden;
-  overflow-wrap: anywhere;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-}
-
-.workflow-finalize-box {
-  display: grid;
-  gap: 10px;
-}
-
-.workflow-finalize-box__button {
-  width: 100%;
-  justify-content: center;
-}
-
-.workflow-finalize-box__hint {
-  margin: 0;
-  color: rgba(255, 255, 255, 0.62);
-  font-size: 0.84rem;
-  line-height: 1.5;
-}
-
-.workflow-banner {
+.workflow-new-button {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 16px 18px;
-}
-
-.workflow-banner-error,
-.workflow-error {
-  color: #ffb4b4;
-}
-
-.workflow-empty {
-  padding: 28px 18px;
-  border-radius: 20px;
-  border: 1px dashed rgba(255, 255, 255, 0.14);
-  color: rgba(255, 255, 255, 0.64);
-  text-align: center;
-}
-
-.workflow-empty-large {
-  padding: 64px 24px;
-}
-
-.workflow-empty-large h2 {
-  margin: 8px 0 10px;
-}
-
-.workflow-empty-prompt {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
   justify-content: center;
-  gap: 10px;
-  text-align: center;
-}
-
-.workflow-empty-prompt p:not(.workflow-eyebrow) {
-  max-width: 520px;
-  margin: 0;
-  color: rgba(255, 255, 255, 0.64);
-  line-height: 1.7;
-}
-
-.workflow-empty-prompt__actions {
-  display: flex;
-  justify-content: center;
-  margin-top: 8px;
-}
-
-.workflow-empty-nested {
-  padding: 18px 14px;
-}
-
-.workflow-scroll-hint {
-  margin-bottom: 10px;
-  font-size: 0.84rem;
-  color: rgba(255, 255, 255, 0.54);
-}
-
-.workflow-scroll-hint-nested {
-  margin-bottom: 12px;
-}
-
-.workflow-summary-card {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  padding: 18px;
-}
-
-.workflow-summary-card h3,
-.clip-column__head h4,
-.version-card h3 {
-  margin: 0;
-}
-
-.workflow-stage-panel {
-  display: flex;
-  flex-direction: column;
-  gap: 18px;
-  padding: 24px;
-  border-radius: 26px;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.028));
-}
-
-.workflow-stage-grid {
-  display: grid;
-  grid-template-columns: minmax(220px, 248px) minmax(0, 1fr);
-  gap: 18px;
-  min-height: 0;
-}
-
-.workflow-stage-content {
-  min-width: 0;
-  min-height: 0;
-}
-
-.workflow-summary-card-compact {
-  position: sticky;
-  top: 0;
-  max-height: 72vh;
-  overflow-y: auto;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.055), rgba(255, 255, 255, 0.035));
-}
-
-.workflow-kv {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.workflow-kv__row {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  font-size: 0.92rem;
-}
-
-.workflow-kv__row span {
-  color: rgba(255, 255, 255, 0.6);
-}
-
-.workflow-note-block {
-  display: flex;
-  flex-direction: column;
   gap: 8px;
-  padding: 14px;
+  min-height: 44px;
+  border: 0;
   border-radius: 16px;
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--bg-accent);
+  color: #fff;
+  font-weight: 800;
+  cursor: pointer;
+  box-shadow: 0 12px 28px rgba(0, 161, 194, 0.2);
 }
 
-.workflow-note-block span {
-  font-size: 0.8rem;
-  color: rgba(255, 255, 255, 0.52);
+.workflow-new-button span {
+  font-size: 1.25rem;
+  line-height: 1;
 }
 
-.workflow-note-block p {
-  margin: 0;
-  white-space: pre-wrap;
-  line-height: 1.6;
-}
-
-.version-grid {
-  display: flex;
-  flex-direction: row;
-  gap: 16px;
-  overflow-x: auto;
-  overflow-y: hidden;
-  padding: 2px 6px 10px 0;
-  scroll-snap-type: x proximity;
-  overscroll-behavior-x: contain;
-  scrollbar-gutter: stable both-edges;
-}
-
-.storyboard-version-list {
-  flex-direction: column;
-  overflow-x: hidden;
-  overflow-y: visible;
-  padding-right: 0;
-  scroll-snap-type: none;
-  scrollbar-gutter: auto;
-}
-
-.storyboard-version-list .version-card {
-  flex: 1 1 auto;
-  width: 100%;
-}
-
-.storyboard-adjust-row {
+.workflow-search-box,
+.workflow-field {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 10px;
-  align-items: center;
-}
-
-.storyboard-adjust-row__input {
-  min-width: 0;
-}
-
-.version-card {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  padding: 18px;
-  border-radius: 20px;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  flex: 0 0 min(560px, calc(100% - 8px));
-  min-width: 0;
-  scroll-snap-align: start;
-}
-
-.version-card-compact {
-  padding: 16px;
-}
-
-.version-card__head {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.version-card__meta {
-  display: flex;
-  flex-wrap: wrap;
   gap: 8px;
-  align-items: center;
 }
 
-.version-card__text {
-  margin: 0;
-  padding: 14px;
-  min-height: 220px;
-  max-height: 320px;
-  overflow: auto;
-  border-radius: 16px;
-  background: rgba(4, 6, 10, 0.72);
-  color: rgba(255, 255, 255, 0.84);
-  font-size: 0.84rem;
-  line-height: 1.6;
-  word-break: break-word;
-}
-
-.version-card__markdown :deep(h1),
-.version-card__markdown :deep(h2),
-.version-card__markdown :deep(h3),
-.version-card__markdown :deep(h4),
-.version-card__markdown :deep(h5),
-.version-card__markdown :deep(h6) {
-  margin: 0 0 14px;
-  color: #f8f4e8;
-  line-height: 1.4;
-}
-
-.version-card__markdown :deep(h1) {
-  font-size: 1.28rem;
-}
-
-.version-card__markdown :deep(h2) {
-  font-size: 1.08rem;
-}
-
-.version-card__markdown :deep(p),
-.version-card__markdown :deep(ul),
-.version-card__markdown :deep(ol),
-.version-card__markdown :deep(blockquote),
-.version-card__markdown :deep(table),
-.version-card__markdown :deep(pre) {
-  margin: 0 0 14px;
-}
-
-.version-card__markdown :deep(ul),
-.version-card__markdown :deep(ol) {
-  padding-left: 20px;
-}
-
-.version-card__markdown :deep(li + li) {
-  margin-top: 6px;
-}
-
-.version-card__markdown :deep(code) {
-  padding: 2px 6px;
-  border-radius: 6px;
-  background: rgba(255, 255, 255, 0.08);
-  font-size: 0.78rem;
-}
-
-.version-card__markdown :deep(pre) {
-  padding: 12px;
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.05);
-  overflow: auto;
-}
-
-.version-card__markdown :deep(pre code) {
-  padding: 0;
-  background: transparent;
-}
-
-.version-card__markdown :deep(blockquote) {
-  padding-left: 12px;
-  border-left: 3px solid rgba(255, 180, 92, 0.5);
-  color: rgba(255, 255, 255, 0.72);
-}
-
-.version-card__markdown :deep(table) {
-  width: 100%;
-  border-collapse: collapse;
-}
-
-.version-card__markdown :deep(th),
-.version-card__markdown :deep(td) {
-  padding: 8px 10px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  text-align: left;
-  vertical-align: top;
-}
-
-.version-card__markdown :deep(th) {
-  background: rgba(255, 255, 255, 0.06);
-  color: #fff1cc;
+.workflow-search-box span,
+.workflow-field span {
+  color: var(--text-body);
+  font-size: 0.82rem;
   font-weight: 700;
 }
 
-.version-card__markdown :deep(a) {
-  color: #ffcf7a;
-  text-decoration: none;
-}
-
-.version-card__markdown :deep(a:hover) {
-  text-decoration: underline;
-}
-
-.version-card__markdown :deep(:last-child) {
-  margin-bottom: 0;
-}
-
-.version-card__textarea {
-  min-height: 86px;
-}
-
-.keyframe-frame-grid {
+.workflow-project-list {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
+  gap: 10px;
+  min-height: 0;
+  overflow: auto;
+  padding-right: 2px;
 }
 
-.keyframe-frame-grid-landscape {
-  grid-template-columns: minmax(0, 1fr);
+.workflow-project-card {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 30px;
+  align-items: start;
+  border-radius: 18px;
+  overflow: visible;
 }
 
-.character-sheet-stack {
+.workflow-project-card-active {
+  border-color: rgba(0, 161, 194, 0.28);
+  box-shadow: var(--shadow-glow);
+}
+
+.workflow-project-card__open {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.workflow-project-card__title strong,
+.compact-version-card strong,
+.character-mini-card strong,
+.video-version-card strong,
+.missing-clip-list strong {
+  color: var(--text-strong);
+  line-height: 1.35;
+}
+
+.workflow-project-card__title span,
+.workflow-project-card__stats,
+.workflow-project-card__meta,
+.compact-version-card span,
+.character-mini-card p,
+.clip-detail-card p,
+.final-result-card-v2 span,
+.inspector-kv-list span,
+.workflow-finalize-box__hint {
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  line-height: 1.55;
+}
+
+.workflow-project-card__stats,
+.workflow-project-card__meta,
+.workflow-summary__meta,
+.readiness-strip,
+.character-mini-card__actions,
+.version-card__actions,
+.rating-row,
+.workflow-inspector-actions,
+.character-asset-card__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.workflow-more-menu {
+  position: relative;
+  padding: 8px 8px 0 0;
+}
+
+.workflow-more-menu summary {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 999px;
+  color: var(--text-muted);
+  cursor: pointer;
+  list-style: none;
+}
+
+.workflow-more-menu summary::-webkit-details-marker {
+  display: none;
+}
+
+.workflow-more-menu[open] summary,
+.workflow-more-menu summary:hover {
+  background: #eef2f4;
+  color: var(--text-strong);
+}
+
+.workflow-more-menu[open]::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+}
+
+.workflow-more-menu > button,
+.workflow-more-menu > a {
+  position: absolute;
+  top: 38px;
+  right: 8px;
+  z-index: 11;
+  display: flex;
+  width: 150px;
+  min-height: 34px;
+  align-items: center;
+  padding: 0 12px;
+  border: 0;
+  border-bottom: 1px solid rgba(15, 20, 25, 0.06);
+  background: #fff;
+  color: var(--text-strong);
+  font-size: 0.8rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.workflow-more-menu > button:nth-child(3),
+.workflow-more-menu > a:nth-child(3) {
+  top: 72px;
+}
+
+.workflow-more-menu > button:nth-child(4),
+.workflow-more-menu > a:nth-child(4) {
+  top: 106px;
+}
+
+.workflow-more-menu > button:nth-child(5),
+.workflow-more-menu > a:nth-child(5) {
+  top: 140px;
+}
+
+.workflow-more-menu > button:nth-child(2),
+.workflow-more-menu > a:nth-child(2) {
+  border-radius: 12px 12px 0 0;
+}
+
+.workflow-more-menu > button:last-child,
+.workflow-more-menu > a:last-child {
+  border-bottom: 0;
+  border-radius: 0 0 12px 12px;
+}
+
+.workflow-more-menu[open] > button,
+.workflow-more-menu[open] > a {
+  box-shadow: var(--shadow-panel);
+}
+
+.workflow-more-menu:not([open]) > button,
+.workflow-more-menu:not([open]) > a {
+  display: none;
+}
+
+.workflow-menu-danger {
+  color: var(--accent-danger) !important;
+}
+
+.workflow-canvas-main {
   display: flex;
   flex-direction: column;
   gap: 16px;
-}
-
-.character-sheet-card {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
+  min-width: 0;
+  min-height: 0;
   padding: 18px;
+  border-radius: 28px;
+  overflow: auto;
+}
+
+.workflow-create-board,
+.workflow-canvas-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: 16px;
+  align-items: start;
+}
+
+.workflow-create-composer {
+  display: grid;
+  gap: 28px;
+  justify-items: center;
+  padding: 38px 18px;
+}
+
+.workflow-create-title {
+  width: min(100%, 980px);
+}
+
+.workflow-composer-card {
+  position: relative;
+  display: grid;
+  gap: 16px;
+  width: min(100%, 980px);
+  min-height: 340px;
+  padding: 24px 62px 18px 24px;
+  border-radius: 26px;
+}
+
+.workflow-composer-title-field,
+.workflow-composer-body-field,
+.workflow-composer-prompt-field {
+  display: grid;
+  gap: 8px;
+}
+
+.workflow-composer-title-field span,
+.workflow-composer-body-field span,
+.workflow-composer-prompt-field span {
+  color: var(--text-muted);
+  font-size: 0.74rem;
+  font-weight: 800;
+}
+
+.workflow-composer-title-field input,
+.workflow-composer-body-field textarea,
+.workflow-composer-prompt-field textarea {
+  width: 100%;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--text-strong);
+}
+
+.workflow-composer-title-field input {
+  font-size: 1.08rem;
+  font-weight: 800;
+}
+
+.workflow-composer-body-field textarea,
+.workflow-composer-prompt-field textarea {
+  line-height: 1.7;
+}
+
+.workflow-composer-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding-top: 4px;
+}
+
+.tool-pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 34px;
+  padding: 0 13px;
+  border: 1px solid rgba(15, 20, 25, 0.06);
+  border-radius: 9px;
+  background: #fff;
+  color: var(--text-strong);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.tool-pill-accent {
+  color: var(--accent-cyan);
+}
+
+.composer-required-count {
+  margin-left: auto;
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.workflow-composer-submit {
+  position: absolute;
+  right: 18px;
+  bottom: 18px;
+  width: 40px;
+  height: 40px;
+  background: var(--accent-cyan);
+  color: #fff;
+  font-size: 1.2rem;
+  box-shadow: 0 12px 28px rgba(0, 161, 194, 0.24);
+}
+
+.workflow-composer-submit:disabled,
+.workflow-new-button:disabled,
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.54;
+  box-shadow: none;
+}
+
+.workflow-canvas-header,
+.workflow-stage-pipeline,
+.workflow-stage-board,
+.workflow-inspector,
+.workflow-create-inspector {
+  border-radius: 24px;
+  padding: 18px;
+}
+
+.workflow-stage-pipeline {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.workflow-stage-step {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  min-height: 64px;
+  padding: 10px;
+  border: 1px solid rgba(15, 20, 25, 0.07);
+  border-radius: 18px;
+  background: #f8fafb;
+  color: var(--text-body);
+  text-align: left;
+  cursor: pointer;
+}
+
+.workflow-stage-step-active,
+.workflow-stage-step:hover {
+  border-color: rgba(0, 161, 194, 0.28);
+  background: rgba(0, 161, 194, 0.08);
+  color: var(--accent-cyan);
+}
+
+.workflow-stage-step__index {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: #fff;
+  color: currentColor;
+  font-weight: 900;
+}
+
+.workflow-stage-step__text {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.workflow-stage-step__text strong {
+  color: var(--text-strong);
+}
+
+.workflow-stage-step__text small,
+.workflow-stage-step__count {
+  color: var(--text-muted);
+  font-size: 0.72rem;
+}
+
+.workflow-stage-step-ready .workflow-stage-step__count {
+  color: var(--accent-cyan);
+}
+
+.workflow-stage-canvas {
+  min-width: 0;
+}
+
+.workflow-stage-board {
+  display: grid;
+  gap: 16px;
+  min-height: 620px;
+}
+
+.storyboard-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  gap: 14px;
+  min-height: 0;
+}
+
+.storyboard-preview-card,
+.version-side-panel,
+.clip-detail-card,
+.character-strip,
+.missing-clip-list {
+  display: grid;
+  gap: 14px;
+  padding: 16px;
   border-radius: 20px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(255, 255, 255, 0.03);
+  background: #fff;
+  border: 1px solid rgba(15, 20, 25, 0.07);
+}
+
+.storyboard-preview-card__head {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  align-items: flex-start;
+}
+
+.storyboard-preview-markdown,
+.version-card__markdown {
+  min-height: 420px;
+  max-height: 62vh;
+  overflow: auto;
+  padding: 18px;
+  border-radius: 18px;
+  background: #f8fafb;
+  color: var(--text-body);
+  line-height: 1.75;
+}
+
+.storyboard-preview-markdown :deep(h1),
+.storyboard-preview-markdown :deep(h2),
+.storyboard-preview-markdown :deep(h3),
+.storyboard-preview-markdown :deep(h4) {
+  color: var(--text-strong);
+}
+
+.storyboard-preview-markdown :deep(table) {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.storyboard-preview-markdown :deep(th),
+.storyboard-preview-markdown :deep(td) {
+  padding: 8px 9px;
+  border: 1px solid rgba(15, 20, 25, 0.08);
+  vertical-align: top;
+}
+
+.compact-version-list {
+  display: grid;
+  gap: 8px;
+  max-height: 460px;
+  overflow: auto;
+  padding-right: 2px;
+}
+
+.horizontal-version-list,
+.video-version-grid,
+.character-strip__list,
+.character-asset-grid,
+.keyframe-thumb-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 10px;
+  max-height: none;
+  overflow: visible;
+}
+
+.compact-version-card,
+.video-version-card,
+.keyframe-frame-card,
+.keyframe-thumb-card,
+.character-asset-card,
+.missing-clip-card {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid rgba(15, 20, 25, 0.07);
+  border-radius: 16px;
+  background: #f8fafb;
+}
+
+.compact-version-card-active,
+.video-version-card-active {
+  border-color: rgba(0, 161, 194, 0.28);
+  background: rgba(0, 161, 194, 0.08);
+}
+
+.compact-version-card__main,
+.missing-clip-card {
+  border: 0;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.storyboard-adjust-panel {
+  display: grid;
+  gap: 8px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(15, 20, 25, 0.07);
+}
+
+.character-strip {
+  background: #f8fafb;
+}
+
+.character-mini-card {
+  padding: 14px;
+  border-radius: 18px;
+}
+
+.character-mini-card p,
+.clip-detail-card p {
+  margin: 6px 0 0;
+}
+
+.character-mini-card__frames {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.character-mini-frame {
+  position: relative;
+  display: block;
+  min-height: 96px;
+  padding: 0;
+  border: 0;
+  border-radius: 14px;
+  overflow: hidden;
+  background: #eef2f4;
+  cursor: zoom-in;
+}
+
+.character-mini-frame img {
+  width: 100%;
+  height: 100%;
+  min-height: 96px;
+  object-fit: cover;
+}
+
+.character-mini-frame span {
+  position: absolute;
+  left: 6px;
+  bottom: 6px;
+  min-height: 22px;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.88);
+  color: var(--text-strong);
+  font-size: 0.7rem;
+  font-weight: 800;
+  line-height: 22px;
 }
 
 .character-asset-picker {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  padding: 16px;
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid rgba(15, 20, 25, 0.07);
   border-radius: 18px;
-  border: 1px solid rgba(255, 180, 92, 0.22);
-  background: rgba(255, 180, 92, 0.06);
+  background: #fff;
 }
 
 .character-asset-picker__head,
 .character-asset-picker__filters {
   display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
   align-items: flex-end;
   justify-content: space-between;
-  gap: 12px;
-}
-
-.character-asset-picker__head {
-  align-items: flex-start;
-}
-
-.character-asset-picker__head h4 {
-  margin: 4px 0 0;
-  font-size: 1rem;
-}
-
-.character-asset-picker__filters {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr)) auto;
-}
-
-.character-asset-picker__search {
-  align-self: end;
-  min-height: 40px;
-}
-
-.character-asset-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-  gap: 12px;
-}
-
-.character-asset-card {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  min-width: 0;
-  padding: 12px;
-  border-radius: 16px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(6, 8, 12, 0.36);
 }
 
 .character-asset-card__preview {
-  width: 100%;
-  padding: 0;
-  border: 0;
-  border-radius: 12px;
-  background: rgba(0, 0, 0, 0.22);
-  cursor: zoom-in;
-  overflow: hidden;
-}
-
-.character-asset-card__preview img {
   display: block;
   width: 100%;
-  aspect-ratio: 1 / 1;
-  object-fit: contain;
+  height: 148px;
+  padding: 0;
+  border: 0;
+  border-radius: 14px;
+  overflow: hidden;
+  background: #eef2f4;
+  cursor: zoom-in;
 }
 
-.character-asset-card__body {
-  display: flex;
-  flex: 1 1 auto;
-  flex-direction: column;
-  gap: 8px;
-  min-width: 0;
-}
-
-.character-asset-card__body strong {
-  overflow-wrap: anywhere;
-  line-height: 1.35;
-}
-
-.character-asset-card__meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.character-sheet-frame-grid {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-}
-
-.character-sheet-frame-grid-single {
-  grid-template-columns: minmax(0, 1fr);
-}
-
-.keyframe-frame-grid-compact {
-  max-width: 560px;
-}
-
-.keyframe-frame-card {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: 12px;
-  border-radius: 16px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(255, 255, 255, 0.03);
-}
-
-.keyframe-frame-card-compact {
-  padding: 10px;
-}
-
-.keyframe-frame-card__head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-}
-
-.keyframe-frame-card__image {
-  aspect-ratio: 9 / 16;
+.character-asset-card__preview img,
+.keyframe-frame-card__image,
+.keyframe-thumb-card__image {
+  width: 100%;
+  height: 100%;
   object-fit: cover;
 }
 
-.keyframe-frame-card__image-landscape {
-  aspect-ratio: 16 / 9;
-  object-fit: contain;
+.clip-workbench {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
+  gap: 14px;
+}
+
+.clip-timeline {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  max-height: 620px;
+  overflow: auto;
+}
+
+.clip-timeline__item {
+  display: grid;
+  gap: 4px;
+  min-height: 60px;
+  padding: 12px;
+  border: 1px solid rgba(15, 20, 25, 0.07);
+  border-radius: 16px;
+  background: #fff;
+  text-align: left;
+  cursor: pointer;
+}
+
+.clip-timeline__item-active,
+.clip-timeline__item:hover {
+  border-color: rgba(0, 161, 194, 0.28);
+  background: rgba(0, 161, 194, 0.08);
+}
+
+.clip-timeline__item span {
+  color: var(--text-muted);
+  font-size: 0.76rem;
+}
+
+.keyframe-frame-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.character-sheet-preview-trigger {
+  display: block;
+  width: 100%;
+  height: 260px;
+  padding: 0;
+  border: 0;
+  border-radius: 16px;
+  overflow: hidden;
+  background: #eef2f4;
+  cursor: zoom-in;
+}
+
+.keyframe-frame-card__head,
+.keyframe-frame-card__actions,
+.clip-card__selected-keyframes-head {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
 }
 
 .keyframe-frame-card__failure {
   display: grid;
+  place-items: center;
   min-height: 180px;
-  place-content: center;
-  gap: 6px;
-  border: 1px dashed rgba(225, 81, 89, 0.38);
-  border-radius: 8px;
-  background: rgba(225, 81, 89, 0.08);
   padding: 16px;
-  color: #7f1d1d;
+  border-radius: 14px;
+  background: #fff4f6;
+  color: var(--accent-danger);
   text-align: center;
 }
 
-.keyframe-frame-card__failure strong,
-.keyframe-frame-card__failure span {
-  overflow-wrap: anywhere;
+.readiness-strip {
+  padding: 12px 14px;
+  border-radius: 16px;
+  background: #f3f6f8;
+  color: var(--text-body);
+  font-weight: 700;
 }
 
-.keyframe-frame-card__failure span {
-  font-size: 12px;
-  line-height: 1.5;
+.video-version-card .version-card__video,
+.final-result-card__video {
+  width: 100%;
+  max-height: 380px;
+  border-radius: 16px;
+  background: #eef2f4;
+  object-fit: cover;
 }
 
-.keyframe-frame-card__actions {
+.final-result-card-v2 {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1fr) 280px;
+  gap: 16px;
+  padding: 16px;
+  border-radius: 20px;
+}
+
+.final-result-card-v2__meta {
+  flex-direction: column;
+}
+
+.workflow-kv,
+.inspector-kv-list,
+.workflow-settings-stack {
+  display: grid;
+  gap: 10px;
+}
+
+.workflow-kv__row,
+.inspector-kv-list div {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 10px 0;
+  border-bottom: 1px solid rgba(15, 20, 25, 0.06);
+}
+
+.workflow-kv__row strong,
+.inspector-kv-list strong {
+  color: var(--text-strong);
+  text-align: right;
+}
+
+.workflow-inspector {
+  position: sticky;
+  top: 0;
+  display: grid;
+  gap: 14px;
+  max-height: calc(100vh - 150px);
+  overflow: auto;
+}
+
+.inspector-section {
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+  border-radius: 20px;
+}
+
+.inspector-section__head {
+  display: block;
+}
+
+.stage-toggle-row {
+  display: flex;
+  flex-wrap: wrap;
   gap: 8px;
 }
 
-.character-sheet-frame-card__image {
-  object-fit: contain;
-  background: rgba(0, 0, 0, 0.22);
+.stage-toggle-chip,
+.rating-pill {
+  min-height: 34px;
+  padding: 0 12px;
+  border: 1px solid rgba(15, 20, 25, 0.08);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--text-body);
+  font-size: 0.82rem;
+  font-weight: 800;
+  cursor: pointer;
 }
 
-.character-sheet-frame-card-single {
-  width: 100%;
+.stage-toggle-chip-active,
+.rating-pill-active {
+  border-color: rgba(0, 161, 194, 0.24);
+  background: rgba(0, 161, 194, 0.08);
+  color: var(--accent-cyan);
 }
 
-.character-sheet-frame-card__image-single {
-  aspect-ratio: auto;
-  min-height: 260px;
-  max-height: 420px;
+.workflow-empty,
+.workflow-error {
+  margin: 0;
+  color: var(--text-muted);
+  line-height: 1.65;
 }
 
-.character-sheet-preview-trigger {
-  width: 100%;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  cursor: zoom-in;
+.workflow-error {
+  color: var(--accent-danger);
 }
 
-.character-sheet-preview-trigger:focus-visible {
-  outline: 2px solid rgba(255, 180, 92, 0.9);
-  outline-offset: 4px;
+.workflow-empty-large {
+  display: grid;
+  place-items: center;
+  min-height: 240px;
+  padding: 28px;
+  text-align: center;
+}
+
+.workflow-empty-soft,
+.workflow-empty-nested {
+  padding: 18px;
+  border-radius: 16px;
+  background: #f8fafb;
+}
+
+.workflow-banner {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  align-items: center;
+  padding: 16px;
   border-radius: 18px;
+}
+
+.workflow-banner-error {
+  border-color: rgba(229, 72, 101, 0.2);
+  background: #fff4f6;
 }
 
 .image-preview-overlay {
   position: fixed;
   inset: 0;
   z-index: 1200;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 32px;
-  background: rgba(8, 10, 18, 0.82);
-  backdrop-filter: blur(10px);
-}
-
-.image-preview-caption {
-  position: absolute;
-  top: 24px;
-  left: 50%;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
-  min-width: min(420px, calc(100vw - 180px));
-  padding: 10px 18px;
-  border: 1px solid rgba(255, 180, 92, 0.44);
-  border-radius: 14px;
-  background: rgba(18, 22, 30, 0.78);
-  color: #ffd38a;
-  text-align: center;
-  transform: translateX(-50%);
-  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.28);
-}
-
-.image-preview-caption strong {
-  color: #ff6b6b;
-  font-size: 0.98rem;
-  font-weight: 800;
-}
-
-.image-preview-caption span {
-  color: rgba(255, 255, 255, 0.62);
-  font-size: 0.78rem;
+  display: grid;
+  place-items: center;
+  padding: 28px;
+  background: rgba(15, 20, 25, 0.74);
+  backdrop-filter: blur(12px);
 }
 
 .image-preview-full {
-  max-width: min(92vw, 1440px);
+  display: block;
+  max-width: min(92vw, 1280px);
   max-height: 82vh;
-  border-radius: 20px;
-  box-shadow: 0 28px 60px rgba(0, 0, 0, 0.45);
-  background: rgba(12, 14, 20, 0.9);
+  object-fit: contain;
+  border-radius: 18px;
+  background: #eef2f4;
 }
 
+.image-preview-caption,
 .image-preview-close {
-  position: absolute;
+  position: fixed;
+  z-index: 1;
+  color: #fff;
+}
+
+.image-preview-caption {
+  left: 28px;
   top: 24px;
-  right: 24px;
-  padding: 10px 16px;
-  border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  background: rgba(18, 22, 30, 0.8);
-  color: #f7f7f8;
-  cursor: pointer;
-}
-
-.version-card__image,
-.version-card__video,
-.final-result-card__video {
-  width: 100%;
-  border-radius: 16px;
-  background: rgba(0, 0, 0, 0.35);
-}
-
-.clip-card {
-  display: flex;
-  flex-direction: column;
-  gap: 18px;
-  padding: 18px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.03));
-}
-
-.clip-card__head {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: start;
-  gap: 18px;
+  gap: 4px;
 }
 
-.clip-card__main {
-  min-width: 0;
-}
-
-.clip-card__title-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-width: 0;
-}
-
-.clip-card__title-row h3 {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.clip-card__bell {
-  flex: 0 0 auto;
-}
-
-.clip-card__side-actions {
-  display: grid;
-  grid-template-columns: 76px 144px;
-  align-items: center;
-  gap: 12px;
-  flex: 0 0 auto;
-}
-
-.clip-card__side-actions-video {
-  grid-template-columns: 144px 144px;
-}
-
-.clip-card__duration-chip,
-.clip-card__selection-chip {
-  justify-content: center;
-  min-height: 44px;
-  padding: 0 10px;
-  letter-spacing: 0;
-  white-space: nowrap;
-}
-
-.clip-card__duration-chip {
-  width: 76px;
-}
-
-.clip-card__selection-chip {
-  width: 144px;
-  max-width: 144px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.clip-card__action-button {
-  width: 144px;
-  min-width: 144px;
-  min-height: 44px;
-  white-space: nowrap;
-  word-break: keep-all;
-}
-
-.clip-card__character-chip {
-  max-width: 120px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.clip-card__selected-keyframes {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: 12px 14px;
-  border-radius: 16px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(255, 255, 255, 0.03);
-}
-
-.clip-card__selected-keyframes-head {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-}
-
-.keyframe-thumb-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-}
-
-.keyframe-thumb-card {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-width: 0;
-  padding: 8px;
-  border-radius: 14px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(255, 255, 255, 0.025);
-}
-
-.keyframe-thumb-card__image {
-  width: 52px;
-  height: 72px;
-  flex: 0 0 auto;
-  border-radius: 10px;
-  object-fit: cover;
-  background: rgba(0, 0, 0, 0.35);
-}
-
-.keyframe-thumb-card__meta {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-}
-
-.clip-stack {
-  gap: 18px;
-}
-
-.clip-version-list-grid {
-  display: flex;
-  flex-direction: row;
-  gap: 14px;
-  overflow-x: auto;
-  overflow-y: hidden;
-  padding: 2px 6px 10px 0;
-  scroll-snap-type: x proximity;
-  overscroll-behavior-x: contain;
-  scrollbar-gutter: stable both-edges;
-}
-
-.clip-card__columns {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 16px;
-}
-
-.clip-column {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.clip-column__head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.clip-version-list-grid .version-card {
-  flex: 0 0 min(360px, calc(100% - 8px));
-}
-
-.clip-version-list-grid .version-card-keyframe-landscape {
-  flex-basis: min(640px, calc(100% - 8px));
-}
-
-.rating-pill {
-  padding: 6px 10px;
-  border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(255, 255, 255, 0.04);
+.image-preview-caption span {
+  color: rgba(255, 255, 255, 0.72);
   font-size: 0.82rem;
 }
 
-.rating-pill-active {
-  border-color: rgba(255, 180, 92, 0.72);
-  background: rgba(255, 180, 92, 0.16);
-  color: #ffe1b1;
+.image-preview-close {
+  right: 28px;
+  top: 24px;
+  min-height: 36px;
+  padding: 0 14px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+  cursor: pointer;
 }
 
-.workflow-final-compact {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  padding-top: 6px;
-}
+@media (max-width: 1380px) {
+  .workflow-canvas-view {
+    grid-template-columns: 280px minmax(0, 1fr);
+  }
 
-.final-result-card {
-  display: grid;
-  grid-template-columns: minmax(0, 1.2fr) 320px;
-  gap: 18px;
-}
-
-.final-result-card__meta {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-@media (max-width: 1280px) {
-  .workflow-view {
+  .workflow-create-board,
+  .workflow-canvas-grid,
+  .storyboard-layout,
+  .final-result-card-v2 {
     grid-template-columns: 1fr;
   }
 
-  .workflow-rail-panel {
+  .workflow-inspector {
     position: static;
+    max-height: none;
+  }
+}
+
+@media (max-width: 1024px) {
+  .workflow-canvas-view {
+    grid-template-columns: 1fr;
     height: auto;
-    min-height: auto;
-    max-height: none;
-    overflow: visible;
-    padding-top: 22px;
+    min-height: 100%;
+    overflow: auto;
   }
 
-  .workflow-form__grid,
-  .workflow-create-shell__grid,
-  .workflow-stage-grid,
-  .workflow-review-grid,
-  .stage-progress-form,
-  .clip-card__columns,
-  .final-result-card {
-    grid-template-columns: 1fr;
+  .workflow-canvas-view-detail .workflow-canvas-main {
+    order: 1;
   }
 
-  .workflow-stage-create {
-    grid-template-columns: 1fr;
-    grid-template-areas:
-      "base"
-      "focus"
-      "submit";
+  .workflow-canvas-view-detail .workflow-project-drawer {
+    order: 2;
   }
 
-  .workflow-summary-card-compact {
-    position: static;
+  .workflow-project-drawer {
     max-height: none;
   }
 
-  .stage-config-fields--single {
+  .workflow-stage-pipeline {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .clip-workbench {
     grid-template-columns: 1fr;
-    grid-template-areas:
-      "title"
-      "body"
-      "prompt";
   }
 
-  .stage-config-card__title-row {
-    flex-direction: column;
-  }
-
-  .stage-progress-form__summary,
-  .stage-progress-form__panel,
-  .stage-progress-form__rail {
-    grid-column: auto;
-  }
-
-  .stage-switch-row {
-    justify-content: flex-start;
-  }
-
-  .workflow-settings-form {
-    grid-template-columns: repeat(6, minmax(0, 1fr));
-  }
-
-  .workflow-settings-form__actions {
-    grid-column: span 6;
-  }
-
-  .keyframe-frame-grid,
-  .character-sheet-frame-grid,
-  .keyframe-frame-grid-compact {
-    grid-template-columns: 1fr;
-    max-width: none;
-  }
-
-  .keyframe-thumb-list {
-    flex-direction: column;
+  .clip-timeline {
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(180px, 1fr);
+    grid-template-columns: none;
+    overflow-x: auto;
+    overflow-y: hidden;
   }
 }
 
-@media (max-width: 720px) {
-  .stage-slider__meta,
-  .stage-progress-form__actions,
-  .workflow-stage-panel__actions,
-  .workflow-review-item,
-  .workflow-review-actions,
-  .workflow-settings-panel__head,
-  .workflow-settings-form__actions,
-  .workflow-panel__head,
-  .clip-card__head {
+@media (max-width: 640px) {
+  .workflow-canvas-view {
+    padding: 14px;
+  }
+
+  .workflow-stage-pipeline {
+    grid-template-columns: 1fr;
+  }
+
+  .workflow-composer-card {
+    padding: 18px;
+  }
+
+  .workflow-composer-submit {
+    position: static;
+    margin-left: auto;
+  }
+
+  .composer-required-count {
+    width: 100%;
+    margin-left: 0;
+  }
+
+  .workflow-canvas-header,
+  .stage-board__head,
+  .workflow-drawer__head,
+  .storyboard-preview-card__head,
+  .clip-detail-card__head,
+  .keyframe-frame-card__head,
+  .keyframe-frame-card__actions,
+  .workflow-banner {
     flex-direction: column;
     align-items: stretch;
-  }
-
-  .workflow-settings-form {
-    grid-template-columns: 1fr;
-  }
-
-  .workflow-settings-field-model,
-  .workflow-settings-field-compact,
-  .workflow-settings-field-short,
-  .workflow-settings-field-mode,
-  .workflow-settings-field-duration,
-  .workflow-settings-form__actions {
-    grid-column: 1 / -1;
-  }
-
-  .workflow-field-span-2 {
-    grid-column: span 1;
-  }
-
-  .clip-card__head {
-    grid-template-columns: 1fr;
-  }
-
-  .clip-card__side-actions {
-    grid-template-columns: 76px minmax(144px, 1fr);
-    justify-content: start;
-  }
-
-  .clip-card__side-actions-video {
-    grid-template-columns: minmax(144px, 1fr) 144px;
-  }
-
-  .clip-card__action-button {
-    width: 144px;
-    min-width: 144px;
   }
 }
 </style>

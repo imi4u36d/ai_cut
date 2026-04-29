@@ -47,7 +47,7 @@ jiandou:
   task:
     defaults:
       source-file-name: text_prompt
-      default-aspect-ratio: 9:16
+      default-aspect-ratio: 16:9
       default-duration-seconds: 8
       editing-mode: drama
       intro-template: none
