@@ -1,34 +1,26 @@
 /**
  * 任务相关工具方法。
  */
+export {
+  TASK_LIFECYCLE_GROUP_LABELS,
+  TASK_STATUS_LABELS,
+  TERMINAL_TASK_STATUSES,
+} from "@jiandou/frontend-domain";
+import {
+  formatTaskProgress as sharedFormatTaskProgress,
+  formatTaskRange as sharedFormatTaskRange,
+  formatTaskStatus as sharedFormatTaskStatus,
+  getTaskLifecycleGroup as sharedGetTaskLifecycleGroup,
+  isTerminalTaskStatus as sharedIsTerminalTaskStatus,
+} from "@jiandou/frontend-domain";
 import type { TaskStatus } from "@/types";
-
-export const TERMINAL_TASK_STATUSES: TaskStatus[] = ["COMPLETED", "FAILED"];
-
-export const TASK_STATUS_LABELS: Record<TaskStatus, string> = {
-  PENDING: "排队等待",
-  PAUSED: "已暂停",
-  ANALYZING: "分析素材",
-  PLANNING: "生成方案",
-  RENDERING: "渲染导出",
-  COMPLETED: "已完成",
-  FAILED: "失败"
-};
-
-export const TASK_LIFECYCLE_GROUP_LABELS = {
-  queued: "排队中",
-  paused: "已暂停",
-  running: "处理中",
-  completed: "已完成",
-  failed: "失败"
-} as const;
 
 /**
  * 检查是否终态任务状态。
  * @param status 状态值
  */
 export function isTerminalTaskStatus(status: TaskStatus) {
-  return TERMINAL_TASK_STATUSES.includes(status);
+  return sharedIsTerminalTaskStatus(status);
 }
 
 /**
@@ -36,7 +28,7 @@ export function isTerminalTaskStatus(status: TaskStatus) {
  * @param status 状态值
  */
 export function formatTaskStatus(status: TaskStatus) {
-  return TASK_STATUS_LABELS[status] ?? status;
+  return sharedFormatTaskStatus(status);
 }
 
 /**
@@ -44,20 +36,7 @@ export function formatTaskStatus(status: TaskStatus) {
  * @param status 状态值
  */
 export function getTaskLifecycleGroup(status: TaskStatus) {
-  switch (status) {
-    case "COMPLETED":
-      return "completed";
-    case "FAILED":
-      return "failed";
-    case "PAUSED":
-      return "paused";
-    case "ANALYZING":
-    case "PLANNING":
-    case "RENDERING":
-      return "running";
-    default:
-      return "queued";
-  }
+  return sharedGetTaskLifecycleGroup(status);
 }
 
 /**
@@ -66,7 +45,7 @@ export function getTaskLifecycleGroup(status: TaskStatus) {
  * @param maxDuration 最大时长值
  */
 export function formatTaskRange(minDuration: number, maxDuration: number) {
-  return `${minDuration}-${maxDuration}s`;
+  return sharedFormatTaskRange(minDuration, maxDuration);
 }
 
 /**
@@ -74,5 +53,5 @@ export function formatTaskRange(minDuration: number, maxDuration: number) {
  * @param progress 进度值
  */
 export function formatTaskProgress(progress: number) {
-  return `${Math.max(0, Math.min(100, progress))}%`;
+  return sharedFormatTaskProgress(progress);
 }

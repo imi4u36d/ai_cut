@@ -14,10 +14,22 @@
     "types": ["node"],
     "baseUrl": ".",
     "paths": {
-      "@/*": ["src/*"]
+      "@/*": ["src/*"],
+      "@jiandou/api-client": ["../../packages/api-client/src/index.ts"],
+      "@jiandou/api-client/generated": ["../../packages/api-client/src/generated/index.ts"],
+      "@jiandou/frontend-domain": ["../../packages/frontend-domain/src/index.ts"],
+      "@jiandou/frontend-ui": ["../../packages/frontend-ui/src/index.ts"]
     }
   },
-  "include": ["src/**/*.ts", "src/**/*.tsx", "src/**/*.d.ts", "src/**/*.vue"],
+  "include": [
+    "src/**/*.ts",
+    "src/**/*.tsx",
+    "src/**/*.d.ts",
+    "src/**/*.vue",
+    "../../packages/api-client/src/**/*.ts",
+    "../../packages/frontend-domain/src/**/*.ts",
+    "../../packages/frontend-ui/src/**/*.ts"
+  ],
   "references": [
     {
       "path": "./tsconfig.node.json"

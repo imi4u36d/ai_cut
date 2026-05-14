@@ -11,7 +11,7 @@ import { ensureAuthSession, installAuthClientBridge } from "./auth/session";
 
 function normalizeRedirectTarget(value: unknown) {
   if (typeof value !== "string" || !value.startsWith("/") || value.startsWith("//")) {
-    return "/dashboard";
+    return "/";
   }
   return value;
 }
@@ -41,7 +41,8 @@ async function bootstrap() {
     app.component(key, component);
   }
   app.use(ElementPlus, {
-    locale: zhCn
+    locale: zhCn,
+    size: "small"
   });
   app.use(router);
   await router.isReady();

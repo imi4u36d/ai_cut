@@ -17,6 +17,15 @@
           </div>
           <div class="task-page__toolbar-actions">
             <el-button plain @click="resetFilters">重置</el-button>
+            <el-button
+              plain
+              type="danger"
+              :disabled="selectedTerminableIds.length === 0 || actionLoading"
+              :loading="actionLoading"
+              @click="terminateSelected"
+            >
+              批量终止
+            </el-button>
             <el-button :icon="Refresh" plain @click="loadTasks">刷新</el-button>
           </div>
         </div>
@@ -42,8 +51,16 @@
       </el-form>
 
       <el-alert v-if="errorMessage" :closable="false" class="task-page__alert" show-icon type="error" :title="errorMessage" />
+      <el-alert v-if="successMessage" :closable="false" class="task-page__alert" show-icon type="success" :title="successMessage" />
 
-      <el-table v-loading="loading" :data="tasks" class="task-page__table">
+      <el-table
+        v-loading="loading"
+        :data="tasks"
+        class="task-page__table"
+        row-key="id"
+        @selection-change="handleSelectionChange"
+      >
+        <el-table-column type="selection" width="48" />
         <el-table-column label="任务信息" min-width="260">
           <template #default="{ row }">
             <div class="task-page__task-cell">
@@ -109,6 +126,20 @@
             {{ formatDateTime(row.updatedAt) }}
           </template>
         </el-table-column>
+        <el-table-column fixed="right" label="操作" min-width="120">
+          <template #default="{ row }">
+            <el-button
+              v-if="terminableStatus(row.status)"
+              link
+              type="danger"
+              :disabled="actionLoading"
+              @click="terminateSingle(row)"
+            >
+              终止
+            </el-button>
+            <span v-else class="task-page__muted-action">不可终止</span>
+          </template>
+        </el-table-column>
       </el-table>
     </el-card>
   </section>
@@ -116,13 +147,17 @@
 
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from "vue";
+import { ElMessage, ElMessageBox } from "element-plus";
 import { Refresh } from "@element-plus/icons-vue";
-import { fetchAdminTasks } from "@/api/tasks";
+import { bulkTerminateAdminTasks, fetchAdminTasks, terminateAdminTask } from "@/features/tasks/services/taskService";
 import type { AdminTaskListItem, AdminTaskSortMode, TaskStatus } from "@/types";
 
 const loading = ref(false);
+const actionLoading = ref(false);
 const errorMessage = ref("");
+const successMessage = ref("");
 const tasks = ref<AdminTaskListItem[]>([]);
+const selectedTasks = ref<AdminTaskListItem[]>([]);
 const filters = reactive({
   q: "",
   status: "" as TaskStatus | "",
@@ -143,8 +178,7 @@ const sortOptions: Array<{ label: string; value: AdminTaskSortMode }> = [
   { label: "最近更新", value: "updated_desc" },
   { label: "最新创建", value: "created_desc" },
   { label: "进度优先", value: "progress_desc" },
-  { label: "状态优先", value: "status_desc" },
-  { label: "评分优先", value: "effect_rating_desc" }
+  { label: "状态优先", value: "status_desc" }
 ];
 
 const summaryCards = computed(() => {
@@ -159,6 +193,10 @@ const summaryCards = computed(() => {
     { label: "失败任务", value: failed, note: "建议及时排查处理" }
   ];
 });
+
+const selectedTerminableIds = computed(() => selectedTasks.value
+  .filter((task) => terminableStatus(task.status))
+  .map((task) => task.id));
 
 function formatDateTime(value?: string | null) {
   if (!value) {
@@ -244,15 +282,93 @@ function progressHint(task: AdminTaskListItem) {
   return task.currentStage || "等待处理";
 }
 
+function terminableStatus(status: TaskStatus) {
+  return ["PENDING", "ANALYZING", "PLANNING", "RENDERING"].includes(status);
+}
+
+function handleSelectionChange(selection: AdminTaskListItem[]) {
+  selectedTasks.value = selection;
+}
+
 async function loadTasks() {
   loading.value = true;
   errorMessage.value = "";
+  successMessage.value = "";
   try {
     tasks.value = await fetchAdminTasks(filters);
+    selectedTasks.value = selectedTasks.value.filter((selected) => tasks.value.some((task) => task.id === selected.id));
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : "读取任务列表失败";
   } finally {
     loading.value = false;
+  }
+}
+
+async function terminateSingle(task: AdminTaskListItem) {
+  try {
+    await ElMessageBox.confirm(
+      `确认终止任务“${task.title || task.id}”吗？终止后任务会进入失败状态。`,
+      "终止任务",
+      {
+        confirmButtonText: "终止",
+        cancelButtonText: "取消",
+        type: "warning"
+      }
+    );
+    actionLoading.value = true;
+    errorMessage.value = "";
+    successMessage.value = "";
+    await terminateAdminTask(task.id);
+    selectedTasks.value = selectedTasks.value.filter((item) => item.id !== task.id);
+    await loadTasks();
+    successMessage.value = "任务已终止。";
+    ElMessage.success("任务已终止");
+  } catch (error) {
+    if (error === "cancel") {
+      return;
+    }
+    errorMessage.value = error instanceof Error ? error.message : "终止任务失败";
+  } finally {
+    actionLoading.value = false;
+  }
+}
+
+async function terminateSelected() {
+  const taskIds = selectedTerminableIds.value;
+  if (taskIds.length === 0) {
+    ElMessage.warning("请选择排队或执行中的任务");
+    return;
+  }
+  try {
+    await ElMessageBox.confirm(
+      `确认终止选中的 ${taskIds.length} 个任务吗？已完成、失败或暂停任务不会被提交。`,
+      "批量终止任务",
+      {
+        confirmButtonText: "批量终止",
+        cancelButtonText: "取消",
+        type: "warning"
+      }
+    );
+    actionLoading.value = true;
+    errorMessage.value = "";
+    successMessage.value = "";
+    const result = await bulkTerminateAdminTasks(taskIds);
+    const failedIds = new Set(result.failed.map((item) => item.taskId));
+    selectedTasks.value = result.failed.length
+      ? selectedTasks.value.filter((task) => failedIds.has(task.id))
+      : [];
+    await loadTasks();
+    successMessage.value = result.failed.length
+      ? `已终止 ${result.succeededTaskIds.length} 个任务，${result.failed.length} 个未成功。`
+      : `已终止 ${result.succeededTaskIds.length} 个任务。`;
+    ElMessage.success(successMessage.value);
+  } catch (error) {
+    if (error === "cancel") {
+      return;
+    }
+    errorMessage.value = error instanceof Error ? error.message : "批量终止任务失败";
+  } finally {
+    actionLoading.value = false;
   }
 }
 
@@ -293,7 +409,7 @@ onMounted(() => {
 }
 
 .task-page__summary-card strong {
-  font-family: "Space Grotesk", sans-serif;
+  font-family: inherit;
   font-size: 1.9rem;
 }
 
@@ -311,7 +427,7 @@ onMounted(() => {
 
 .task-page__toolbar h3 {
   margin: 4px 0 0;
-  font-family: "Space Grotesk", sans-serif;
+  font-family: inherit;
 }
 
 .task-page__eyebrow {
@@ -324,6 +440,7 @@ onMounted(() => {
 
 .task-page__toolbar-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 12px;
 }
 
@@ -375,6 +492,11 @@ onMounted(() => {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+}
+
+.task-page__muted-action {
+  color: var(--jd-text-soft);
+  font-size: 0.86rem;
 }
 
 @media (max-width: 1200px) {

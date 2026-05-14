@@ -90,7 +90,7 @@
               <th><input :checked="allVisibleSelected" type="checkbox" @change="toggleSelectVisible" /></th>
               <th>任务</th>
               <th>状态</th>
-              <th>Seed / 评分</th>
+              <th>Seed</th>
               <th>诊断</th>
               <th>文本输入</th>
               <th>进度</th>
@@ -124,11 +124,6 @@
               </td>
               <td>
                 <p class="text-sm font-medium text-slate-900">{{ formatTaskSeed(task.taskSeed) }}</p>
-                <p class="mt-1 text-xs text-slate-500">
-                  {{ formatEffectRating(task.effectRating) }}
-                  <span v-if="task.ratedAt"> · {{ formatShortDate(task.ratedAt) }}</span>
-                </p>
-                <p v-if="task.effectRatingNote" class="mt-1 line-clamp-2 text-xs text-slate-500">{{ task.effectRatingNote }}</p>
               </td>
               <td>
                 <span :class="diagnosisPillClass(task.diagnosisSeverity)" class="inline-flex rounded px-2 py-0.5 text-xs font-medium">
@@ -185,7 +180,7 @@
  * 管理任务页面组件。
  */
 import { computed, onMounted, ref, watch } from "vue";
-import { bulkDeleteAdminTasks, bulkRetryAdminTasks, deleteAdminTask, fetchAdminTasks, retryAdminTask } from "@/api/admin";
+import { bulkDeleteAdminTasks, bulkRetryAdminTasks, deleteAdminTask, fetchAdminTasks, retryAdminTask } from "@/features/admin";
 import AppSelect from "@/components/common/AppSelect.vue";
 import type { AppSelectOption } from "@/components/common/app-select";
 import { usePolling } from "@/composables/usePolling";
@@ -199,7 +194,7 @@ const actionMessage = ref("");
 const actionMessageTone = ref<"success" | "warn">("success");
 const searchText = ref("");
 const statusFilter = ref<TaskStatus | "all">("all");
-const sortMode = ref<"updated_desc" | "created_desc" | "progress_desc" | "status_desc" | "effect_rating_desc">("updated_desc");
+const sortMode = ref<"updated_desc" | "created_desc" | "progress_desc" | "status_desc">("updated_desc");
 const selectedIds = ref<string[]>([]);
 let refreshDebounceTimer: ReturnType<typeof setTimeout> | null = null;
 const statusFilterOptions: AppSelectOption[] = [
@@ -216,7 +211,6 @@ const sortModeOptions: AppSelectOption[] = [
   { label: "最近更新", value: "updated_desc" },
   { label: "最新创建", value: "created_desc" },
   { label: "进度优先", value: "progress_desc" },
-  { label: "评分最高", value: "effect_rating_desc" },
   { label: "状态优先", value: "status_desc" },
 ];
 
@@ -248,19 +242,6 @@ const sortedTasks = computed(() => {
   }
   if (sortMode.value === "progress_desc") {
     return items.sort((left, right) => (right.progress ?? 0) - (left.progress ?? 0));
-  }
-  if (sortMode.value === "effect_rating_desc") {
-    return items.sort((left, right) => {
-      const ratingDiff = (right.effectRating ?? 0) - (left.effectRating ?? 0);
-      if (ratingDiff !== 0) {
-        return ratingDiff;
-      }
-      const ratedAtDiff = new Date(right.ratedAt || 0).getTime() - new Date(left.ratedAt || 0).getTime();
-      if (ratedAtDiff !== 0) {
-        return ratedAtDiff;
-      }
-      return new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime();
-    });
   }
   if (sortMode.value === "status_desc") {
     return items.sort((left, right) => String(left.status).localeCompare(String(right.status)));
@@ -402,14 +383,6 @@ function semanticHint(task: TaskListItem) {
  */
 function formatTaskSeed(value: number | null | undefined) {
   return typeof value === "number" && Number.isFinite(value) ? String(Math.trunc(value)) : "未设置";
-}
-
-/**
- * 格式化效果评分。
- * @param value 待处理的值
- */
-function formatEffectRating(value: number | null | undefined) {
-  return typeof value === "number" && Number.isFinite(value) && value > 0 ? `${Math.trunc(value)}/5` : "未评分";
 }
 
 /**

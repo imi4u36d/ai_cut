@@ -4,12 +4,12 @@
 import { getJson, postJson } from "./client";
 import type { GenerateScriptRequest, GenerateScriptResponse } from "@/types";
 
-const RUNS_ENDPOINT = "/api/v2/generation/runs";
+const RUNS_ENDPOINT = "/api/v3/generation/runs";
 /**
  * 处理RUNDETAILSENDPOINT。
  * @param runId 运行标识值
  */
-const RUN_DETAILS_ENDPOINT = (runId: string) => `/api/v2/generation/runs/${encodeURIComponent(runId)}`;
+const RUN_DETAILS_ENDPOINT = (runId: string) => `/api/v3/generation/runs/${encodeURIComponent(runId)}`;
 const RUN_POLL_INTERVAL_MS = 1200;
 const RUN_POLL_TIMEOUT_MS = 120000;
 
@@ -108,6 +108,13 @@ function hasScriptResult(raw: UnknownRecord | null | undefined) {
   );
 }
 
+function runErrorMessage(raw: UnknownRecord | null | undefined) {
+  const run = raw ?? {};
+  const scriptResult = asRecord(run.resultScript ?? run.result ?? {}) ?? {};
+  const metadata = asRecord(scriptResult.metadata) ?? {};
+  return asString(scriptResult.error) || asString(metadata.error) || "脚本生成失败";
+}
+
 async function delay(ms: number) {
   await new Promise((resolve) => {
     setTimeout(resolve, ms);
@@ -123,7 +130,7 @@ async function waitForScriptRun(runId: string, initialRun?: UnknownRecord | null
     }
     const status = asString(latest?.status).toLowerCase();
     if (status === "failed" || status === "cancelled" || status === "canceled") {
-      return latest;
+      throw new Error(runErrorMessage(latest));
     }
     await delay(RUN_POLL_INTERVAL_MS);
     latest = asRecord(await getJson<unknown>(RUN_DETAILS_ENDPOINT(runId)));

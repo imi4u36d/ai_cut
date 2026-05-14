@@ -86,7 +86,7 @@
  * 管理系统页面组件。
  */
 import { onMounted, ref, watch } from "vue";
-import { fetchAdminTraces } from "@/api/admin";
+import { fetchAdminTraces } from "@/features/admin";
 import AppSelect from "@/components/common/AppSelect.vue";
 import ModelStatusStrip from "@/components/ModelStatusStrip.vue";
 import type { AppSelectOption } from "@/components/common/app-select";

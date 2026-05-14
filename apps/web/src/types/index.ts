@@ -108,6 +108,7 @@ export interface TaskSourceAssetSummary {
   originalFileName: string;
   storedFileName?: string;
   fileUrl: string;
+  thumbnailUrl?: string | null;
   durationSeconds?: number | null;
   width?: number | null;
   height?: number | null;
@@ -129,15 +130,26 @@ export interface UploadResponse {
   sizeBytes: number;
 }
 
+export interface ImageUploadResponse {
+  assetId?: string | null;
+  fileName?: string | null;
+  fileUrl: string;
+  publicUrl?: string | null;
+  previewUrl?: string | null;
+  sizeBytes?: number | null;
+}
+
 /**
  * Create生成任务请求体。
  */
 export interface CreateGenerationTaskRequest {
   title: string;
+  taskType?: "image_generation" | "image_to_image" | "character_sheet" | "video_generation" | string | null;
+  assetType?: MaterialAssetType | string | null;
   creativePrompt?: string | null;
-  aspectRatio: "9:16" | "16:9";
+  aspectRatio: string;
+  imageSize?: string | null;
   textAnalysisModel?: string | null;
-  visionModel?: string | null;
   imageModel?: string | null;
   videoModel?: string | null;
   videoSize?: string | null;
@@ -148,6 +160,8 @@ export interface CreateGenerationTaskRequest {
   maxDurationSeconds?: number | null;
   transcriptText?: string | null;
   stopBeforeVideoGeneration?: boolean | null;
+  referenceImageUrls?: string[];
+  referenceAssetIds?: string[];
 }
 
 /**
@@ -256,6 +270,7 @@ export interface GenerationTextAnalysisModelInfo {
   provider?: string | null;
   family?: string | null;
   supportsSeed?: boolean;
+  supportedSizes?: string[];
 }
 
 /**
@@ -312,6 +327,7 @@ export interface GenerationImageSizeOption {
   label: string;
   width?: number;
   height?: number;
+  supportedModels?: string[];
 }
 
 /**
@@ -346,8 +362,6 @@ export interface GenerationOptionsResponse {
   defaultVideoModel?: string | null;
   textAnalysisModels?: GenerationTextAnalysisModelInfo[];
   defaultTextAnalysisModel?: string | null;
-  visionModels?: GenerationTextAnalysisModelInfo[];
-  defaultVisionModel?: string | null;
   imageModels?: GenerationTextAnalysisModelInfo[];
   videoSizes: GenerationVideoSizeOption[];
   videoDurations: GenerationVideoDurationOption[];
@@ -417,7 +431,6 @@ export interface AdminModelConfigModelItem {
   description: string;
   supportsSeed: boolean;
   supportsResponsesApi: boolean;
-  prefersChatCompletionsForVision: boolean;
   generationMode: string;
   supportedSizes: string[];
   supportedDurations: number[];
@@ -572,6 +585,7 @@ export interface TaskOutput {
   durationSeconds: number;
   previewUrl: string;
   downloadUrl: string;
+  thumbnailUrl?: string | null;
 }
 
 /**
@@ -579,11 +593,12 @@ export interface TaskOutput {
  */
 export interface TaskMaterial {
   id: string;
-  kind: "source" | "output";
-  mediaType: "video" | "image" | "text";
+  kind: "source" | "output" | string;
+  mediaType: "video" | "image" | "text" | string;
   title: string;
   fileUrl: string;
   previewUrl?: string | null;
+  thumbnailUrl?: string | null;
   mimeType?: string | null;
   durationSeconds?: number | null;
   width?: number | null;
@@ -620,6 +635,7 @@ export interface SeedanceTaskQueryResult {
  */
 export interface TaskListItem {
   id: string;
+  taskType?: "image_generation" | "image_to_image" | "character_sheet" | "video_generation" | string | null;
   title: string;
   status: TaskStatus;
   progress: number;
@@ -651,6 +667,10 @@ export interface TaskListItem {
   diagnosisCode?: string | null;
   diagnosisHint?: string | null;
   recommendedAction?: string | null;
+  failureReason?: string | null;
+  failureStage?: string | null;
+  failureClipIndex?: number | null;
+  thumbnailUrl?: string | null;
 }
 
 /**
@@ -748,12 +768,13 @@ export interface AdminTaskDiagnosis {
  */
 export interface TaskRequestSnapshot {
   taskType?: string | null;
+  assetType?: string | null;
   title?: string | null;
   creativePrompt?: string | null;
   aspectRatio?: string | null;
+  imageSize?: string | null;
   stylePreset?: string | null;
   textAnalysisModel?: string | null;
-  visionModel?: string | null;
   imageModel?: string | null;
   videoModel?: string | null;
   videoSize?: string | null;
@@ -764,6 +785,8 @@ export interface TaskRequestSnapshot {
   maxDurationSeconds?: number | null;
   transcriptText?: string | null;
   stopBeforeVideoGeneration?: boolean | null;
+  referenceImageUrls?: string[] | null;
+  referenceAssetIds?: string[] | null;
 }
 
 /**
@@ -781,6 +804,9 @@ export interface TaskDetail extends TaskListItem {
   outroTemplate: string;
   creativePrompt?: string;
   errorMessage?: string | null;
+  failureReason?: string | null;
+  failureStage?: string | null;
+  failureClipIndex?: number | null;
   startedAt?: string | null;
   finishedAt?: string | null;
   retryCount?: number;
@@ -807,7 +833,6 @@ export interface TaskDetail extends TaskListItem {
  */
 export interface TaskShowcaseModels {
   textAnalysisModel?: string | null;
-  visionModel?: string | null;
   imageModel?: string | null;
   videoModel?: string | null;
 }
@@ -865,7 +890,6 @@ export interface HealthModelSummary {
   primary_model: string | null;
   text_analysis_provider?: string | null;
   text_analysis_model?: string | null;
-  vision_model?: string | null;
   endpoint_host?: string;
   api_key_present: boolean;
   ready: boolean;
@@ -936,7 +960,6 @@ export interface AdminOverview {
   modelReady: boolean;
   primaryModel: string | null;
   textModel?: string | null;
-  visionModel?: string | null;
   recentTasks: TaskListItem[];
   recentFailures: TaskListItem[];
   recentRunningTasks: TaskListItem[];
@@ -1023,20 +1046,35 @@ export interface AdminTaskBatchResult {
   failed: AdminTaskBatchFailure[];
 }
 
-export type WorkflowStageType = "storyboard" | "keyframe" | "video" | "joined";
+export type WorkflowStageType = "storyboard" | "keyframe" | "video" | "joined" | "material_center";
 
 export interface CreateWorkflowRequest {
   title: string;
   transcriptText?: string | null;
-  globalPrompt?: string | null;
   aspectRatio: "9:16" | "16:9";
   stylePreset?: string | null;
   textAnalysisModel: string;
-  visionModel: string;
   imageModel: string;
   videoModel: string;
   videoSize?: string | null;
+  keyframeSeed?: number | null;
+  videoSeed?: number | null;
   seed?: number | null;
+  durationMode?: "auto" | "manual" | string | null;
+  minDurationSeconds?: number | null;
+  maxDurationSeconds?: number | null;
+}
+
+export interface UpdateWorkflowSettingsRequest {
+  aspectRatio: string;
+  stylePreset: string;
+  textAnalysisModel: string;
+  imageModel: string;
+  videoModel: string;
+  videoSize: string;
+  keyframeSeed?: number | null;
+  videoSeed?: number | null;
+  durationMode?: "auto" | "manual" | string | null;
   minDurationSeconds?: number | null;
   maxDurationSeconds?: number | null;
 }
@@ -1051,20 +1089,15 @@ export interface RateStageVersionRequest {
   effectRatingNote?: string | null;
 }
 
-export interface MaterialAssetTag {
-  id: string;
-  tagType: "system" | "custom";
-  tagKey: string;
-  tagValue: string;
-}
-
 export interface MaterialAssetLibraryItem {
   id: string;
-  workflowId: string;
+  workflowId?: string | null;
   stageType: WorkflowStageType;
   clipIndex: number;
   versionNo: number;
   selectedForNext: boolean;
+  assetType?: MaterialAssetType | string | null;
+  assetRole?: string | null;
   userRating?: number | null;
   ratingNote?: string | null;
   mediaType: "text" | "image" | "video" | string;
@@ -1078,11 +1111,13 @@ export interface MaterialAssetLibraryItem {
   hasAudio?: boolean | null;
   fileUrl: string;
   previewUrl: string;
+  thumbnailUrl?: string | null;
   remoteUrl?: string | null;
-  metadata?: Record<string, unknown> | null;
+  hasRemotePath?: boolean;
+  remotePath?: string | null;
+  metadata?: WorkflowMetadataSummary | null;
   createdAt: string;
   updatedAt: string;
-  tags: MaterialAssetTag[];
 }
 
 export interface StageVersion {
@@ -1101,12 +1136,82 @@ export interface StageVersion {
   materialAssetId?: string | null;
   previewUrl?: string | null;
   downloadUrl?: string | null;
-  inputSummary?: Record<string, unknown> | null;
-  outputSummary?: Record<string, unknown> | null;
-  modelCallSummary?: Record<string, unknown> | null;
+  inputSummary?: WorkflowStageInputSummary | null;
+  outputSummary?: WorkflowStageOutputSummary | null;
+  modelCallSummary?: WorkflowModelCallSummary | null;
   createdAt: string;
   updatedAt: string;
   asset?: MaterialAssetLibraryItem | null;
+}
+
+export interface WorkflowMetadataSummary {
+  taskId?: string | null;
+  sourceAssetId?: string | null;
+  originWorkflowId?: string | null;
+  originStageType?: string | null;
+  originClipIndex?: number | null;
+  originVersionNo?: number | null;
+  scriptMarkdown?: string | null;
+}
+
+export interface WorkflowStageInputSummary {
+  seed?: number | string | null;
+  clipIndex?: number | null;
+  frameRole?: string | null;
+  generationMode?: string | null;
+  variantKind?: string | null;
+  characterName?: string | null;
+  characterDefinition?: string | null;
+  characterAppearance?: string | null;
+  storyboardVersionId?: string | null;
+  imagePrompt?: string | null;
+}
+
+export interface WorkflowFrameFailureSummary {
+  frameRole?: string | null;
+  errorMessage?: string | null;
+}
+
+export interface WorkflowStageOutputSummary {
+  scriptMarkdown?: string | null;
+  previewText?: string | null;
+  width?: number | string | null;
+  height?: number | string | null;
+  startFrameUrl?: string | null;
+  firstFrameUrl?: string | null;
+  endFrameUrl?: string | null;
+  lastFrameUrl?: string | null;
+  fileUrl?: string | null;
+  sheetUrl?: string | null;
+  previewUrl?: string | null;
+  frontViewUrl?: string | null;
+  frontImageUrl?: string | null;
+  frontUrl?: string | null;
+  sideViewUrl?: string | null;
+  sideImageUrl?: string | null;
+  sideUrl?: string | null;
+  profileViewUrl?: string | null;
+  backViewUrl?: string | null;
+  backImageUrl?: string | null;
+  backUrl?: string | null;
+  threeViewUrls?: string[] | null;
+  viewUrls?: string[] | null;
+  sheetUrls?: string[] | null;
+  images?: string[] | null;
+  selectedFirstFrame?: boolean | null;
+  selectedLastFrame?: boolean | null;
+  frameFailures?: WorkflowFrameFailureSummary[] | null;
+  remoteSourceUrl?: string | null;
+  characterName?: string | null;
+  characterDefinition?: string | null;
+  characterAppearance?: string | null;
+}
+
+export interface WorkflowModelCallSummary {
+  runId?: string | null;
+  requestId?: string | null;
+  provider?: string | null;
+  modelName?: string | null;
 }
 
 export interface WorkflowClipSlot {
@@ -1115,8 +1220,22 @@ export interface WorkflowClipSlot {
   scene?: string | null;
   durationHint?: string | null;
   targetDurationSeconds?: number | null;
+  matchedCharacters?: WorkflowCharacterSheet[] | null;
   keyframeVersions: StageVersion[];
   videoVersions: StageVersion[];
+}
+
+export interface WorkflowCharacterSheet {
+  id?: string | null;
+  characterName?: string | null;
+  name?: string | null;
+  displayName?: string | null;
+  appearanceSummary?: string | null;
+  appearance?: string | null;
+  syntheticClipIndex?: number | null;
+  clipIndex?: number | null;
+  versions?: StageVersion[] | null;
+  keyframeVersions?: StageVersion[] | null;
 }
 
 export interface WorkflowSummary {
@@ -1129,23 +1248,32 @@ export interface WorkflowSummary {
   createdAt: string;
   updatedAt: string;
   storyboardVersionCount: number;
+  characterSheetCount?: number;
+  selectedCharacterSheetCount?: number;
+  characterSheetVersionCount?: number;
   keyframeVersionCount: number;
   videoVersionCount: number;
+}
+
+export interface WorkflowDeleteResult {
+  workflowId: string;
+  deleted: boolean;
 }
 
 export interface WorkflowDetail {
   id: string;
   title: string;
   transcriptText?: string | null;
-  globalPrompt?: string | null;
   aspectRatio: string;
   stylePreset?: string | null;
   textAnalysisModel: string;
-  visionModel: string;
   imageModel: string;
   videoModel: string;
   videoSize?: string | null;
+  keyframeSeed?: number | null;
+  videoSeed?: number | null;
   seed?: number | null;
+  durationMode?: string | null;
   minDurationSeconds?: number | null;
   maxDurationSeconds?: number | null;
   status: string;
@@ -1157,27 +1285,81 @@ export interface WorkflowDetail {
   createdAt: string;
   updatedAt: string;
   storyboardVersions: StageVersion[];
+  characterSheets?: WorkflowCharacterSheet[] | null;
   clipSlots: WorkflowClipSlot[];
   finalResult?: MaterialAssetLibraryItem | null;
 }
 
+export type MaterialAssetType = "character_sheet" | "scene" | "prop" | "free" | "workflow";
+
 export interface MaterialAssetQuery {
   q?: string;
   type?: WorkflowStageType | "";
-  tag?: string;
+  assetType?: MaterialAssetType | "";
   minRating?: number | null;
   model?: string;
   aspectRatio?: string;
   clipIndex?: number | null;
+  offset?: number;
+  limit?: number;
+}
+
+export interface MaterialAssetPage {
+  items: MaterialAssetLibraryItem[];
+  offset: number;
+  limit: number;
+  total: number;
+  hasMore: boolean;
+  nextOffset: number | null;
+}
+
+export interface CreateMaterialGenerationRequest {
+  assetType: Exclude<MaterialAssetType, "workflow">;
+  title: string;
+  description?: string | null;
+  styleKeywords?: string[];
+  aspectRatio: string;
+  imageSize?: string | null;
+  textAnalysisModel?: string | null;
+  imageModel?: string | null;
+  seed?: number | null;
+  referenceImageUrls?: string[];
+  referenceAssetIds?: string[];
+}
+
+export interface MaterialGenerationResponse {
+  id?: string | null;
+  asset?: MaterialAssetLibraryItem | null;
+  assets?: MaterialAssetLibraryItem[];
+  outputUrl?: string | null;
+  previewUrl?: string | null;
+  fileUrl?: string | null;
+  title?: string | null;
+  status?: string | null;
+  metadata?: Record<string, unknown> | null;
+}
+
+export interface MaterialAssetDeleteResult {
+  assetId?: string | null;
+  deleted: boolean;
+}
+
+export interface CreditRule {
+  featureCode: string;
+  displayName: string;
+  cost: number;
+  updatedAt?: string | null;
+}
+
+export interface CreditSummary {
+  exempt: boolean;
+  balance: number | null;
+  rules: CreditRule[];
 }
 
 export interface UpdateMaterialAssetRatingRequest {
   effectRating: number;
   effectRatingNote?: string | null;
-}
-
-export interface UpdateMaterialAssetTagsRequest {
-  tags: string[];
 }
 
 export interface ReuseMaterialRequest {

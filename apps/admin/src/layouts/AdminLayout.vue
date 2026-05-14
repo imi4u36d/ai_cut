@@ -15,7 +15,7 @@
       </div>
 
       <el-menu :default-active="activeMenu" class="admin-layout__menu" router>
-        <el-menu-item index="/dashboard">
+        <el-menu-item index="/">
           <el-icon><DataAnalysis /></el-icon>
           <span>首页概览</span>
         </el-menu-item>
@@ -26,6 +26,14 @@
         <el-menu-item index="/users">
           <el-icon><UserFilled /></el-icon>
           <span>用户管理</span>
+        </el-menu-item>
+        <el-menu-item index="/invites">
+          <el-icon><Ticket /></el-icon>
+          <span>邀请码管理</span>
+        </el-menu-item>
+        <el-menu-item index="/credits">
+          <el-icon><Coin /></el-icon>
+          <span>积分管理</span>
         </el-menu-item>
       </el-menu>
 
@@ -70,14 +78,20 @@ const authState = useAuthSessionState();
 
 const currentUser = computed(() => authState.user.value);
 const activeMenu = computed(() => {
-  if (route.path.startsWith("/dashboard")) {
-    return "/dashboard";
+  if (route.path === "/") {
+    return "/";
   }
   if (route.path.startsWith("/tasks")) {
     return "/tasks";
   }
   if (route.path.startsWith("/users")) {
     return "/users";
+  }
+  if (route.path.startsWith("/invites")) {
+    return "/invites";
+  }
+  if (route.path.startsWith("/credits")) {
+    return "/credits";
   }
   return route.path;
 });
@@ -164,7 +178,7 @@ async function handleLogout() {
 .admin-layout__brand h1,
 .admin-layout__header h2 {
   margin: 0;
-  font-family: "Space Grotesk", sans-serif;
+  font-family: inherit;
 }
 
 .admin-layout__menu {

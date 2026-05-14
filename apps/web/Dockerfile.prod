@@ -2,15 +2,16 @@ ARG NODE_IMAGE=node:20-bookworm-slim
 ARG NGINX_IMAGE=nginx:1.27-alpine
 FROM ${NODE_IMAGE} AS builder
 
-WORKDIR /build/apps/web
+WORKDIR /build
 
-COPY apps/web/.npmrc /build/apps/web/.npmrc
+COPY package.json /build/package.json
+COPY package-lock.json /build/package-lock.json
 COPY apps/web/package.json /build/apps/web/package.json
-COPY apps/web/package-lock.json /build/apps/web/package-lock.json
-RUN npm ci --registry=https://registry.npmjs.org
+COPY packages /build/packages
+RUN npm ci --workspace jiandou-web --include-workspace-root --registry=https://registry.npmjs.org
 
 COPY apps/web /build/apps/web
-RUN npm run build
+RUN npm --workspace jiandou-web run build
 
 FROM ${NGINX_IMAGE}
 

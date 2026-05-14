@@ -126,7 +126,7 @@
  * 管理端邀请码管理页。
  */
 import { onMounted, ref } from "vue";
-import { createAdminInvite, fetchAdminInvites, revokeAdminInvite } from "@/api/admin";
+import { createAdminInvite, fetchAdminInvites, revokeAdminInvite } from "@/features/admin";
 import AppSelect from "@/components/common/AppSelect.vue";
 import type { AppSelectOption } from "@/components/common/app-select";
 import type { AdminInvite } from "@/types";

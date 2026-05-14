@@ -51,7 +51,7 @@ function normalizeAdminBaseUrl(value: string, fallbackValue: string) {
 // 在 runtime-config.json 未加载或不可用时使用的安全默认值。
 function createDefaultRuntimeConfig(): RuntimeConfig {
   return {
-    apiBaseUrl: "/api/v2",
+    apiBaseUrl: "/api/v3",
     storageBaseUrl: "/storage",
     adminBaseUrl: resolveDefaultAdminBaseUrl()
   };

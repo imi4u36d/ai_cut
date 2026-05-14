@@ -1,5 +1,5 @@
-import { getJson } from "./client";
-import type { AdminTaskListItem, AdminTaskQuery } from "@/types";
+import { getJson, postJson } from "./client";
+import type { AdminTaskBatchResult, AdminTaskListItem, AdminTaskQuery } from "@/types";
 
 export async function fetchAdminTasks(query?: AdminTaskQuery) {
   const params = new URLSearchParams();
@@ -14,4 +14,12 @@ export async function fetchAdminTasks(query?: AdminTaskQuery) {
   }
   const search = params.toString();
   return getJson<AdminTaskListItem[]>(search ? `/admin/tasks?${search}` : "/admin/tasks");
+}
+
+export async function terminateAdminTask(taskId: string) {
+  return postJson<AdminTaskListItem>(`/admin/tasks/${taskId}/terminate`, {});
+}
+
+export async function bulkTerminateAdminTasks(taskIds: string[]) {
+  return postJson<AdminTaskBatchResult>("/admin/tasks/bulk-terminate", { taskIds });
 }

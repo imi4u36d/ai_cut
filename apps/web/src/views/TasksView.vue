@@ -1,176 +1,123 @@
 <template>
   <section class="tasks-view">
-    <div class="tasks-layout">
-      <div class="tasks-board">
-        <div class="tasks-title-row">
-          <h2 class="tasks-title">任务管理</h2>
-          <span class="tasks-last-updated">最近刷新：{{ lastLoadedAt }}</span>
+    <aside
+      class="tasks-list-panel"
+      :class="{ 'tasks-list-panel-collapsed': listCollapsed }"
+      :style="listCollapsed ? { '--tasks-list-column-width': '214px' } : undefined"
+    >
+      <div class="tasks-panel-header">
+        <div>
+          <p class="tasks-eyebrow">任务管理</p>
+          <h2 class="tasks-title">工作台任务</h2>
         </div>
+        <button
+          class="tasks-collapse-toggle"
+          type="button"
+          :aria-expanded="!listCollapsed"
+          :aria-label="listCollapsed ? '展开任务列表' : '收起任务列表'"
+          @click="listCollapsed = !listCollapsed"
+        >
+          <span></span>
+          <span></span>
+        </button>
+      </div>
 
-        <div class="tasks-toolbar surface-panel">
-          <label class="toolbar-search">
+      <template v-if="!listCollapsed">
+        <label class="tasks-search-field">
+          <span>搜索</span>
+          <div class="tasks-search-field__control">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <circle cx="11" cy="11" r="7" />
               <path d="m20 20-3.5-3.5" />
             </svg>
-            <input v-model="searchText" type="search" placeholder="搜索任务、文件名或画幅" />
-          </label>
-
-          <div class="toolbar-pills">
-            <button
-              class="toolbar-pill"
-              :class="{ 'toolbar-pill-active': statusFilter === 'PENDING' }"
-              type="button"
-              @click="statusFilter = statusFilter === 'PENDING' ? 'all' : 'PENDING'"
-            >
-              <span class="toolbar-pill__dot toolbar-pill__dot-pending"></span>
-              待处理
-            </button>
-            <button
-              class="toolbar-pill"
-              :class="{ 'toolbar-pill-active': statusFilter === 'RENDERING' }"
-              type="button"
-              @click="statusFilter = statusFilter === 'RENDERING' ? 'all' : 'RENDERING'"
-            >
-              <span class="toolbar-pill__dot toolbar-pill__dot-rendering"></span>
-              生成中
-            </button>
-            <AppSelect v-model="sortMode" :options="sortModeOptions" variant="toolbar" prefix="↻" />
-            <button
-              class="toolbar-pill"
-              :class="{ 'toolbar-pill-active': statusFilter === 'COMPLETED' }"
-              type="button"
-              @click="statusFilter = statusFilter === 'COMPLETED' ? 'all' : 'COMPLETED'"
-            >
-              <span class="toolbar-pill__dot toolbar-pill__dot-completed"></span>
-              已完成
-            </button>
+            <input v-model="searchText" type="search" placeholder="标题、状态、类型" />
           </div>
+        </label>
 
-          <div class="toolbar-actions">
-            <button class="toolbar-icon" :class="{ 'toolbar-icon-active': viewMode === 'cards' }" type="button" @click="viewMode = 'cards'">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <rect x="4" y="4" width="6" height="6" rx="1.4" />
-                <rect x="14" y="4" width="6" height="6" rx="1.4" />
-                <rect x="4" y="14" width="6" height="6" rx="1.4" />
-                <rect x="14" y="14" width="6" height="6" rx="1.4" />
-              </svg>
-            </button>
-            <button class="toolbar-icon" :class="{ 'toolbar-icon-active': viewMode === 'rows' }" type="button" @click="viewMode = 'rows'">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <path d="M5 7h14" />
-                <path d="M5 12h14" />
-                <path d="M5 17h14" />
-              </svg>
-            </button>
-            <button class="toolbar-icon" type="button" @click="clearFilters">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <path d="M4 7h16" />
-                <path d="M7 12h10" />
-                <path d="M10 17h4" />
-              </svg>
-            </button>
-          </div>
-        </div>
-
-        <div v-if="errorMessage" class="surface-tile tasks-alert">
+        <div v-if="errorMessage" class="tasks-alert">
           <p>{{ errorMessage }}</p>
           <button class="btn-secondary btn-sm" type="button" @click="loadTasks">重新加载</button>
         </div>
 
-        <div v-if="loading" class="surface-panel tasks-loading">
-          正在加载任务面板...
-        </div>
+        <div v-if="loading" class="tasks-loading">正在加载任务...</div>
 
-        <div v-else-if="filteredTasks.length === 0" class="surface-panel tasks-empty-board">
-          <p class="tasks-empty-board__eyebrow">{{ isFilterActive ? "当前筛选无结果" : "任务工作台" }}</p>
-          <h3>{{ isFilterActive ? "没有匹配的任务" : "创建你的第一个生成任务" }}</h3>
-          <p>
-            {{
-              isFilterActive
-                ? "可以清空搜索词，或切换状态筛选后再试。"
-                : "任务创建后会出现在这里，你可以在同一个面板里查看进度、详情和追踪信息。"
-            }}
-          </p>
+        <div v-else-if="filteredTasks.length === 0" class="tasks-empty-board">
+          <p class="tasks-empty-board__eyebrow">{{ isFilterActive ? "当前筛选无结果" : "暂无工作台任务" }}</p>
+          <h3>{{ isFilterActive ? "没有匹配任务" : "提交生成后会在这里追踪" }}</h3>
+          <p>{{ isFilterActive ? "可以清空搜索词或切换状态筛选后再试。" : "在工作台发起图片、三视图或视频生成后，会出现实时进度和结果记录。" }}</p>
           <div class="tasks-empty-board__actions">
             <button v-if="isFilterActive" class="btn-warning" type="button" @click="clearFilters">清空筛选</button>
-            <RouterLink v-else to="/tasks/new" class="btn-primary">新建任务</RouterLink>
-            <RouterLink to="/generate" class="btn-secondary">打开生成器</RouterLink>
+            <RouterLink to="/workspace" class="btn-secondary">返回工作台</RouterLink>
           </div>
         </div>
 
-        <div v-else class="board-columns">
-          <section v-for="column in boardColumns" :key="column.key" class="surface-panel board-column">
-            <div class="board-column__head">
-              <div>
-                <h3>{{ column.title }}</h3>
-              </div>
-              <button class="board-column__more" type="button" @click="toggleGroup(column.key)">•••</button>
-            </div>
-
-            <div v-if="isGroupCollapsed(column.key)" class="board-column__collapsed">当前列已收起</div>
-            <div v-else class="board-column__list">
+        <div v-else class="task-list">
+          <article
+            v-for="task in sortedFilteredTasks"
+            :key="task.id"
+            class="task-list__item"
+            :class="{ 'task-list__item-active': task.id === selectedTaskId }"
+            role="button"
+            tabindex="0"
+            :aria-label="`查看任务 ${task.title || '未命名任务'}`"
+            @click="handleSelectTask(task)"
+            @keydown="handleTaskItemKeydown(task, $event)"
+          >
+            <span class="task-list__thumb">
+              <img v-if="taskThumbnailUrl(task)" :src="taskThumbnailUrl(task)" alt="" />
+              <span v-else>{{ taskTypeShortLabel(task) }}</span>
+            </span>
+            <span class="task-list__main">
+              <span class="task-list__title">{{ task.title || "未命名任务" }}</span>
+              <span class="task-list__meta">
+                <span>{{ taskTypeLabel(task) }}</span>
+                <span>{{ formatTaskStatus(task.status) }}</span>
+                <span>{{ formatDateTime(task.updatedAt || task.createdAt) }}</span>
+              </span>
+              <span class="task-list__progress" aria-hidden="true"><i :style="{ width: `${taskProgress(task)}%` }"></i></span>
+            </span>
+            <span class="task-list__side">
               <button
-                v-for="task in column.items"
-                :key="task.id"
+                v-if="task.status === 'FAILED'"
+                class="task-list__retry"
                 type="button"
-                class="board-task"
-                :class="[
-                  task.id === selectedTaskId ? 'board-task-active' : '',
-                  boardTaskToneClass(task.status),
-                ]"
-                @click="handleSelectTask(task)"
+                :disabled="managingTaskId === task.id"
+                @click.stop="handleRetry(task)"
               >
-                <div class="board-task__media"></div>
-                <div class="board-task__content">
-                  <div class="board-task__head">
-                    <h4>{{ task.title }}</h4>
-                    <span class="board-task__menu">⋮</span>
-                  </div>
-                  <div class="board-task__progress">
-                    <div class="board-task__progress-fill" :style="{ width: `${task.progress}%` }"></div>
-                  </div>
-                  <div class="board-task__meta">
-                    <span>{{ task.aspectRatio || "9:16" }}</span>
-                    <span>种子：{{ typeof task.taskSeed === "number" ? task.taskSeed : "--" }}</span>
-                  </div>
-                  <div class="board-task__footer">
-                    <span>可用操作 {{ quickActionCount(task) }}</span>
-                    <span class="board-task__rating">★ {{ typeof task.effectRating === "number" ? task.effectRating.toFixed(1) : "0.0" }}</span>
-                  </div>
-                </div>
+                重试
               </button>
-            </div>
-          </section>
+              <strong>{{ taskProgress(task) }}%</strong>
+            </span>
+          </article>
         </div>
+      </template>
+
+      <div v-else class="tasks-collapsed-hint">
+        <span>{{ filteredTasks.length }}</span>
+        <small>任务</small>
       </div>
+    </aside>
 
-    </div>
+    <main class="task-detail-panel">
+      <section v-if="!selectedTaskId" class="task-detail-empty">
+        <p class="tasks-empty-board__eyebrow">任务追踪</p>
+        <h3>选择一个任务查看进度和结果</h3>
+        <p>这里会展示工作台生成请求的阶段、参数、素材入口、结果预览和最近追踪。</p>
+      </section>
 
-    <div
-      v-if="selectedTaskId"
-      class="task-details-dialog-backdrop"
-      @click="clearSelectedTask"
-    >
-      <section
-        class="surface-panel task-details-dialog"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="task-details-dialog-title"
-        @click.stop
-      >
-        <div class="task-details-dialog__head">
-          <div class="task-details-dialog__title-wrap">
-            <p class="task-details-dialog__eyebrow">Task Detail</p>
-            <h2 id="task-details-dialog-title">{{ selectedTaskDetail?.title || selectedTaskSummary?.title || "任务详情" }}</h2>
-            <div class="task-details-dialog__meta">
-              <span class="surface-chip">任务编号 · {{ selectedTaskDetail?.id || selectedTaskId }}</span>
+      <section v-else class="task-detail-content" aria-labelledby="task-detail-title">
+        <header class="task-detail-header">
+          <div>
+            <p class="tasks-eyebrow">{{ selectedTaskTypeLabel }}</p>
+            <h2 id="task-detail-title">{{ selectedTask?.title || "任务详情" }}</h2>
+            <div class="task-detail-header__meta">
+              <span class="surface-chip">{{ selectedTaskId }}</span>
               <span class="surface-chip">{{ selectedTaskStageLabel }}</span>
               <span v-if="selectedTaskLoading" class="surface-chip">加载中</span>
             </div>
           </div>
-          <button class="task-details-dialog__close" type="button" @click="clearSelectedTask">×</button>
-        </div>
+          <button class="btn-secondary btn-sm" type="button" @click="clearSelectedTask">取消选中</button>
+        </header>
 
         <div class="detail-stage-line">
           <div v-for="stage in selectedTaskStages" :key="stage.key" class="detail-stage-line__item">
@@ -179,39 +126,38 @@
           </div>
         </div>
 
-        <div class="task-details-dialog__grid">
-          <section class="detail-section detail-section-card">
-            <h3>结果概览</h3>
+        <div v-if="selectedTaskFailureReason" class="task-details-panel__error task-details-panel__error-block">
+          <strong>{{ selectedTaskFailureContext || "失败原因" }}</strong>
+          <p>{{ selectedTaskFailureReason }}</p>
+        </div>
+
+        <div class="task-detail-grid task-detail-grid-primary">
+          <section class="detail-section detail-section-card detail-preview-section">
+            <div class="detail-section__head">
+              <h3>结果预览</h3>
+              <span class="surface-chip">{{ selectedTaskJoinProgressPercent }}%</span>
+            </div>
+            <div class="task-result-preview">
+              <img v-if="selectedTaskThumbnailUrl" :src="selectedTaskThumbnailUrl" alt="任务结果预览" />
+              <div v-else>等待结果</div>
+            </div>
             <div class="detail-overview">
-              <div class="detail-overview__row">
-                <span>执行实例</span>
-                <strong>{{ selectedTaskWorkerLabel }}</strong>
-              </div>
-              <div class="detail-overview__row">
-                <span>最新拼接结果</span>
-                <strong>{{ selectedTaskJoinLabel }}</strong>
-              </div>
               <div class="detail-overview__row detail-overview__row-progress">
-                <span>拼接进度</span>
+                <span>任务进度</span>
                 <div class="detail-overview__progress">
                   <div class="detail-overview__progress-fill" :style="{ width: `${selectedTaskJoinProgressPercent}%` }"></div>
                 </div>
                 <strong>{{ selectedTaskJoinProgressPercent }}%</strong>
               </div>
-              <div class="detail-overview__row">
-                <span>评分</span>
-                <strong>★ {{ selectedTaskEffectRatingLabel }}</strong>
-              </div>
-              <div class="detail-overview__row">
-                <span>种子</span>
-                <strong>{{ selectedTaskSeedLabel }}</strong>
-              </div>
+              <div class="detail-overview__row"><span>参考图</span><strong>{{ selectedReferenceImageCount }} 张</strong></div>
+              <div class="detail-overview__row"><span>执行实例</span><strong>{{ selectedTaskWorkerLabel }}</strong></div>
+              <div class="detail-overview__row"><span>种子</span><strong>{{ selectedTaskSeedLabel }}</strong></div>
             </div>
           </section>
 
           <section class="detail-section detail-section-card">
             <div class="detail-section__head">
-              <h3>创建参数</h3>
+              <h3>请求参数</h3>
               <span class="surface-chip">{{ selectedTaskDurationModeLabel }}</span>
             </div>
             <div class="detail-params">
@@ -221,13 +167,24 @@
               </div>
             </div>
             <div v-if="selectedTaskTranscriptPreview" class="detail-note-block">
-              <span>文本输入预览</span>
+              <span>输入预览</span>
               <p>{{ selectedTaskTranscriptPreview }}</p>
             </div>
           </section>
         </div>
 
-        <div v-if="selectedTaskMonitoringRows.length || selectedTaskArtifactRows.length" class="task-details-dialog__grid">
+        <section v-if="selectedTaskResultItems.length || selectedTaskMaterialItems.length" class="detail-section detail-section-card">
+          <div class="detail-section__head">
+            <h3>结果和素材</h3>
+            <RouterLink class="surface-chip detail-material-link" :to="materialLibraryLink">素材库入口</RouterLink>
+          </div>
+          <div class="detail-result-list">
+            <a v-for="item in selectedTaskResultItems" :key="`result-${item.url}`" :href="item.url" target="_blank" rel="noreferrer">{{ item.title }}</a>
+            <a v-for="item in selectedTaskMaterialItems" :key="`material-${item.url}`" :href="item.url" target="_blank" rel="noreferrer">{{ item.title }}</a>
+          </div>
+        </section>
+
+        <div v-if="selectedTaskMonitoringRows.length || selectedTaskArtifactRows.length" class="task-detail-grid task-detail-grid-secondary">
           <section v-if="selectedTaskMonitoringRows.length" class="detail-section detail-section-card">
             <h3>运行监控</h3>
             <div class="detail-params">
@@ -260,11 +217,7 @@
           <div v-if="selectedTaskError" class="task-details-panel__error">{{ selectedTaskError }}</div>
           <div v-else class="detail-traces">
             <div v-if="selectedTaskTrace.length === 0" class="detail-traces__empty">暂时还没有追踪记录。</div>
-            <div
-              v-for="event in selectedTaskTrace.slice(0, 16)"
-              :key="`${event.timestamp}-${event.event}-${event.stage}`"
-              class="detail-traces__item"
-            >
+            <div v-for="event in selectedTaskTracePreview" :key="`${event.timestamp}-${event.event}-${event.stage}`" class="detail-traces__item">
               <p>{{ event.message }}</p>
               <small>[{{ event.stage }}] {{ formatDateTime(event.timestamp) }}</small>
             </div>
@@ -272,39 +225,13 @@
         </section>
 
         <div class="detail-actions">
-          <button
-            v-if="selectedTaskActionTask && ['PENDING', 'ANALYZING', 'PLANNING'].includes(selectedTaskActionTask.status)"
-            class="btn-secondary btn-sm"
-            type="button"
-            :disabled="selectedTaskLoading || managingTaskId === selectedTaskActionTask.id"
-            @click="handlePause(selectedTaskActionTask)"
-          >
-            暂停
-          </button>
-          <button
-            v-if="selectedTaskActionTask && ['PENDING', 'ANALYZING', 'PLANNING', 'RENDERING'].includes(selectedTaskActionTask.status)"
-            class="btn-warning btn-sm"
-            type="button"
-            :disabled="selectedTaskLoading || managingTaskId === selectedTaskActionTask.id"
-            @click="handleTerminate(selectedTaskActionTask)"
-          >
-            终止
-          </button>
-          <button
-            v-if="selectedTaskActionTask?.status === 'PAUSED'"
-            class="btn-primary btn-sm"
-            type="button"
-            :disabled="selectedTaskLoading || managingTaskId === selectedTaskActionTask.id"
-            @click="handleContinueTask(selectedTaskActionTask)"
-          >
-            继续
-          </button>
-          <button class="btn-secondary btn-sm" type="button" :disabled="selectedTaskLoading" @click="refreshSelectedTask">
-            刷新
-          </button>
+          <button v-if="selectedTaskActionTask && ['PENDING', 'ANALYZING', 'PLANNING'].includes(selectedTaskActionTask.status)" class="btn-secondary btn-sm" type="button" :disabled="selectedTaskLoading || managingTaskId === selectedTaskActionTask.id" @click="handlePause(selectedTaskActionTask)">暂停</button>
+          <button v-if="selectedTaskActionTask && ['PENDING', 'ANALYZING', 'PLANNING', 'RENDERING'].includes(selectedTaskActionTask.status)" class="btn-warning btn-sm" type="button" :disabled="selectedTaskLoading || managingTaskId === selectedTaskActionTask.id" @click="handleTerminate(selectedTaskActionTask)">终止</button>
+          <button v-if="selectedTaskActionTask?.status === 'PAUSED'" class="btn-primary btn-sm" type="button" :disabled="selectedTaskLoading || managingTaskId === selectedTaskActionTask.id" @click="handleContinueTask(selectedTaskActionTask)">继续</button>
+          <button class="btn-secondary btn-sm" type="button" :disabled="selectedTaskLoading" @click="refreshSelectedTask">刷新</button>
         </div>
       </section>
-    </div>
+    </main>
   </section>
 </template>
 
@@ -314,14 +241,12 @@
  */
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
-import AppSelect from "@/components/common/AppSelect.vue";
-import type { AppSelectOption } from "@/components/common/app-select";
-import { continueTask, deleteTask, fetchTask, fetchTaskTrace, fetchTasks, pauseTask, rateTaskEffect, retryTask, terminateTask } from "@/api/tasks";
-import type { TaskDetail, TaskListItem, TaskStatus, TaskTraceEvent } from "@/types";
+import { requireAuth } from "@/auth/modal";
 import { usePolling } from "@/composables/usePolling";
+import { continueTask, fetchTask, fetchTaskTrace, fetchTasks, pauseTask, retryTask, terminateTask } from "@/features/tasks";
+import type { TaskDetail, TaskListItem, TaskStatus, TaskTraceEvent } from "@/types";
 import {
   formatTaskDurationMode,
-  formatTaskEffectRating,
   formatTaskModelValue,
   formatTaskOutputCount,
   formatTaskRequestedDuration,
@@ -332,22 +257,14 @@ import {
   getTaskRequestSnapshot,
   previewTaskTranscript,
 } from "@/utils/task-request";
-import { formatTaskStatus, getTaskLifecycleGroup, TASK_LIFECYCLE_GROUP_LABELS } from "@/utils/task";
+import { formatTaskStatus } from "@/utils/task";
 
 const route = useRoute();
 const router = useRouter();
 
-type TaskSortMode = "status_desc" | "updated_desc" | "created_desc" | "progress_desc" | "semantic_desc" | "effect_rating_desc";
+type TaskSortMode = "status_desc" | "updated_desc" | "created_desc" | "progress_desc" | "semantic_desc";
 
 const DEFAULT_SORT_MODE: TaskSortMode = "status_desc";
-const sortModeOptions: AppSelectOption[] = [
-  { label: "按状态", value: "status_desc" },
-  { label: "按创建时间", value: "created_desc" },
-  { label: "按最近刷新", value: "updated_desc" },
-  { label: "按进度", value: "progress_desc" },
-  { label: "按文本输入", value: "semantic_desc" },
-  { label: "按评分", value: "effect_rating_desc" },
-];
 const STATUS_SORT_PRIORITY: Record<TaskStatus, number> = {
   RENDERING: 0,
   ANALYZING: 1,
@@ -361,21 +278,16 @@ const STATUS_SORT_PRIORITY: Record<TaskStatus, number> = {
 const tasks = ref<TaskListItem[]>([]);
 const loading = ref(true);
 const errorMessage = ref("");
-const lastLoadedAt = ref("尚未刷新");
 const searchText = ref("");
 const statusFilter = ref<TaskStatus | "all">("all");
 const sortMode = ref<TaskSortMode>(DEFAULT_SORT_MODE);
-const viewMode = ref<"rows" | "cards">("rows");
+const listCollapsed = ref(false);
 const managingTaskId = ref("");
-const collapsedGroups = ref<Record<string, boolean>>({});
 const selectedTaskId = ref("");
 const selectedTaskDetail = ref<TaskDetail | null>(null);
 const selectedTaskTrace = ref<TaskTraceEvent[]>([]);
 const selectedTaskLoading = ref(false);
 const selectedTaskError = ref("");
-const selectedTaskRatingDraft = ref<number | null>(null);
-const selectedTaskRatingNote = ref("");
-const selectedTaskRatingSaving = ref(false);
 let querySyncTimer: number | null = null;
 
 const isFilterActive = computed(() => {
@@ -442,12 +354,10 @@ function applyRouteFilters() {
     : "all";
 
   const nextSort = normalizeQueryValue(route.query.sort);
-  sortMode.value = ["status_desc", "updated_desc", "created_desc", "progress_desc", "semantic_desc", "effect_rating_desc"].includes(nextSort)
+  sortMode.value = ["status_desc", "updated_desc", "created_desc", "progress_desc", "semantic_desc"].includes(nextSort)
     ? (nextSort as typeof sortMode.value)
     : DEFAULT_SORT_MODE;
-
-  const nextView = normalizeQueryValue(route.query.view);
-  viewMode.value = nextView === "cards" ? "cards" : "rows";
+  listCollapsed.value = normalizeQueryValue(route.query.collapsed) === "1";
 
   const selected = normalizeQueryValue(route.query.selected) || normalizeQueryValue(route.query.taskId);
   selectedTaskId.value = selected.trim();
@@ -460,7 +370,11 @@ const selectedTaskSummary = computed(() => {
   return tasks.value.find((task) => task.id === selectedTaskId.value) ?? null;
 });
 
+const selectedTask = computed(() => selectedTaskDetail.value ?? selectedTaskSummary.value);
+
 const selectedTaskActionTask = computed(() => selectedTaskDetail.value ?? selectedTaskSummary.value);
+
+const selectedTaskTypeLabel = computed(() => taskTypeLabel(selectedTask.value));
 
 const selectedTaskStageLabel = computed(() => {
   if (selectedTaskDetail.value) {
@@ -477,9 +391,14 @@ const selectedTaskRequestSnapshot = computed(() => getTaskRequestSnapshot(select
 const selectedTaskDurationModeLabel = computed(() => formatTaskDurationMode(selectedTaskRequestSnapshot.value));
 
 const selectedTaskTranscriptPreview = computed(() => previewTaskTranscript(selectedTaskRequestSnapshot.value));
-const selectedTaskEffectRatingLabel = computed(() => {
-  return formatTaskEffectRating(selectedTaskDetail.value?.effectRating ?? selectedTaskSummary.value?.effectRating);
+
+const selectedReferenceImageCount = computed(() => {
+  const snapshotCount = listValue(selectedTaskDetail.value?.requestSnapshot?.referenceImageUrls).length;
+  const contextCount = listValue(selectedTaskDetail.value?.executionContext?.referenceImageUrls).length;
+  const sourceCount = selectedTaskDetail.value?.sourceAssetCount ?? selectedTaskSummary.value?.sourceAssetCount ?? 0;
+  return Math.max(snapshotCount, contextCount, sourceCount);
 });
+
 const selectedTaskSeedLabel = computed(() => {
   const detailSeed = selectedTaskDetail.value?.taskSeed;
   if (typeof detailSeed === "number" && Number.isFinite(detailSeed)) {
@@ -513,7 +432,6 @@ const selectedTaskParameterRows = computed(() => {
   const snapshot = selectedTaskRequestSnapshot.value;
   return [
     { label: "文本模型", value: formatTaskModelValue(snapshot.textAnalysisModel) },
-    { label: "视觉模型", value: formatTaskModelValue(snapshot.visionModel) },
     { label: "关键帧模型", value: formatTaskModelValue(snapshot.imageModel) },
     { label: "视频模型", value: formatTaskModelValue(snapshot.videoModel) },
     { label: "清晰度 / 画幅", value: formatTaskModelValue(snapshot.videoSize) },
@@ -552,6 +470,67 @@ const selectedTaskJoinLabel = computed(() => {
   }
   return formatMonitoringValue(monitoring.latestJoinName || monitoring.latestJoinClipIndex);
 });
+const selectedTaskFailureReason = computed(() => {
+  return selectedTaskDetail.value?.failureReason || selectedTaskSummary.value?.failureReason || "";
+});
+const selectedTaskFailureContext = computed(() => {
+  return taskFailureContext(selectedTaskDetail.value ?? selectedTaskSummary.value);
+});
+
+const selectedTaskThumbnailUrl = computed(() => taskThumbnailUrl(selectedTaskDetail.value ?? selectedTaskSummary.value));
+
+const selectedTaskResultItems = computed(() => {
+  const items: Array<{ title: string; url: string }> = [];
+  const detail = selectedTaskDetail.value;
+  if (!detail) {
+    return items;
+  }
+  for (const output of detail.outputs ?? []) {
+    const url = firstNonBlank(output.previewUrl, output.downloadUrl);
+    if (url) {
+      items.push({ title: output.title || `结果 #${output.clipIndex || items.length + 1}`, url });
+    }
+  }
+  const latestJoinUrl = detail.monitoring?.latestJoinOutputUrl;
+  if (latestJoinUrl && !items.some((item) => item.url === latestJoinUrl)) {
+    items.push({ title: detail.monitoring?.latestJoinName || "最新拼接结果", url: latestJoinUrl });
+  }
+  const latestVideoUrl = detail.monitoring?.latestVideoOutputUrl;
+  if (latestVideoUrl && !items.some((item) => item.url === latestVideoUrl)) {
+    items.push({ title: "最新视频结果", url: latestVideoUrl });
+  }
+  return items;
+});
+
+const selectedTaskMaterialItems = computed(() => {
+  const detail = selectedTaskDetail.value;
+  if (!detail) {
+    return [];
+  }
+  const rows: Array<{ title: string; url: string }> = [];
+  for (const material of detail.materials ?? []) {
+    const url = firstNonBlank(material.previewUrl, material.fileUrl);
+    if (url) {
+      rows.push({ title: material.title || material.id || "任务素材", url });
+    }
+  }
+  if (detail.source?.fileUrl) {
+    rows.push({ title: detail.source.originalFileName || "来源素材", url: detail.source.fileUrl });
+  }
+  for (const source of detail.sourceAssets ?? []) {
+    if (source.fileUrl && !rows.some((item) => item.url === source.fileUrl)) {
+      rows.push({ title: source.originalFileName || "来源素材", url: source.fileUrl });
+    }
+  }
+  return rows;
+});
+
+const selectedTaskTracePreview = computed(() => selectedTaskTrace.value.slice(0, 16));
+
+const materialLibraryLink = computed(() => {
+  const assetType = selectedTaskDetail.value?.requestSnapshot?.assetType;
+  return assetType ? `/materials?assetType=${encodeURIComponent(assetType)}` : "/materials";
+});
 
 const selectedTaskArtifactDirectories = computed(() => {
   return selectedTaskDetail.value?.artifactDirectories ?? selectedTaskDetail.value?.monitoring?.artifactDirectories ?? null;
@@ -585,35 +564,63 @@ const selectedTaskArtifactRows = computed(() => {
 
 const selectedTaskStages = computed(() => {
   const status = selectedTaskDetail.value?.status ?? selectedTaskSummary.value?.status ?? "PENDING";
+  const taskType = normalizedTaskType(selectedTask.value);
+  if (taskType !== "video_generation") {
+    return buildImageTaskStages(status, taskType);
+  }
+  return buildVideoTaskStages(status);
+});
+
+const taskStageStateLabels: Record<TaskStageState, string> = {
+  pending: "等待",
+  active: "进行中",
+  paused: "已暂停",
+  done: "已完成",
+  failed: "失败",
+};
+
+type TaskStageState = "pending" | "active" | "paused" | "done" | "failed";
+
+interface TaskStageDisplayItem {
+  key: string;
+  label: string;
+  state: TaskStageState;
+  stateLabel: string;
+}
+
+function withTaskStageLabels(items: Array<Omit<TaskStageDisplayItem, "stateLabel">>): TaskStageDisplayItem[] {
+  return items.map((item) => ({ ...item, stateLabel: taskStageStateLabels[item.state] }));
+}
+
+function buildVideoTaskStages(status: TaskStatus): TaskStageDisplayItem[] {
   const stageOrder: TaskStatus[] = ["ANALYZING", "PLANNING", "RENDERING", "COMPLETED"];
   const pausedAtRender = status === "PAUSED";
   const currentIndex = pausedAtRender ? 2 : stageOrder.indexOf(status);
-  /**
-   * 处理转为标签。
-   * @param state 状态值
-   */
-  const toLabel = (state: "pending" | "active" | "paused" | "done" | "failed") => {
-    switch (state) {
-      case "done":
-        return "已完成";
-      case "active":
-        return "进行中";
-      case "paused":
-        return "已暂停";
-      case "failed":
-        return "失败";
-      default:
-        return "等待";
-    }
-  };
   const items = [
     { key: "ANALYZING", label: "素材分析", state: currentIndex > 0 ? "done" : currentIndex === 0 ? "active" : "pending" },
     { key: "PLANNING", label: "任务编排", state: currentIndex > 1 ? "done" : currentIndex === 1 ? "active" : "pending" },
     { key: "RENDERING", label: "视频生成", state: pausedAtRender ? "paused" : currentIndex > 2 ? "done" : currentIndex === 2 ? "active" : "pending" },
     { key: "COMPLETED", label: "任务完成", state: status === "COMPLETED" ? "done" : status === "FAILED" ? "failed" : "pending" },
-  ] as Array<{ key: string; label: string; state: "pending" | "active" | "paused" | "done" | "failed" }>;
-  return items.map((item) => ({ ...item, stateLabel: toLabel(item.state) }));
-});
+  ] as Array<Omit<TaskStageDisplayItem, "stateLabel">>;
+  return withTaskStageLabels(items);
+}
+
+function buildImageTaskStages(status: TaskStatus, taskType: string): TaskStageDisplayItem[] {
+  const renderLabel = taskType === "character_sheet" ? "三视图生成" : "图片生成";
+  const submitState: TaskStageState = ["RENDERING", "COMPLETED", "FAILED"].includes(status) ? "done" : status === "PAUSED" ? "paused" : "active";
+  const renderState: TaskStageState =
+    status === "COMPLETED" ? "done" :
+    status === "FAILED" ? "failed" :
+    status === "PAUSED" ? "paused" :
+    status === "RENDERING" ? "active" :
+    "pending";
+  const completeState: TaskStageState = status === "COMPLETED" ? "done" : "pending";
+  return withTaskStageLabels([
+    { key: "PENDING", label: "提交任务", state: submitState },
+    { key: "RENDERING", label: renderLabel, state: renderState },
+    { key: "COMPLETED", label: "生成完成", state: completeState },
+  ]);
+}
 
 const filteredTasks = computed(() => {
   const keyword = searchText.value.trim().toLowerCase();
@@ -645,92 +652,22 @@ const sortedFilteredTasks = computed(() => {
       return items.sort((left, right) => (right.progress ?? 0) - (left.progress ?? 0));
     case "semantic_desc":
       return items.sort((left, right) => Number(Boolean(right.hasTimedTranscript || right.hasTranscript)) - Number(Boolean(left.hasTimedTranscript || left.hasTranscript)));
-    case "effect_rating_desc":
-      return items.sort((left, right) => {
-        const ratingDiff = (right.effectRating ?? 0) - (left.effectRating ?? 0);
-        if (ratingDiff !== 0) {
-          return ratingDiff;
-        }
-        const ratedAtDiff = new Date(right.ratedAt || 0).getTime() - new Date(left.ratedAt || 0).getTime();
-        if (ratedAtDiff !== 0) {
-          return ratedAtDiff;
-        }
-        return compareByUpdatedAtDesc(left, right);
-      });
     default:
       return items.sort(compareByUpdatedAtDesc);
   }
 });
 
-const metrics = computed(() => {
-  const total = tasks.value.length;
-  const running = tasks.value.filter((task) => getTaskLifecycleGroup(task.status) === "running").length;
-  const completed = tasks.value.filter((task) => getTaskLifecycleGroup(task.status) === "completed").length;
-  const failed = tasks.value.filter((task) => getTaskLifecycleGroup(task.status) === "failed").length;
-  const semantic = tasks.value.filter((task) => task.hasTranscript).length;
-  const timedSemantic = tasks.value.filter((task) => task.hasTimedTranscript).length;
-  return { total, running, completed, failed, semantic, timedSemantic };
-});
-
-const groupedTasks = computed(() => {
-  // 先排序再分组，保证同一生命周期分组内也维持统一的优先级顺序。
-  const groups = [
-    {
-      key: "running",
-      title: TASK_LIFECYCLE_GROUP_LABELS.running,
-      description: "分析、编排和渲染中的任务会优先显示在这里。",
-      items: sortedFilteredTasks.value.filter((task) => getTaskLifecycleGroup(task.status) === "running")
-    },
-    {
-      key: "paused",
-      title: TASK_LIFECYCLE_GROUP_LABELS.paused,
-      description: "已暂停的任务可继续生成，也可以直接删除。",
-      items: sortedFilteredTasks.value.filter((task) => getTaskLifecycleGroup(task.status) === "paused")
-    },
-    {
-      key: "queued",
-      title: TASK_LIFECYCLE_GROUP_LABELS.queued,
-      description: "等待处理的任务，适合查看队列压力。",
-      items: sortedFilteredTasks.value.filter((task) => getTaskLifecycleGroup(task.status) === "queued")
-    },
-    {
-      key: "completed",
-      title: TASK_LIFECYCLE_GROUP_LABELS.completed,
-      description: "已经完成渲染的素材，可以直接预览和下载。",
-      items: sortedFilteredTasks.value.filter((task) => getTaskLifecycleGroup(task.status) === "completed")
-    },
-    {
-      key: "failed",
-      title: TASK_LIFECYCLE_GROUP_LABELS.failed,
-      description: "失败任务可直接重试或删除后重新创建。",
-      items: sortedFilteredTasks.value.filter((task) => getTaskLifecycleGroup(task.status) === "failed")
-    }
-  ];
-  return groups.filter((group) => group.items.length > 0);
-});
-
-const boardColumns = computed(() => {
-  const pendingStatuses: TaskStatus[] = ["PENDING", "PAUSED", "ANALYZING", "PLANNING"];
-  return [
-    {
-      key: "pending",
-      title: "待处理",
-      items: sortedFilteredTasks.value.filter((task) => pendingStatuses.includes(task.status)),
-    },
-    {
-      key: "rendering",
-      title: "生成中",
-      items: sortedFilteredTasks.value.filter((task) => task.status === "RENDERING"),
-    },
-    {
-      key: "completed",
-      title: "已结束",
-      items: sortedFilteredTasks.value.filter((task) => ["COMPLETED", "FAILED"].includes(task.status)),
-    },
-  ];
-});
-
 async function loadTasks() {
+  const authenticated = await requireAuth({
+    title: "登录后查看任务",
+    message: "任务管理只展示你的个人任务，请先登录或使用邀请码注册。",
+  });
+  if (!authenticated) {
+    tasks.value = [];
+    errorMessage.value = "登录后可查看任务管理。";
+    loading.value = false;
+    return;
+  }
   errorMessage.value = "";
   loading.value = tasks.value.length === 0;
   try {
@@ -739,7 +676,6 @@ async function loadTasks() {
       sort: sortMode.value,
     });
     tasks.value = reconcileTaskList(tasks.value, nextTasks);
-    lastLoadedAt.value = new Date().toLocaleString();
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : "加载任务列表失败";
   } finally {
@@ -752,8 +688,6 @@ async function loadSelectedTaskDetails(options: { silent?: boolean } = {}) {
     selectedTaskDetail.value = null;
     selectedTaskTrace.value = [];
     selectedTaskError.value = "";
-    selectedTaskRatingDraft.value = null;
-    selectedTaskRatingNote.value = "";
     return;
   }
   if (!options.silent) {
@@ -768,8 +702,6 @@ async function loadSelectedTaskDetails(options: { silent?: boolean } = {}) {
     selectedTaskDetail.value = detail;
     // 详情面板优先显示最新事件，便于定位当前卡住的阶段。
     selectedTaskTrace.value = [...trace].reverse();
-    selectedTaskRatingDraft.value = typeof detail.effectRating === "number" && detail.effectRating > 0 ? Math.trunc(detail.effectRating) : null;
-    selectedTaskRatingNote.value = detail.effectRatingNote?.trim() || "";
   } catch (error) {
     if (!options.silent) {
       selectedTaskError.value = error instanceof Error ? error.message : "任务详情加载失败";
@@ -783,25 +715,6 @@ async function loadSelectedTaskDetails(options: { silent?: boolean } = {}) {
 
 async function refreshSelectedTask() {
   await loadSelectedTaskDetails();
-}
-
-async function saveSelectedTaskRating() {
-  if (!selectedTaskId.value || !selectedTaskRatingDraft.value) {
-    return;
-  }
-  selectedTaskRatingSaving.value = true;
-  selectedTaskError.value = "";
-  try {
-    await rateTaskEffect(selectedTaskId.value, {
-      effectRating: selectedTaskRatingDraft.value,
-      effectRatingNote: selectedTaskRatingNote.value.trim() || undefined,
-    });
-    await Promise.all([loadTasks(), loadSelectedTaskDetails()]);
-  } catch (error) {
-    selectedTaskError.value = error instanceof Error ? error.message : "保存评分失败";
-  } finally {
-    selectedTaskRatingSaving.value = false;
-  }
 }
 
 /**
@@ -818,8 +731,8 @@ function writeQuery() {
   if (sortMode.value !== DEFAULT_SORT_MODE) {
     query.sort = sortMode.value;
   }
-  if (viewMode.value !== "rows") {
-    query.view = viewMode.value;
+  if (listCollapsed.value) {
+    query.collapsed = "1";
   }
   if (selectedTaskId.value) {
     query.selected = selectedTaskId.value;
@@ -831,7 +744,7 @@ function writeQuery() {
     (normalizeQueryValue(currentQuery.q) || "") === (nextQuery.q || "") &&
     (normalizeQueryValue(currentQuery.status) || "") === (nextQuery.status || "") &&
     (normalizeQueryValue(currentQuery.sort) || "") === (nextQuery.sort || "") &&
-    (normalizeQueryValue(currentQuery.view) || "") === (nextQuery.view || "") &&
+    (normalizeQueryValue(currentQuery.collapsed) || "") === (nextQuery.collapsed || "") &&
     ((normalizeQueryValue(currentQuery.selected) || normalizeQueryValue(currentQuery.taskId) || "") === (nextQuery.selected || ""));
 
   if (!sameQuery) {
@@ -885,63 +798,39 @@ function handleSelectTask(task: TaskListItem) {
   void loadSelectedTaskDetails();
 }
 
-/**
- * 检查是否分组折叠。
- * @param groupKey 分组Key值
- */
-function isGroupCollapsed(groupKey: string) {
-  return Boolean(collapsedGroups.value[groupKey]);
-}
-
-/**
- * 处理切换分组。
- * @param groupKey 分组Key值
- */
-function toggleGroup(groupKey: string) {
-  collapsedGroups.value = {
-    ...collapsedGroups.value,
-    [groupKey]: !collapsedGroups.value[groupKey]
-  };
-}
-
-function quickActionCount(task: TaskListItem) {
-  let count = 1;
-  if (["PENDING", "ANALYZING", "PLANNING"].includes(task.status)) {
-    count += 1;
+function handleTaskItemKeydown(task: TaskListItem, event: KeyboardEvent) {
+  if (event.target !== event.currentTarget) {
+    return;
   }
-  if (["PENDING", "ANALYZING", "PLANNING", "RENDERING"].includes(task.status)) {
-    count += 1;
+  if (event.key !== "Enter" && event.key !== " ") {
+    return;
   }
-  if (task.status === "FAILED" || task.status === "PAUSED") {
-    count += 1;
-  }
-  return count;
-}
-
-function boardTaskToneClass(status: TaskStatus) {
-  switch (status) {
-    case "COMPLETED":
-      return "board-task-tone-completed";
-    case "FAILED":
-      return "board-task-tone-failed";
-    case "RENDERING":
-      return "board-task-tone-rendering";
-    default:
-      return "board-task-tone-pending";
-  }
+  event.preventDefault();
+  handleSelectTask(task);
 }
 
 async function handleRetry(task: TaskListItem) {
   if (managingTaskId.value) {
     return;
   }
+  const authenticated = await requireAuth({
+    title: "登录后操作任务",
+    message: "任务重试会重新加入队列，请先登录或使用邀请码注册。",
+  });
+  if (!authenticated) {
+    errorMessage.value = "登录后可继续操作任务。";
+    return;
+  }
   managingTaskId.value = task.id;
   errorMessage.value = "";
   try {
     await retryTask(task.id);
-    await loadTasks();
+    await Promise.all([
+      loadTasks(),
+      task.id === selectedTaskId.value ? loadSelectedTaskDetails() : Promise.resolve(),
+    ]);
   } catch (error) {
-    errorMessage.value = error instanceof Error ? error.message : "任务重试失败";
+    errorMessage.value = error instanceof Error ? error.message : "重试任务失败";
   } finally {
     managingTaskId.value = "";
   }
@@ -949,6 +838,14 @@ async function handleRetry(task: TaskListItem) {
 
 async function handlePause(task: TaskListItem) {
   if (managingTaskId.value) {
+    return;
+  }
+  const authenticated = await requireAuth({
+    title: "登录后操作任务",
+    message: "任务操作会修改你的任务状态，请先登录或使用邀请码注册。",
+  });
+  if (!authenticated) {
+    errorMessage.value = "登录后可继续操作任务。";
     return;
   }
   managingTaskId.value = task.id;
@@ -967,6 +864,14 @@ async function handleContinueTask(task: TaskListItem) {
   if (managingTaskId.value) {
     return;
   }
+  const authenticated = await requireAuth({
+    title: "登录后操作任务",
+    message: "任务操作会修改你的任务状态，请先登录或使用邀请码注册。",
+  });
+  if (!authenticated) {
+    errorMessage.value = "登录后可继续操作任务。";
+    return;
+  }
   managingTaskId.value = task.id;
   errorMessage.value = "";
   try {
@@ -983,6 +888,14 @@ async function handleTerminate(task: TaskListItem) {
   if (managingTaskId.value) {
     return;
   }
+  const authenticated = await requireAuth({
+    title: "登录后操作任务",
+    message: "任务操作会修改你的任务状态，请先登录或使用邀请码注册。",
+  });
+  if (!authenticated) {
+    errorMessage.value = "登录后可继续操作任务。";
+    return;
+  }
   const ok = window.confirm(`确认终止任务“${task.title}”吗？终止后任务会变为失败状态，可再删除或重试。`);
   if (!ok) {
     return;
@@ -994,33 +907,6 @@ async function handleTerminate(task: TaskListItem) {
     await Promise.all([loadTasks(), loadSelectedTaskDetails()]);
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : "终止任务失败";
-  } finally {
-    managingTaskId.value = "";
-  }
-}
-
-async function handleDelete(task: TaskListItem) {
-  if (managingTaskId.value) {
-    return;
-  }
-  const ok = window.confirm(`确认删除任务“${task.title}”吗？已生成的输出和日志也会一并清理。`);
-  if (!ok) {
-    return;
-  }
-  managingTaskId.value = task.id;
-  errorMessage.value = "";
-  try {
-    await deleteTask(task.id);
-    if (selectedTaskId.value === task.id) {
-      selectedTaskId.value = "";
-      selectedTaskDetail.value = null;
-      selectedTaskTrace.value = [];
-      selectedTaskError.value = "";
-      writeQuery();
-    }
-    await loadTasks();
-  } catch (error) {
-    errorMessage.value = error instanceof Error ? error.message : "删除任务失败";
   } finally {
     managingTaskId.value = "";
   }
@@ -1056,6 +942,107 @@ function formatMonitoringValue(value: unknown) {
   return text ? text : "暂无";
 }
 
+function taskFailureContext(task?: Pick<TaskListItem, "failureStage" | "failureClipIndex"> | null) {
+  if (!task) {
+    return "";
+  }
+  const parts: string[] = [];
+  if (task.failureStage) {
+    parts.push(`阶段 ${task.failureStage}`);
+  }
+  if (typeof task.failureClipIndex === "number" && task.failureClipIndex > 0) {
+    parts.push(`镜头 #${task.failureClipIndex}`);
+  }
+  return parts.join(" · ");
+}
+
+function taskProgress(task?: Pick<TaskListItem, "progress" | "status"> | null) {
+  if (!task) {
+    return 0;
+  }
+  if (task.status === "COMPLETED") {
+    return 100;
+  }
+  return Math.max(0, Math.min(100, Math.round(task.progress ?? 0)));
+}
+
+function normalizedTaskType(task?: Pick<TaskListItem, "taskType"> & { requestSnapshot?: { taskType?: string | null } } | null) {
+  return String(task?.requestSnapshot?.taskType || task?.taskType || "video_generation").trim() || "video_generation";
+}
+
+function taskTypeLabel(task?: Pick<TaskListItem, "taskType"> & { requestSnapshot?: { taskType?: string | null } } | null) {
+  switch (normalizedTaskType(task)) {
+    case "image_generation":
+      return "文生图";
+    case "image_to_image":
+      return "图生图";
+    case "character_sheet":
+      return "角色三视图";
+    case "video_generation":
+      return "视频生成";
+    default:
+      return "生成任务";
+  }
+}
+
+function taskTypeShortLabel(task?: Pick<TaskListItem, "taskType"> & { requestSnapshot?: { taskType?: string | null } } | null) {
+  switch (normalizedTaskType(task)) {
+    case "image_generation":
+      return "文";
+    case "image_to_image":
+      return "图";
+    case "character_sheet":
+      return "角";
+    case "video_generation":
+      return "视";
+    default:
+      return "任";
+  }
+}
+
+function firstNonBlank(...values: Array<string | null | undefined>) {
+  for (const value of values) {
+    const normalized = String(value ?? "").trim();
+    if (normalized) {
+      return normalized;
+    }
+  }
+  return "";
+}
+
+function listValue(value: unknown): unknown[] {
+  return Array.isArray(value) ? value : [];
+}
+
+function taskThumbnailUrl(task?: (TaskListItem | TaskDetail) | null) {
+  const detail = task && "outputs" in task ? task : null;
+  if (detail) {
+    const material = detail.materials?.find((item) => firstNonBlank(item.thumbnailUrl, item.previewUrl, item.fileUrl));
+    if (material) {
+      return firstNonBlank(material.thumbnailUrl, material.previewUrl, material.fileUrl);
+    }
+    const output = detail.outputs?.find((item) => firstNonBlank(item.thumbnailUrl, item.previewUrl, item.downloadUrl));
+    if (output) {
+      return firstNonBlank(output.thumbnailUrl, output.previewUrl, output.downloadUrl);
+    }
+    const source = detail.sourceAssets?.find((item) => firstNonBlank(item.thumbnailUrl, item.fileUrl));
+    if (source) {
+      return firstNonBlank(source.thumbnailUrl, source.fileUrl);
+    }
+    return firstNonBlank(
+      detail.source?.fileUrl,
+    );
+  }
+  if (task?.thumbnailUrl) {
+    return task.thumbnailUrl;
+  }
+  const selectedDetailForTask = task?.id && selectedTaskDetail.value?.id === task.id ? selectedTaskDetail.value : null;
+  if (selectedDetailForTask) {
+    return taskThumbnailUrl(selectedDetailForTask);
+  }
+  return "";
+}
+
 /**
  * 处理阶段状态样式类。
  * @param state 状态值
@@ -1089,7 +1076,7 @@ watch(
   { immediate: true, deep: true }
 );
 
-watch([searchText, statusFilter, sortMode, viewMode], () => {
+watch([searchText, statusFilter, sortMode, listCollapsed], () => {
   scheduleWriteQuery();
 });
 
@@ -1113,152 +1100,121 @@ onUnmounted(() => {
   height: 100%;
   min-height: 0;
   color: var(--text-strong);
-}
-
-.tasks-layout {
-  display: block;
-  height: 100%;
-  min-height: 0;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 0 0 24px 24px;
+  padding: 18px 22px 18px 0;
   overflow: hidden;
+  display: grid;
+  grid-template-columns: minmax(var(--tasks-list-column-width, 320px), var(--tasks-list-column-width, 410px)) minmax(0, 1fr);
+  align-content: stretch;
+  gap: 22px;
 }
 
-.tasks-board {
-  min-width: 0;
+.tasks-list-panel,
+.task-detail-panel {
   min-height: 0;
-  padding: 18px 18px 18px 24px;
   overflow: auto;
 }
 
-.tasks-title-row {
+.tasks-list-panel {
+  display: grid;
+  align-content: start;
+  gap: 16px;
+  padding: 26px 20px 18px 26px;
+  border-right: 1px solid rgba(15, 20, 25, 0.08);
+  background: rgba(255, 255, 255, 0.5);
+}
+
+.tasks-list-panel-collapsed {
+  grid-template-rows: auto auto;
+  align-content: start;
+  min-width: 214px;
+  padding: 20px 16px 18px 20px;
+}
+
+.task-detail-panel {
+  display: grid;
+}
+
+.tasks-panel-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 16px;
+  gap: 16px;
 }
 
 .tasks-title {
   margin: 0;
-  font-family: "Sora", "Inter", sans-serif;
   font-size: 1.1rem;
-  font-weight: 700;
-  letter-spacing: -0.04em;
-  background: linear-gradient(90deg, #c567ff 0%, #8a8fff 46%, #67caff 100%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
+  font-weight: 800;
+  color: var(--text-strong);
 }
 
-.tasks-last-updated {
-  color: var(--text-muted);
-  font-size: 0.72rem;
-}
-
-.tasks-toolbar {
-  display: grid;
-  gap: 12px;
-  grid-template-columns: minmax(220px, 1.2fr) minmax(0, 1.7fr) auto;
-  align-items: center;
-  padding: 14px;
-  margin-bottom: 18px;
-}
-
-.toolbar-search {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-height: 46px;
-  padding: 0 14px;
-  border-radius: 14px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(255, 255, 255, 0.03);
-}
-
-.toolbar-search svg {
-  width: 18px;
-  height: 18px;
-  color: rgba(255, 255, 255, 0.46);
-}
-
-.toolbar-search input {
-  width: 100%;
-  border: 0;
-  background: transparent;
-  color: rgba(255, 255, 255, 0.86);
-}
-
-.toolbar-search input::placeholder {
-  color: rgba(255, 255, 255, 0.34);
-}
-
-.toolbar-pills {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-}
-
-.toolbar-pill {
+.tasks-collapse-toggle {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  min-height: 40px;
-  padding: 0 14px;
-  border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(255, 255, 255, 0.03);
-  color: rgba(255, 255, 255, 0.8);
-}
-
-.toolbar-pill-active {
-  border-color: rgba(145, 180, 255, 0.36);
-  box-shadow: var(--shadow-glow);
-}
-
-.toolbar-pill__dot {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-}
-
-.toolbar-pill__dot-pending {
-  background: #ffcf74;
-}
-
-.toolbar-pill__dot-rendering {
-  background: #8ea5ff;
-}
-
-.toolbar-pill__dot-completed {
-  background: #63dc97;
-}
-
-.toolbar-actions {
-  display: flex;
-  gap: 8px;
-  justify-self: end;
-}
-
-.toolbar-icon {
+  justify-content: center;
+  gap: 4px;
   width: 42px;
-  height: 42px;
+  height: 36px;
+  border: 1px solid rgba(15, 20, 25, 0.06);
+  border-radius: 10px;
+  background: #fff;
+  color: var(--text-strong);
+}
+
+.tasks-collapse-toggle span {
+  width: 10px;
+  height: 16px;
+  border: 2px solid currentColor;
+  border-radius: 3px;
+}
+
+.tasks-collapse-toggle span:first-child {
+  border-right-width: 1px;
+}
+
+.tasks-collapse-toggle span:last-child {
+  border-left-width: 1px;
+}
+
+.tasks-search-field {
   display: grid;
-  place-items: center;
-  border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(255, 255, 255, 0.03);
-  color: rgba(255, 255, 255, 0.7);
+  gap: 12px;
 }
 
-.toolbar-icon-active {
-  color: rgba(255, 255, 255, 0.96);
-  border-color: rgba(145, 180, 255, 0.32);
+.tasks-search-field > span {
+  font-size: 0.95rem;
+  font-weight: 800;
+  color: var(--text-strong);
 }
 
-.toolbar-icon svg {
+.tasks-search-field__control {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 54px;
+  padding: 0 14px;
+  border-radius: 14px;
+  border: 0;
+  background: #eef2f4;
+}
+
+.tasks-search-field__control svg {
   width: 18px;
   height: 18px;
+  color: var(--text-muted);
+}
+
+.tasks-search-field__control input {
+  width: 100%;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--text-strong);
+  font-size: 0.95rem;
+}
+
+.tasks-search-field__control input::placeholder {
+  color: #9aa5ad;
 }
 
 .tasks-alert,
@@ -1268,7 +1224,10 @@ onUnmounted(() => {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 18px;
+  padding: 14px 0;
+  border-top: 1px solid rgba(15, 20, 25, 0.08);
+  border-bottom: 1px solid rgba(15, 20, 25, 0.08);
+  background: transparent;
 }
 
 .tasks-empty-board {
@@ -1287,7 +1246,7 @@ onUnmounted(() => {
 .tasks-empty-board h3 {
   margin: 0;
   font-size: 1.35rem;
-  color: rgba(255, 255, 255, 0.94);
+  color: var(--text-strong);
 }
 
 .tasks-empty-board p {
@@ -1303,191 +1262,196 @@ onUnmounted(() => {
   gap: 10px;
 }
 
-.board-columns {
-  display: grid;
-  gap: 14px;
-  min-height: 0;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-}
-
-.board-column {
-  display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
-  gap: 14px;
-  min-height: 0;
-  padding: 12px;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.02)),
-    rgba(18, 21, 28, 0.82);
-}
-
-.board-column__head {
+.tasks-collapsed-hint {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
-}
-
-.board-column__head h3 {
-  margin: 0;
-  font-size: 0.98rem;
-  font-weight: 700;
-  color: rgba(255, 255, 255, 0.94);
-}
-
-.board-column__more {
-  color: rgba(255, 255, 255, 0.48);
-}
-
-.board-column__list {
-  display: grid;
   gap: 12px;
-  align-content: start;
-  min-height: 0;
-  overflow: auto;
+  width: min(100%, 520px);
+  padding: 12px 0;
+  border-top: 1px solid rgba(15, 20, 25, 0.08);
+  border-bottom: 1px solid rgba(15, 20, 25, 0.08);
+  color: var(--text-muted);
+  font-size: 0.82rem;
 }
 
-.board-column__collapsed {
+.task-list {
+  display: grid;
+  gap: 0;
+}
+
+.task-list__item {
+  display: grid;
+  grid-template-columns: 54px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  min-height: 82px;
+  padding: 12px 0;
+  border: 0;
+  border-bottom: 1px solid rgba(15, 20, 25, 0.08);
+  border-radius: 0;
+  background: transparent;
+  text-align: left;
+  color: var(--text-strong);
+  cursor: pointer;
+  transition: background 180ms ease, color 180ms ease;
+}
+
+.task-list__item:focus-visible {
+  outline: 2px solid rgba(0, 161, 194, 0.34);
+  outline-offset: 3px;
+}
+
+.task-list__item-active {
+  background: linear-gradient(90deg, rgba(0, 161, 194, 0.1), rgba(0, 161, 194, 0));
+}
+
+.task-list__item:hover {
+  background: rgba(255, 255, 255, 0.58);
+}
+
+.task-list__thumb {
+  display: grid;
+  place-items: center;
+  width: 54px;
+  height: 54px;
+  overflow: hidden;
+  border-radius: 14px;
+  background: #eef8fb;
+  color: var(--accent-cyan);
+  font-size: 0.92rem;
+  font-weight: 900;
+}
+
+.task-list__thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.task-list__main {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.task-list__title {
+  min-width: 0;
+  font-size: 0.94rem;
+  font-weight: 760;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.task-list__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
   color: var(--text-muted);
+  font-size: 0.72rem;
+  font-weight: 720;
+}
+
+.task-list__progress {
+  height: 6px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(15, 20, 25, 0.08);
+}
+
+.task-list__progress i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--bg-accent);
+}
+
+.task-list__side {
+  display: grid;
+  justify-items: end;
+  align-self: stretch;
+  min-width: 58px;
+  gap: 6px;
+}
+
+.task-list__side > strong {
+  align-self: end;
+  color: var(--text-body);
   font-size: 0.78rem;
 }
 
-.board-task {
-  display: grid;
-  grid-template-columns: 72px minmax(0, 1fr);
-  gap: 12px;
-  padding: 10px;
-  border-radius: 16px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.02)),
-    rgba(255, 255, 255, 0.03);
-  text-align: left;
-  transition: border-color 180ms ease, box-shadow 180ms ease, transform 180ms ease;
-}
-
-.board-task:hover {
-  transform: translateY(-1px);
-}
-
-.board-task-active {
-  box-shadow: var(--shadow-glow);
-}
-
-.board-task-tone-pending {
-  border-color: rgba(176, 92, 255, 0.34);
-}
-
-.board-task-tone-rendering {
-  border-color: rgba(78, 219, 255, 0.34);
-}
-
-.board-task-tone-completed {
-  border-color: rgba(99, 220, 151, 0.28);
-}
-
-.board-task-tone-failed {
-  border-color: rgba(255, 118, 150, 0.28);
-}
-
-.board-task__media {
-  border-radius: 10px;
-  min-height: 96px;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0.01)),
-    radial-gradient(circle at 50% 28%, rgba(247, 223, 167, 0.22), transparent 34%),
-    linear-gradient(135deg, rgba(52, 67, 84, 0.72), rgba(15, 18, 24, 0.96));
-}
-
-.board-task__content {
-  min-width: 0;
-  display: grid;
-  gap: 9px;
-}
-
-.board-task__head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 8px;
-}
-
-.board-task__head h4 {
-  margin: 0;
-  font-size: 0.92rem;
-  line-height: 1.3;
-  color: rgba(255, 255, 255, 0.94);
-}
-
-.board-task__menu {
-  color: rgba(255, 255, 255, 0.44);
-}
-
-.board-task__progress {
-  height: 6px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.08);
-  overflow: hidden;
-}
-
-.board-task__progress-fill {
-  height: 100%;
-  border-radius: inherit;
-  background: linear-gradient(90deg, #a96eff 0%, #59d7ff 100%);
-}
-
-.board-task__meta,
-.board-task__footer {
-  display: flex;
+.task-list__retry {
+  display: inline-flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  color: rgba(255, 255, 255, 0.52);
-  font-size: 0.76rem;
+  justify-content: center;
+  align-self: start;
+  min-width: 54px;
+  height: 28px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(229, 72, 101, 0.1);
+  color: var(--accent-danger);
+  font-size: 0.72rem;
+  font-weight: 800;
+  cursor: pointer;
+  transition: border-color 160ms ease, background 160ms ease, color 160ms ease;
 }
 
-.board-task__rating {
-  color: #ffc559;
+.task-list__retry:hover:not(:disabled),
+.task-list__retry:focus-visible {
+  border-color: rgba(255, 118, 150, 0.62);
+  background: rgba(255, 118, 150, 0.1);
 }
 
-.task-details-dialog-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 60;
+.task-list__retry:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+}
+
+.task-detail-empty,
+.task-detail-content {
   display: grid;
-  place-items: center;
-  padding: 28px;
-  background: rgba(4, 6, 10, 0.72);
-  backdrop-filter: blur(18px);
+  align-content: start;
+  gap: 20px;
+  min-height: 100%;
+  padding: 30px 28px 24px 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
 }
 
-.task-details-dialog {
-  width: min(1080px, 100%);
-  max-height: min(88vh, 920px);
-  display: grid;
-  gap: 18px;
-  padding: 24px;
-  border-radius: 28px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.02)),
-    rgba(7, 10, 16, 0.96);
-  overflow: auto;
+.task-detail-empty {
+  place-content: center;
+  justify-items: center;
+  text-align: center;
 }
 
-.task-details-dialog__head {
+.task-detail-empty h3,
+.task-detail-empty p {
+  margin: 0;
+}
+
+.task-detail-empty h3 {
+  font-size: 1.4rem;
+}
+
+.task-detail-empty p {
+  max-width: 30rem;
+  color: var(--text-body);
+  line-height: 1.7;
+}
+
+.task-detail-header {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
 }
 
-.task-details-dialog__title-wrap {
-  display: grid;
-  gap: 8px;
-}
-
-.task-details-dialog__eyebrow {
+.tasks-eyebrow {
   margin: 0;
   color: var(--text-muted);
   font-size: 0.72rem;
@@ -1495,60 +1459,46 @@ onUnmounted(() => {
   text-transform: uppercase;
 }
 
-.task-details-dialog__head h2 {
+.task-detail-header h2 {
   margin: 0;
   font-size: clamp(1.25rem, 2vw, 1.7rem);
   font-weight: 700;
-  color: rgba(255, 255, 255, 0.96);
+  color: var(--text-strong);
 }
 
-.task-details-dialog__meta {
+.task-detail-header__meta {
   display: flex;
   flex-wrap: wrap;
+  margin-top: 10px;
   gap: 8px;
-}
-
-.task-details-dialog__close {
-  color: rgba(255, 255, 255, 0.54);
-  font-size: 1.5rem;
-  line-height: 1;
-  flex: 0 0 auto;
 }
 
 .task-details-panel__empty,
 .task-details-panel__error {
-  padding: 14px;
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.03);
+  padding: 14px 16px;
+  border-radius: 12px;
+  background: rgba(229, 72, 101, 0.07);
   color: var(--text-muted);
 }
 
 .task-details-panel__error {
-  color: #ffabc0;
+  color: var(--accent-danger);
 }
 
-.task-details-panel__title {
+.task-details-panel__error-block {
   display: grid;
-  gap: 8px;
+  gap: 6px;
+  border-left: 3px solid rgba(229, 72, 101, 0.62);
 }
 
-.task-details-panel__title p,
-.task-details-panel__title strong {
+.task-details-panel__error-block strong,
+.task-details-panel__error-block p {
   margin: 0;
-}
-
-.task-details-panel__title p {
-  font-size: 0.88rem;
-  color: rgba(255, 255, 255, 0.94);
-}
-
-.task-details-panel__title strong {
-  color: rgba(255, 255, 255, 0.86);
 }
 
 .detail-stage-line {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
   gap: 10px;
 }
 
@@ -1564,7 +1514,7 @@ onUnmounted(() => {
   height: 18px;
   border-radius: 999px;
   position: relative;
-  background: linear-gradient(90deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.04));
+  background: rgba(15, 20, 25, 0.08);
 }
 
 .detail-stage-line__bar::after {
@@ -1573,37 +1523,37 @@ onUnmounted(() => {
   inset: 3px auto 3px calc(50% - 6px);
   width: 12px;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.18);
+  background: rgba(15, 20, 25, 0.18);
 }
 
 .task-stage-row--done {
-  background: linear-gradient(90deg, rgba(176, 92, 255, 0.9), rgba(78, 219, 255, 0.82));
+  background: var(--bg-accent);
 }
 
 .task-stage-row--done::after,
 .task-stage-row--active::after {
-  background: rgba(255, 255, 255, 0.78);
+  background: #fff;
 }
 
 .task-stage-row--active {
-  background: linear-gradient(90deg, rgba(176, 92, 255, 0.92), rgba(78, 219, 255, 0.9));
+  background: var(--bg-accent);
 }
 
 .task-stage-row--paused {
-  background: linear-gradient(90deg, rgba(255, 190, 100, 0.6), rgba(255, 255, 255, 0.06));
+  background: linear-gradient(90deg, rgba(255, 190, 100, 0.6), rgba(15, 20, 25, 0.06));
 }
 
 .task-stage-row--failed {
-  background: linear-gradient(90deg, rgba(255, 118, 150, 0.68), rgba(255, 255, 255, 0.06));
+  background: linear-gradient(90deg, rgba(255, 118, 150, 0.68), rgba(15, 20, 25, 0.06));
 }
 
 .task-stage-row--pending {
-  background: linear-gradient(90deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.05));
+  background: rgba(15, 20, 25, 0.08);
 }
 
 .detail-stage-line__item p {
   margin: 0;
-  color: rgba(255, 255, 255, 0.76);
+  color: var(--text-body);
   font-size: 0.72rem;
   line-height: 1.35;
 }
@@ -1614,17 +1564,18 @@ onUnmounted(() => {
 }
 
 .detail-section-card {
-  padding: 16px;
-  border-radius: 18px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(255, 255, 255, 0.03);
+  padding: 20px 0;
+  border: 0;
+  border-radius: 0;
+  border-top: 1px solid rgba(15, 20, 25, 0.08);
+  background: transparent;
 }
 
 .detail-section h3 {
   margin: 0;
   font-size: 0.88rem;
   font-weight: 700;
-  color: rgba(255, 255, 255, 0.94);
+  color: var(--text-strong);
 }
 
 .detail-section__head {
@@ -1632,22 +1583,27 @@ onUnmounted(() => {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
+  min-height: 28px;
 }
 
 .detail-overview {
   display: grid;
-  gap: 10px;
+  gap: 0;
+  border-top: 1px solid rgba(15, 20, 25, 0.08);
 }
 
 .detail-overview__row {
   display: grid;
   grid-template-columns: 1fr auto;
   gap: 10px;
-  color: rgba(255, 255, 255, 0.64);
+  min-height: 40px;
+  align-items: center;
+  border-bottom: 1px solid rgba(15, 20, 25, 0.08);
+  color: var(--text-body);
 }
 
 .detail-overview__row strong {
-  color: rgba(255, 255, 255, 0.9);
+  color: var(--text-strong);
 }
 
 .detail-overview__row-progress {
@@ -1658,7 +1614,7 @@ onUnmounted(() => {
 .detail-overview__progress {
   height: 6px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.08);
+  background: rgba(15, 20, 25, 0.08);
   overflow: hidden;
 }
 
@@ -1670,15 +1626,15 @@ onUnmounted(() => {
 
 .detail-params {
   display: grid;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 14px;
+  border-top: 1px solid rgba(15, 20, 25, 0.08);
   overflow: hidden;
 }
 
 .detail-params__row {
   display: grid;
   grid-template-columns: minmax(90px, 0.8fr) minmax(0, 1fr);
-  min-height: 40px;
+  min-height: 42px;
+  border-bottom: 1px solid rgba(15, 20, 25, 0.08);
 }
 
 .detail-params__row span,
@@ -1690,32 +1646,81 @@ onUnmounted(() => {
 }
 
 .detail-params__row span {
-  background: rgba(255, 255, 255, 0.03);
-  color: rgba(255, 255, 255, 0.58);
+  color: var(--text-muted);
 }
 
 .detail-params__row strong {
-  background: rgba(0, 0, 0, 0.22);
-  color: rgba(255, 255, 255, 0.86);
+  color: var(--text-strong);
   font-weight: 500;
 }
 
-.task-details-dialog__grid {
+.task-detail-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 18px;
+  gap: 24px;
+}
+
+.task-detail-grid-primary {
+  align-items: start;
+}
+
+.task-detail-grid-primary > .detail-section-card,
+.task-detail-grid-secondary > .detail-section-card:first-child {
+  border-top: 0;
+}
+
+.task-result-preview {
+  display: grid;
+  place-items: center;
+  min-height: 260px;
+  overflow: hidden;
+  border-radius: 12px;
+  background: #eef2f4;
+  color: var(--text-muted);
+  font-weight: 760;
+}
+
+.task-result-preview img {
+  width: 100%;
+  height: 100%;
+  min-height: 260px;
+  object-fit: contain;
+}
+
+.detail-result-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.detail-result-list a,
+.detail-material-link {
+  text-decoration: none;
+}
+
+.detail-result-list a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 34px;
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--accent-cyan);
+  font-size: 0.82rem;
+  font-weight: 800;
+  border-bottom: 1px solid rgba(0, 161, 194, 0.28);
 }
 
 .detail-note-block {
   display: grid;
   gap: 8px;
-  padding: 14px;
-  border-radius: 14px;
-  background: rgba(0, 0, 0, 0.24);
+  padding: 12px 0 0;
+  border-top: 1px solid rgba(15, 20, 25, 0.08);
+  background: transparent;
 }
 
 .detail-note-block span {
-  color: rgba(255, 255, 255, 0.5);
+  color: var(--text-muted);
   font-size: 0.74rem;
   letter-spacing: 0.12em;
   text-transform: uppercase;
@@ -1723,24 +1728,25 @@ onUnmounted(() => {
 
 .detail-note-block p {
   margin: 0;
-  color: rgba(255, 255, 255, 0.82);
+  color: var(--text-body);
   line-height: 1.7;
   white-space: pre-wrap;
 }
 
 .detail-traces {
   display: grid;
-  gap: 8px;
+  gap: 0;
   max-height: 360px;
   overflow: auto;
+  border-top: 1px solid rgba(15, 20, 25, 0.08);
 }
 
 .detail-traces__item,
 .detail-traces__empty {
-  padding: 12px;
-  border-radius: 12px;
-  background: rgba(0, 0, 0, 0.42);
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  padding: 12px 0;
+  border-bottom: 1px solid rgba(15, 20, 25, 0.08);
+  border-radius: 0;
+  background: transparent;
 }
 
 .detail-traces__item p,
@@ -1750,7 +1756,7 @@ onUnmounted(() => {
 }
 
 .detail-traces__item p {
-  color: rgba(255, 255, 255, 0.82);
+  color: var(--text-strong);
   font-size: 0.76rem;
   line-height: 1.55;
 }
@@ -1758,7 +1764,7 @@ onUnmounted(() => {
 .detail-traces__item small {
   display: block;
   margin-top: 0.32rem;
-  color: rgba(255, 255, 255, 0.42);
+  color: var(--text-muted);
   font-size: 0.68rem;
 }
 
@@ -1773,61 +1779,52 @@ onUnmounted(() => {
   gap: 10px;
 }
 
-@media (max-width: 1200px) {
-  .board-columns {
-    grid-template-columns: 1fr;
-  }
-}
-
 @media (max-width: 900px) {
-  .tasks-toolbar {
+  .tasks-view {
     grid-template-columns: 1fr;
+    padding: 18px;
+    overflow: auto;
   }
 
-  .toolbar-actions {
-    justify-self: start;
+  .tasks-list-panel {
+    padding: 0 0 18px;
+    border-right: 0;
+    border-bottom: 1px solid rgba(15, 20, 25, 0.08);
+    background: transparent;
+  }
+
+  .task-detail-empty,
+  .task-detail-content {
+    padding: 0 0 18px;
   }
 
   .detail-stage-line {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .task-details-dialog-backdrop {
-    padding: 16px;
-  }
-
-  .task-details-dialog {
-    padding: 18px;
-  }
-
-  .task-details-dialog__grid {
+  .task-detail-grid {
     grid-template-columns: 1fr;
   }
 }
 
 @media (max-width: 640px) {
-  .tasks-board {
+  .tasks-view {
     padding: 14px;
   }
 
-  .board-task {
-    grid-template-columns: 60px minmax(0, 1fr);
+  .tasks-list-panel,
+  .task-detail-empty,
+  .task-detail-content {
+    padding: 0;
+    border-radius: 0;
   }
 
   .detail-overview__row-progress {
     grid-template-columns: 1fr;
   }
 
-  .task-details-dialog-backdrop {
-    padding: 0;
-  }
-
-  .task-details-dialog {
-    width: 100%;
-    height: 100%;
-    max-height: none;
-    border-radius: 0;
-    padding: 16px;
+  .task-detail-header {
+    display: grid;
   }
 }
 </style>

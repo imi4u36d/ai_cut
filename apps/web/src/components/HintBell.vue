@@ -48,12 +48,14 @@ const props = withDefaults(
     text?: string;
     items?: string[];
     align?: "left" | "right";
+    maxWidth?: number;
   }>(),
   {
     title: "",
     text: "",
     items: () => [],
-    align: "right"
+    align: "right",
+    maxWidth: 288
   }
 );
 
@@ -166,7 +168,8 @@ async function syncPopoverPosition() {
   }
   const rect = root.value.getBoundingClientRect();
   const viewportPadding = 12;
-  const maxWidth = Math.min(288, window.innerWidth - viewportPadding * 2);
+  const preferredWidth = Math.max(220, props.maxWidth);
+  const maxWidth = Math.min(preferredWidth, window.innerWidth - viewportPadding * 2);
   let left =
     props.align === "left"
       ? rect.left
@@ -177,6 +180,7 @@ async function syncPopoverPosition() {
   popoverStyle.value = {
     top: `${Math.round(top)}px`,
     left: `${Math.round(left)}px`,
+    width: `${Math.round(maxWidth)}px`,
     maxWidth: `${Math.round(maxWidth)}px`,
   };
 
@@ -190,6 +194,7 @@ async function syncPopoverPosition() {
     popoverStyle.value = {
       top: `${Math.round(top)}px`,
       left: `${Math.round(left)}px`,
+      width: `${Math.round(maxWidth)}px`,
       maxWidth: `${Math.round(maxWidth)}px`,
     };
   }
@@ -226,10 +231,10 @@ onBeforeUnmount(() => {
   align-items: center;
   justify-content: center;
   border-radius: 9999px;
-  background: rgba(255, 255, 255, 0.04);
-  color: rgba(255, 255, 255, 0.8);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  box-shadow: var(--shadow-soft);
+  background: #fff;
+  color: var(--text-body);
+  border: 1px solid rgba(15, 20, 25, 0.08);
+  box-shadow: none;
   transition:
     transform 180ms ease,
     box-shadow 180ms ease;
@@ -241,8 +246,9 @@ onBeforeUnmount(() => {
 }
 
 .hint-bell-active {
-  border-color: rgba(145, 180, 255, 0.32);
-  background: rgba(176, 92, 255, 0.12);
+  border-color: rgba(0, 161, 194, 0.24);
+  background: rgba(0, 161, 194, 0.08);
+  color: var(--accent-cyan);
 }
 
 .hint-bell svg {
@@ -257,8 +263,8 @@ onBeforeUnmount(() => {
   height: 0.32rem;
   width: 0.32rem;
   border-radius: 9999px;
-  background: #4edbff;
-  box-shadow: 0 0 0 2px rgba(11, 14, 20, 0.9);
+  background: var(--accent-cyan);
+  box-shadow: 0 0 0 2px #fff;
 }
 
 .hint-popover {
@@ -266,14 +272,12 @@ onBeforeUnmount(() => {
   z-index: 4200;
   width: min(18rem, calc(100vw - 1.5rem));
   border-radius: 1rem;
-  border: 1px solid rgba(145, 180, 255, 0.18);
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.02)),
-    rgba(10, 13, 20, 0.96);
+  border: 1px solid rgba(15, 20, 25, 0.08);
+  background: rgba(255, 255, 255, 0.98);
   padding: 0.95rem 1rem;
   color: var(--text-strong);
   box-shadow: var(--shadow-panel);
-  backdrop-filter: blur(18px);
+  backdrop-filter: blur(14px);
 }
 
 .hint-title {
@@ -287,9 +291,13 @@ onBeforeUnmount(() => {
 
 .hint-text {
   margin: 0.55rem 0 0;
+  max-height: min(58vh, 32rem);
+  overflow: auto;
   font-size: 0.9rem;
   line-height: 1.6;
   color: var(--text-body);
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
 }
 
 .hint-list {

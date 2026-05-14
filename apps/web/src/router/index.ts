@@ -11,14 +11,12 @@ import LoginView from "@/views/LoginView.vue";
 import MaterialLibraryView from "@/views/MaterialLibraryView.vue";
 import NewTaskView from "@/views/NewTaskView.vue";
 import OfficialDocsView from "@/views/OfficialDocsView.vue";
-import OfficialSiteView from "@/views/OfficialSiteView.vue";
-import SettingsView from "@/views/SettingsView.vue";
 import StageWorkflowView from "@/views/StageWorkflowView.vue";
 import TasksView from "@/views/TasksView.vue";
 
 function normalizeRedirectTarget(value: unknown) {
   if (typeof value !== "string" || !value.startsWith("/") || value.startsWith("//")) {
-    return "/tasks";
+    return "/workspace";
   }
   return value;
 }
@@ -55,12 +53,8 @@ const router = createRouter({
       }
     },
     {
-      path: "/",
-      name: "official-site",
-      component: OfficialSiteView,
-      meta: {
-        title: "官网"
-      }
+      path: "/official",
+      redirect: "/workspace"
     },
     {
       path: "/docs",
@@ -73,10 +67,11 @@ const router = createRouter({
     {
       path: "/",
       component: WorkspaceShell,
-      meta: {
-        requiresAuth: true
-      },
       children: [
+        {
+          path: "",
+          redirect: "/workspace"
+        },
         {
           path: "workspace",
           name: "workspace-home",
@@ -87,11 +82,7 @@ const router = createRouter({
         },
         {
           path: "generate",
-          name: "generate",
-          component: NewTaskView,
-          meta: {
-            title: "一键生成"
-          }
+          redirect: "/workspace"
         },
         {
           path: "tasks/new",
@@ -118,6 +109,10 @@ const router = createRouter({
           }
         },
         {
+          path: "material-center",
+          redirect: "/workspace"
+        },
+        {
           path: "materials",
           name: "materials",
           component: MaterialLibraryView,
@@ -131,14 +126,6 @@ const router = createRouter({
           component: TasksView,
           meta: {
             title: "任务管理"
-          }
-        },
-        {
-          path: "settings",
-          name: "settings",
-          component: SettingsView,
-          meta: {
-            title: "设置"
           }
         }
       ]
@@ -164,6 +151,14 @@ router.beforeEach(async (to) => {
     return normalizeRedirectTarget(to.query.redirect);
   }
   if (requiresAuth && !isAuthenticated) {
+    return {
+      path: "/login",
+      query: {
+        redirect: to.fullPath
+      }
+    };
+  }
+  if (requiresAdmin && !isAuthenticated) {
     return {
       path: "/login",
       query: {

@@ -31,10 +31,6 @@
           <strong>{{ retryCount }}</strong>
         </div>
         <div>
-          <p>评分</p>
-          <strong>{{ effectRatingLabel }}</strong>
-        </div>
-        <div>
           <p>种子</p>
           <strong>{{ seedLabel }}</strong>
         </div>
@@ -49,10 +45,6 @@
       <div class="neo-info-card">
         <p class="neo-info-label">状态说明</p>
         <p class="neo-info-value">{{ lifecycleLabel }}</p>
-      </div>
-      <div class="neo-info-card">
-        <p class="neo-info-label">效果评分</p>
-        <p class="neo-info-value">{{ effectRatingLabel }}</p>
       </div>
       <div class="neo-info-card">
         <p class="neo-info-label">任务种子</p>
@@ -139,10 +131,6 @@ const durationLabel = computed(() => {
   }
   return "待配置";
 });
-const effectRatingLabel = computed(() => {
-  const rating = props.task.effectRating;
-  return typeof rating === "number" && Number.isFinite(rating) && rating > 0 ? `${Math.trunc(rating)}/5` : "未评分";
-});
 const seedLabel = computed(() => {
   const seed = props.task.taskSeed;
   return typeof seed === "number" && Number.isFinite(seed) ? String(Math.trunc(seed)) : "未设置";
@@ -206,25 +194,22 @@ function handleSelect() {
 
 <style scoped>
 .neo-row {
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.02)),
-    rgba(14, 18, 26, 0.92);
+  border: 1px solid rgba(15, 20, 25, 0.06);
+  background: #fff;
   box-shadow: var(--shadow-panel);
   transition: box-shadow 0.2s ease, transform 0.2s ease, border-color 0.2s ease;
 }
 .neo-row:hover {
   transform: translateY(-2px);
-  border-color: rgba(145, 180, 255, 0.22);
-  box-shadow: var(--shadow-glow);
+  border-color: rgba(0, 161, 194, 0.2);
+  box-shadow: var(--shadow-soft);
 }
 .neo-row-selected {
-  border-color: rgba(145, 180, 255, 0.4);
+  border-color: rgba(0, 161, 194, 0.28);
   box-shadow: var(--shadow-glow);
 }
 .task-row__rail {
   opacity: 0.9;
-  box-shadow: 0 0 18px rgba(145, 180, 255, 0.24);
 }
 .task-row__rail--completed {
   background: #68e0b0;
@@ -239,7 +224,7 @@ function handleSelect() {
   background: #6ed5ff;
 }
 .task-row__rail--idle {
-  background: rgba(255, 255, 255, 0.42);
+  background: rgba(15, 20, 25, 0.12);
 }
 .neo-card-busy {
   opacity: 0.95;
@@ -250,76 +235,71 @@ function handleSelect() {
   gap: 0.5rem;
   padding: 0.75rem;
   border-radius: 20px;
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  background: rgba(255, 255, 255, 0.03);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(15, 20, 25, 0.06);
+  background: #f8fafb;
 }
 .neo-row-stats p {
   font-size: 0.7rem;
-  color: rgba(255, 255, 255, 0.48);
+  color: var(--text-muted);
   margin: 0;
   text-transform: uppercase;
   letter-spacing: 0.1em;
 }
 .neo-row-stats strong {
   font-size: 1rem;
-  color: rgba(255, 255, 255, 0.9);
+  color: var(--text-strong);
 }
 .neo-info-card {
   border-radius: 18px;
   padding: 0.9rem;
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  background: rgba(255, 255, 255, 0.03);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(15, 20, 25, 0.06);
+  background: #f8fafb;
 }
 .neo-info-label {
   font-size: 0.7rem;
   letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.48);
+  color: var(--text-muted);
   margin-bottom: 0.2rem;
 }
 .neo-info-value {
   font-size: 0.9rem;
-  color: rgba(255, 255, 255, 0.9);
+  color: var(--text-strong);
   margin: 0;
 }
 .neo-progress-track {
   height: 12px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.08);
+  background: rgba(15, 20, 25, 0.08);
 }
 .neo-progress-fill {
   height: 100%;
   border-radius: 999px;
-  background: linear-gradient(90deg, #b05cff 0%, #4edbff 100%);
-  box-shadow: 0 0 22px rgba(78, 219, 255, 0.24);
+  background: var(--bg-accent);
   transition: width 0.24s ease;
 }
 .neo-button {
   border-radius: 16px;
-  background: rgba(255, 255, 255, 0.04);
-  color: rgba(255, 255, 255, 0.86);
-  box-shadow: var(--shadow-soft);
+  background: #fff;
+  color: var(--text-strong);
+  box-shadow: none;
   transition: box-shadow 0.2s ease;
 }
 .neo-button:active {
   box-shadow: var(--shadow-glow);
 }
 .neo-button-accent {
-  background: linear-gradient(90deg, #b05cff 0%, #4edbff 100%);
-  color: #081018;
-  box-shadow:
-    0 14px 32px rgba(128, 99, 255, 0.28),
-    0 0 38px rgba(78, 219, 255, 0.14);
+  background: var(--bg-accent);
+  color: #fff;
+  box-shadow: 0 12px 28px rgba(0, 161, 194, 0.18);
 }
 .neo-button-accent:active {
   box-shadow: var(--shadow-glow);
 }
 :deep(.surface-chip) {
-  border: 1px solid rgba(145, 180, 255, 0.18);
-  background: rgba(255, 255, 255, 0.04);
-  color: rgba(255, 255, 255, 0.68);
+  border: 1px solid rgba(15, 20, 25, 0.06);
+  background: #f5f8fa;
+  color: var(--text-body);
   box-shadow: none;
   font-size: 0.65rem;
   letter-spacing: 0.1em;
@@ -327,11 +307,11 @@ function handleSelect() {
 }
 
 .neo-row :deep(.text-slate-900) {
-  color: rgba(255, 255, 255, 0.94) !important;
+  color: var(--text-strong) !important;
 }
 
 .neo-row :deep(.text-slate-600),
 .neo-row :deep(.text-slate-500) {
-  color: rgba(255, 255, 255, 0.52) !important;
+  color: var(--text-muted) !important;
 }
 </style>

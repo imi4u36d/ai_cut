@@ -9,8 +9,10 @@ apps/web/node_modules
 apps/web/dist
 apps/admin/node_modules
 apps/admin/dist
+apps/api-spring/target
 storage/mysql
 storage/mysql.bak_*
 storage/redis
+storage/uploads
 storage/temp
 storage/outputs

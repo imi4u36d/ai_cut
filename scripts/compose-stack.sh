@@ -82,17 +82,18 @@ case "$MODE" in
     COMPOSE_ARGS=(--env-file "$ROOT_DIR/.env.dev" -p "$COMPOSE_PROJECT_NAME" -f "$COMPOSE_FILE")
     PUBLIC_WEB_URL="http://127.0.0.1"
     PUBLIC_ADMIN_URL="http://127.0.0.1:5174"
-    PUBLIC_API_URL="http://127.0.0.1/api/v2"
+    PUBLIC_API_URL="http://127.0.0.1/api/v3"
     warn_missing_dev_config
     ;;
   prod)
     COMPOSE_FILE="$ROOT_DIR/docker-compose.prod.yml"
     COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-jiandou-prod}"
+    export COMPOSE_PARALLEL_LIMIT="${COMPOSE_PARALLEL_LIMIT:-1}"
     ensure_prod_env
     COMPOSE_ARGS=(--env-file "$ROOT_DIR/.env.prod" -p "$COMPOSE_PROJECT_NAME" -f "$COMPOSE_FILE")
     PUBLIC_WEB_URL="http://127.0.0.1"
     PUBLIC_ADMIN_URL="http://127.0.0.1:5174"
-    PUBLIC_API_URL="http://127.0.0.1/api/v2"
+    PUBLIC_API_URL="http://127.0.0.1/api/v3"
     ;;
   *)
     echo "不支持的模式: $MODE"
@@ -110,7 +111,7 @@ compose() {
 
 case "$ACTION" in
   up)
-    compose up -d --build "$@"
+    compose up -d --no-build "$@"
     echo "$MODE 容器已启动:"
     echo "  Web:   $PUBLIC_WEB_URL"
     echo "  Admin: $PUBLIC_ADMIN_URL"

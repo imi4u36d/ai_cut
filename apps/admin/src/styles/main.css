@@ -1,8 +1,15 @@
-@import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;700&display=swap");
-
 :root {
   color-scheme: light;
-  font-family: "IBM Plex Sans", sans-serif;
+  font-family:
+    -apple-system,
+    BlinkMacSystemFont,
+    "SF Pro Text",
+    "SF Pro Display",
+    "PingFang SC",
+    "Hiragino Sans GB",
+    "Noto Sans SC",
+    "Microsoft YaHei",
+    sans-serif;
   line-height: 1.5;
   font-weight: 400;
   color: #17202a;
@@ -29,6 +36,14 @@
 
 * {
   box-sizing: border-box;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+*::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
 }
 
 html,
@@ -38,9 +53,14 @@ body,
   margin: 0;
 }
 
+html {
+  font-size: 15px;
+}
+
 body {
   min-width: 320px;
   color: var(--jd-text);
+  font-weight: 400;
 }
 
 a {

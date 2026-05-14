@@ -85,7 +85,7 @@ const items = [
 
 .section-title {
   margin: 0.48rem 0 0;
-  font-family: "Inter", "PingFang SC", "Noto Sans SC", sans-serif;
+  font-family: inherit;
   font-size: clamp(1.2rem, 3vw, 1.7rem);
   color: var(--text-strong);
 }

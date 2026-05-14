@@ -1,23 +1,26 @@
 model:
   models:
-    "qwen3.6-plus":
-      provider: "qwen"
-      vendor: "aliyun"
+    "gpt-5.4":
+      provider: "deeps_api"
+      vendor: "deeps_api"
       kind: "text"
-      label: "qwen3.6-plus"
-      family: "qwen"
+      label: "GPT5.4"
+      provider_model: "gpt-5.4"
+      max_tokens: 8000
+      family: "gpt"
       capabilities:
         - "text_analysis"
         - "planner_fusion"
         - "creative_prompt"
         - "script_generation"
-      description: "阿里 Qwen 文本模型。"
+      description: "Deeps API GPT5.4 文本模型。"
     "qwen3.6-flash":
       provider: "qwen"
       vendor: "aliyun"
       kind: "text"
       label: "qwen3.6-flash"
       provider_model: "qwen3.6-flash-2026-04-16"
+      max_tokens: 8000
       family: "qwen"
       capabilities:
         - "text_analysis"
@@ -25,37 +28,30 @@ model:
         - "creative_prompt"
         - "script_generation"
       description: "Qwen 通用文本模型 qwen3.6-flash。"
-    "qwen3.5-flash":
-      provider: "qwen"
-      vendor: "aliyun"
-      kind: "text"
-      label: "qwen3.5-flash"
-      family: "qwen"
+    "gpt-image-2":
+      provider: "deeps_api"
+      vendor: "deeps_api"
+      kind: "image"
+      label: "gpt-image-2"
+      provider_model: "gpt-image-2"
+      timeout_seconds: 300
+      family: "gpt-image"
+      supports_image_data_uri_references: true
+      supported_sizes: "1024x1024,2048x2048,2880x2880,1536x1024,2048x1360,3520x2336,1\
+        024x1536,1360x2048,2336x3520,1824x1024,2048x1152,3840x2160,1024x1824,11\
+        52x2048,2160x3840"
       capabilities:
-        - "text_analysis"
-        - "planner_fusion"
-        - "creative_prompt"
-        - "script_generation"
-      description: "Qwen 通用文本模型 qwen3.5-flash。"
-    "qwen3-vl-flash":
-      provider: "qwen"
-      vendor: "aliyun"
-      kind: "vision"
-      label: "Qwen 3 VL Flash"
-      provider_model: "qwen3-vl-flash-2026-01-22"
-      family: "qwen-vl"
-      supports_seed: true
-      capabilities:
-        - "vision_analysis"
-        - "prompt_rewrite"
-      description: "Qwen 视觉理解快速模型。"
+        - "image_generation"
+      description: "Deeps API gpt-image-2 图片模型。"
     "Doubao-Seedream-4.5":
       provider: "seedream"
       vendor: "volcengine"
       kind: "image"
       label: "Doubao Seedream 4.5"
       provider_model: "doubao-seedream-4-5-251128"
+      timeout_seconds: 300
       family: "seedream"
+      supports_image_data_uri_references: true
       capabilities:
         - "image_generation"
       description: "Seedream 文生图模型。"

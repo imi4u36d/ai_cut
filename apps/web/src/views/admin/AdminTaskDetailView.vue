@@ -64,10 +64,6 @@
               <p class="text-xs uppercase tracking-wide text-slate-500">任务 Seed</p>
               <p class="mt-1 break-all text-sm font-medium text-slate-900">{{ taskSeedLabel }}</p>
             </article>
-            <article class="admin-panel-soft p-4">
-              <p class="text-xs uppercase tracking-wide text-slate-500">效果评分</p>
-              <p class="mt-1 break-all text-sm font-medium text-slate-900">{{ effectRatingLabel }}</p>
-            </article>
           </div>
 
           <div class="border-t border-slate-200/80 px-5 py-4">
@@ -154,42 +150,6 @@
 	              <p class="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-800">{{ requestTranscriptPreview }}</p>
 	            </article>
 	          </div>
-
-          <div class="border-t border-slate-200/80 px-5 py-4">
-            <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
-              <h4 class="text-sm font-semibold text-slate-900">效果评分</h4>
-              <span class="admin-chip">{{ effectRatingLabel }}</span>
-            </div>
-            <div class="flex flex-wrap gap-2">
-              <button
-                v-for="score in [5, 4, 3, 2, 1]"
-                :key="score"
-                class="admin-btn-secondary admin-btn-sm"
-                :class="ratingDraft === score ? 'ring-2 ring-slate-300' : ''"
-                type="button"
-                :disabled="actionLoading || ratingSaving"
-                @click="ratingDraft = score"
-              >
-                {{ score }}/5
-              </button>
-            </div>
-            <textarea
-              v-model="ratingNote"
-              class="admin-field mt-3 min-h-[96px]"
-              rows="4"
-              placeholder="评分备注"
-            ></textarea>
-            <div class="mt-3 flex flex-wrap items-center gap-2">
-              <button
-                :class="warningButtonClass"
-                type="button"
-                :disabled="actionLoading || ratingSaving || !ratingDraft"
-                @click="saveEffectRating"
-              >
-                {{ ratingSaving ? "保存中..." : "保存评分" }}
-              </button>
-            </div>
-          </div>
 
 	          <div v-if="task.errorMessage" class="border-t border-slate-200/80 px-5 py-4">
 	            <div class="admin-alert-error">
@@ -334,11 +294,10 @@
  */
 import { computed, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
-import { deleteAdminTask, fetchAdminTask, fetchAdminTaskDiagnosis, fetchAdminTaskTrace, rateAdminTaskEffect, retryAdminTask } from "@/api/admin";
+import { deleteAdminTask, fetchAdminTask, fetchAdminTaskDiagnosis, fetchAdminTaskTrace, retryAdminTask } from "@/features/admin";
 import type { AdminTaskDiagnosis, TaskDetail, TaskDurationDiagnosticClip, TaskTraceEvent } from "@/types";
 import {
   formatTaskDurationMode,
-  formatTaskEffectRating,
   formatTaskModelValue,
   formatTaskOutputCount,
   formatTaskRequestedDuration,
@@ -359,9 +318,6 @@ const loading = ref(true);
 const actionLoading = ref(false);
 const errorMessage = ref("");
 const traceExpanded = ref(false);
-const ratingDraft = ref<number | null>(null);
-const ratingNote = ref("");
-const ratingSaving = ref(false);
 
 const ghostButtonClass = "admin-btn-ghost";
 const secondaryButtonClass = "admin-btn-secondary";
@@ -405,7 +361,6 @@ const requestRows = computed(() => {
   }
   return [
     { label: "文本模型", value: formatTaskModelValue(requestSnapshot.value.textAnalysisModel) },
-    { label: "视觉模型", value: formatTaskModelValue(requestSnapshot.value.visionModel) },
     { label: "关键帧模型", value: formatTaskModelValue(requestSnapshot.value.imageModel) },
     { label: "视频模型", value: formatTaskModelValue(requestSnapshot.value.videoModel) },
     { label: "清晰度 / 画幅", value: formatTaskModelValue(requestSnapshot.value.videoSize) },
@@ -418,7 +373,6 @@ const requestRows = computed(() => {
   ];
 });
 
-const effectRatingLabel = computed(() => formatTaskEffectRating(task.value?.effectRating));
 const taskSeedLabel = computed(() => {
   const topLevelSeed = task.value?.taskSeed;
   if (typeof topLevelSeed === "number" && Number.isFinite(topLevelSeed)) {
@@ -659,25 +613,6 @@ async function refresh() {
   }
 }
 
-async function saveEffectRating() {
-  if (!taskId.value || !ratingDraft.value) {
-    return;
-  }
-  ratingSaving.value = true;
-  errorMessage.value = "";
-  try {
-    await rateAdminTaskEffect(taskId.value, {
-      effectRating: ratingDraft.value,
-      effectRatingNote: ratingNote.value.trim() || undefined,
-    });
-    await refresh();
-  } catch (error) {
-    errorMessage.value = error instanceof Error ? error.message : "保存评分失败";
-  } finally {
-    ratingSaving.value = false;
-  }
-}
-
 async function retryTaskAction() {
   actionLoading.value = true;
   try {
@@ -708,11 +643,6 @@ async function deleteTaskAction() {
 watch(taskId, () => {
   traceExpanded.value = false;
   void refresh();
-}, { immediate: true });
-
-watch(task, (value) => {
-  ratingDraft.value = typeof value?.effectRating === "number" && value.effectRating > 0 ? Math.trunc(value.effectRating) : null;
-  ratingNote.value = value?.effectRatingNote?.trim() || "";
 }, { immediate: true });
 
 </script>
