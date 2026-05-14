@@ -1,30 +1,63 @@
+# Dependencies
 node_modules/
+
+# Frontend build artifacts
 dist/
-storage/
-.claude
-.codex
-.DS_Store
-.idea
+coverage/
+.vite/
+*.tsbuildinfo
+
+# Java build artifacts
+target/
+*.class
+
+# Local runtime storage
+storage/*
+!storage/uploads/
+storage/uploads/*
+!storage/uploads/.gitkeep
+!storage/outputs/
+storage/outputs/*
+!storage/outputs/.gitkeep
+!storage/temp/
+storage/temp/*
+!storage/temp/.gitkeep
+!storage/mysql/
+storage/mysql/*
+!storage/mysql/.gitkeep
+storage/mysql.bak_*/
+!storage/redis/
+storage/redis/*
+!storage/redis/.gitkeep
+
+# Local environment
 .env
-.env.dev
-.env.prod
+.env.*
+!.env.*.example
+
+# Logs and process files
+*.log
+*.pid
+*.seed
+*.pid.lock
+logs/
+
+# Python caches and virtualenvs
 .venv/
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
-*.class
 .pytest_cache/
 .mypy_cache/
-storage/uploads/*
-storage/outputs/*
-storage/temp/*
-storage/mysql/*
-storage/mysql.bak_*/
-storage/redis/*
-apps/api-spring/target
-!storage/uploads/.gitkeep
-!storage/outputs/.gitkeep
-!storage/temp/.gitkeep
-!storage/mysql/.gitkeep
-!storage/redis/.gitkeep
+
+# IDE and OS files
+.DS_Store
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+
+# Local AI/tooling state
+.claude/
+.codex/

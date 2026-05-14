@@ -120,7 +120,7 @@
  * 管理端用户管理页。
  */
 import { computed, onMounted, ref } from "vue";
-import { disableAdminUser, enableAdminUser, fetchAdminUsers } from "@/api/admin";
+import { disableAdminUser, enableAdminUser, fetchAdminUsers } from "@/features/admin";
 import type { AdminUser } from "@/types";
 
 const users = ref<AdminUser[]>([]);

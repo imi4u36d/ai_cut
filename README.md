@@ -57,8 +57,11 @@ cp .env.prod.example .env.prod
 常用部署命令如下：
 
 ```bash
-# 启动开发环境
+# 启动开发环境（会按需构建镜像）
 npm run compose:dev
+
+# 构建开发环境镜像
+npm run compose:dev:build
 
 # 停止开发环境
 npm run compose:dev:down
@@ -66,8 +69,11 @@ npm run compose:dev:down
 # 查看开发环境日志
 npm run compose:dev:logs
 
-# 启动生产环境
+# 启动生产环境（会按需构建镜像）
 npm run compose:prod
+
+# 构建生产环境镜像
+npm run compose:prod:build
 
 # 停止生产环境
 npm run compose:prod:down
@@ -75,6 +81,8 @@ npm run compose:prod:down
 # 查看生产环境日志
 npm run compose:prod:logs
 ```
+
+生产环境默认以 Java 21 Jar 运行，面向 2C8G 应用服务器和 1C1G RDS 的默认参数在 `.env.prod.example` 中。API 镜像固定构建 `jvm-runtime` 阶段。
 
 如果只需要本地分别启动前端、后台或 Spring Boot 服务，也可以使用：
 

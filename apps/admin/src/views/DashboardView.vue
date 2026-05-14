@@ -91,6 +91,39 @@
       <template #header>
         <div class="dashboard-page__panel-header">
           <div>
+            <p class="dashboard-page__eyebrow">User Queues</p>
+            <h4>用户队列与额度</h4>
+          </div>
+        </div>
+      </template>
+
+      <el-table :data="userQueues" class="dashboard-page__table">
+        <el-table-column label="队列" min-width="180">
+          <template #default="{ row }">
+            <div class="dashboard-page__task-cell">
+              <strong>{{ row.ownerDisplayName || row.ownerUsername || "系统任务" }}</strong>
+              <span>{{ row.ownerUsername || "system" }}</span>
+            </div>
+          </template>
+        </el-table-column>
+        <el-table-column label="额度" min-width="90" prop="taskConcurrencyLimit" />
+        <el-table-column label="运行中" min-width="90" prop="runningTaskCount" />
+        <el-table-column label="排队中" min-width="90" prop="queuedTaskCount" />
+        <el-table-column label="最早排队任务" min-width="240">
+          <template #default="{ row }">
+            <div class="dashboard-page__task-cell">
+              <strong>{{ row.oldestQueuedTaskTitle || row.oldestQueuedTaskId || "无排队任务" }}</strong>
+              <span>{{ row.oldestQueuedTaskId || "" }}</span>
+            </div>
+          </template>
+        </el-table-column>
+      </el-table>
+    </el-card>
+
+    <el-card class="surface-card dashboard-page__panel" shadow="never">
+      <template #header>
+        <div class="dashboard-page__panel-header">
+          <div>
             <p class="dashboard-page__eyebrow">Recent Tasks</p>
             <h4>最新任务</h4>
           </div>
@@ -146,8 +179,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
 import { Refresh } from "@element-plus/icons-vue";
-import { fetchAdminOverview } from "@/api/dashboard";
-import { fetchAdminUsers } from "@/api/users";
+import { fetchAdminOverview, fetchAdminUsers } from "@/features/dashboard/services/dashboardService";
 import type { AdminOverviewResponse, AdminTaskListItem, AdminUser, TaskStatus } from "@/types";
 
 const loading = ref(false);
@@ -186,6 +218,7 @@ const pulseItems = computed(() => {
 
 const recentTasks = computed<AdminTaskListItem[]>(() => overview.value?.recentTasks ?? []);
 const recentFailures = computed<AdminTaskListItem[]>(() => overview.value?.recentFailures ?? []);
+const userQueues = computed(() => overview.value?.queue.userQueues ?? []);
 const lastUpdatedLabel = computed(() => formatDateTime(overview.value?.generatedAt));
 
 function formatDateTime(value?: string | null) {
@@ -327,7 +360,7 @@ onMounted(async () => {
 .dashboard-page__hero h3,
 .dashboard-page__panel-header h4 {
   margin: 0;
-  font-family: "Space Grotesk", sans-serif;
+  font-family: inherit;
 }
 
 .dashboard-page__hero-copy {
@@ -375,7 +408,7 @@ onMounted(async () => {
 }
 
 .dashboard-page__stat-card strong {
-  font-family: "Space Grotesk", sans-serif;
+  font-family: inherit;
   font-size: 2rem;
 }
 
@@ -441,7 +474,7 @@ onMounted(async () => {
 
 .dashboard-page__pulse-item strong {
   font-size: 1.3rem;
-  font-family: "Space Grotesk", sans-serif;
+  font-family: inherit;
 }
 
 .dashboard-page__failure-list {

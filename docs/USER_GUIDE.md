@@ -12,7 +12,7 @@
 - Docker 与 Docker Compose Plugin
 - Node.js 20+
 - npm
-- Java 17
+- Java 21
 - Maven 3.9+
 
 如果你只是想最快跑起来，优先使用 Docker Compose 方式。
@@ -104,9 +104,16 @@ cp .env.prod.example .env.prod
 npm run compose:dev
 ```
 
+如果只需要预先构建镜像，可执行：
+
+```bash
+npm run compose:dev:build
+```
+
 常用配套命令：
 
 ```bash
+npm run compose:dev:build
 npm run compose:dev:logs
 npm run compose:dev:ps
 npm run compose:dev:down
@@ -117,7 +124,7 @@ npm run compose:dev:down:volumes
 
 - 用户前台：`http://127.0.0.1`
 - 管理后台：`http://127.0.0.1:5174`
-- API 健康检查：`http://127.0.0.1/api/v2/health`
+- API 健康检查：`http://127.0.0.1/api/v3/health`
 
 ### 4.3 启动生产编排
 
@@ -125,9 +132,18 @@ npm run compose:dev:down:volumes
 npm run compose:prod
 ```
 
+如果只需要预先构建生产镜像，可执行：
+
+```bash
+npm run compose:prod:build
+```
+
+生产编排默认以 Java 21 Jar 运行 API 容器。该模式适合 2C8G 应用服务器：默认启用 Java 21 Virtual Threads，API 常驻内存限制为 1536m，RDS 连接池最大 3，后台生成线程和任务 worker 并发都为 1。API 镜像固定构建 `jvm-runtime` 阶段。
+
 常用配套命令：
 
 ```bash
+npm run compose:prod:build
 npm run compose:prod:logs
 npm run compose:prod:ps
 npm run compose:prod:down
@@ -141,9 +157,10 @@ npm run compose:prod:down:volumes
 ### 5.1 安装前端依赖
 
 ```bash
-npm --prefix apps/web install
-npm --prefix apps/admin install
+npm install
 ```
+
+根目录已启用 npm workspaces，`npm install` 会安装 `apps/web` 和 `apps/admin` 两个前端工作区依赖。
 
 ### 5.2 启动前台 + Spring Boot API
 
@@ -175,7 +192,7 @@ npm run api:dev
 注意：
 
 - 本地开发模式下，数据库等基础设施需要你自行准备
-- 默认开发代理会把 `/api/v2` 和 `/storage` 转发到 `http://127.0.0.1:8000`
+- 默认开发代理会把 `/api/v3` 和 `/storage` 转发到 `http://127.0.0.1:8000`
 
 ## 6. 数据库变更与重建
 
@@ -211,12 +228,35 @@ npm run compose:prod
 
 1. 打开用户前台，确认页面能正常加载
 2. 打开后台管理端，确认登录页或首页可访问
-3. 访问 `http://127.0.0.1/api/v2/health`，确认 API 健康检查返回正常
-4. 在创建任务前，确认对应模型 provider 已配置真实 `api_key`
+3. 访问 `http://127.0.0.1/api/v3/health`，确认 API 健康检查返回正常
+4. 访问 `http://127.0.0.1/v3/api-docs`，确认 OpenAPI 文档可访问
+5. 在创建任务前，确认对应模型 provider 已配置真实 `api_key`
 
 如果模型密钥未配置，任务创建或模型调用会失败。
 
-## 8. 常见文件位置
+## 8. 本地验证与 OpenAPI
+
+常用验证命令：
+
+```bash
+npm run verify:architecture
+npm run api:test
+npm run web:typecheck
+npm run admin:typecheck
+npm run verify
+```
+
+其中 `verify:architecture` 是迁移守卫，会检查后端生产代码中的 `Map<String, Object>`、前端业务代码中的宽类型，以及仓库内旧版 API 路径残留。当前 `api-boot` 中的 `Map<String, Object>` 作为历史白名单展示，不作为阻断项。
+
+后端启动后可生成 OpenAPI 文件：
+
+```bash
+npm run generate:api
+```
+
+默认读取 `http://127.0.0.1:8000/v3/api-docs` 并写入 `docs/openapi.json`。如需改地址或输出路径，可设置 `API_DOCS_URL` 或 `OPENAPI_OUTPUT`。
+
+## 9. 常见文件位置
 
 - 环境变量示例：`.env.dev.example`、`.env.prod.example`
 - 当前环境变量：`.env.dev`、`.env.prod`

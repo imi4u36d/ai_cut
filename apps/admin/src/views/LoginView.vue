@@ -110,7 +110,7 @@ async function handleSubmit() {
 .login-view__intro h1,
 .login-view__card-header h2 {
   margin: 0;
-  font-family: "Space Grotesk", sans-serif;
+  font-family: inherit;
 }
 
 .login-view__intro h1 {

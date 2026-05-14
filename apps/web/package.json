@@ -10,6 +10,9 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@jiandou/api-client": "file:../../packages/api-client",
+    "@jiandou/frontend-domain": "file:../../packages/frontend-domain",
+    "@jiandou/frontend-ui": "file:../../packages/frontend-ui",
     "vue": "^3.4.38",
     "vue-router": "^4.4.3"
   },

@@ -1,15 +1,17 @@
 import { createRouter, createWebHistory } from "vue-router";
 import { ensureAuthSession, useAuthSessionState } from "@/auth/session";
 import AdminLayout from "@/layouts/AdminLayout.vue";
+import CreditManagementView from "@/views/CreditManagementView.vue";
 import DashboardView from "@/views/DashboardView.vue";
 import ForbiddenView from "@/views/ForbiddenView.vue";
+import InviteManagementView from "@/views/InviteManagementView.vue";
 import LoginView from "@/views/LoginView.vue";
 import TaskManagementView from "@/views/TaskManagementView.vue";
 import UserManagementView from "@/views/UserManagementView.vue";
 
 function normalizeRedirectTarget(value: unknown) {
   if (typeof value !== "string" || !value.startsWith("/") || value.startsWith("//")) {
-    return "/dashboard";
+    return "/";
   }
   return value;
 }
@@ -45,10 +47,6 @@ const router = createRouter({
       children: [
         {
           path: "",
-          redirect: "/dashboard"
-        },
-        {
-          path: "dashboard",
           name: "dashboard",
           component: DashboardView,
           meta: {
@@ -64,6 +62,22 @@ const router = createRouter({
           }
         },
         {
+          path: "invites",
+          name: "invites",
+          component: InviteManagementView,
+          meta: {
+            title: "邀请码管理"
+          }
+        },
+        {
+          path: "credits",
+          name: "credits",
+          component: CreditManagementView,
+          meta: {
+            title: "积分管理"
+          }
+        },
+        {
           path: "tasks",
           name: "tasks",
           component: TaskManagementView,
@@ -75,7 +89,7 @@ const router = createRouter({
     },
     {
       path: "/:pathMatch(.*)*",
-      redirect: "/dashboard"
+      redirect: "/"
     }
   ]
 });

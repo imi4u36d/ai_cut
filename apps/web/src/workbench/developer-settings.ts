@@ -5,7 +5,6 @@
  * developer设置工作台辅助方法。
  */
 export interface DeveloperSettings {
-  enabled: boolean;
   stopBeforeVideoGeneration: boolean;
 }
 
@@ -13,7 +12,6 @@ const STORAGE_KEY = "jiandou-developer-settings-v1";
 const UPDATE_EVENT = "jiandou:developer-settings-updated";
 
 const DEFAULT_SETTINGS: DeveloperSettings = {
-  enabled: false,
   stopBeforeVideoGeneration: false,
 };
 
@@ -28,7 +26,6 @@ function normalizeSettings(value: unknown): DeveloperSettings {
   }
   const record = value as Record<string, unknown>;
   return {
-    enabled: Boolean(record.enabled),
     stopBeforeVideoGeneration: Boolean(record.stopBeforeVideoGeneration),
   };
 }
@@ -93,6 +90,6 @@ export function subscribeDeveloperSettings(listener: (settings: DeveloperSetting
  * @return 是否满足条件
  */
 export function shouldStopBeforeVideoGeneration(settings?: DeveloperSettings | null): boolean {
-  const resolved = settings ? normalizeSettings(settings) : loadDeveloperSettings();
-  return resolved.enabled && resolved.stopBeforeVideoGeneration;
+  const resolved = settings ? normalizeSettings(settings) : DEFAULT_SETTINGS;
+  return resolved.stopBeforeVideoGeneration;
 }

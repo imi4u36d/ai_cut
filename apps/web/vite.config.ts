@@ -11,7 +11,11 @@ export default defineConfig({
   resolve: {
     alias: {
       // 使用 @/ 作为 src 目录的统一别名。
-      "@": fileURLToPath(new URL("./src", import.meta.url))
+      "@": fileURLToPath(new URL("./src", import.meta.url)),
+      "@jiandou/api-client": fileURLToPath(new URL("../../packages/api-client/src/index.ts", import.meta.url)),
+      "@jiandou/api-client/generated": fileURLToPath(new URL("../../packages/api-client/src/generated/index.ts", import.meta.url)),
+      "@jiandou/frontend-domain": fileURLToPath(new URL("../../packages/frontend-domain/src/index.ts", import.meta.url)),
+      "@jiandou/frontend-ui": fileURLToPath(new URL("../../packages/frontend-ui/src/index.ts", import.meta.url))
     }
   },
   server: {
@@ -20,7 +24,7 @@ export default defineConfig({
     port: 5173,
     proxy: {
       // 开发期将 API 请求代理到后端服务（统一 v2）。
-      "/api/v2": {
+      "/api/v3": {
         target: apiProxyTarget,
         changeOrigin: true
       },

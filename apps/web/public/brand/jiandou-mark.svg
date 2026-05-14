@@ -1,21 +1,21 @@
-<svg width="128" height="128" viewBox="0 0 128 128" fill="none" xmlns="http://www.w3.org/2000/svg">
+<svg width="128" height="128" viewBox="0 0 128 128" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="JianDou logo">
   <defs>
-    <linearGradient id="jiandouGradient" x1="24" y1="24" x2="104" y2="104" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#A855F7"/>
-      <stop offset="0.52" stop-color="#7B7DFF"/>
-      <stop offset="1" stop-color="#38DDF8"/>
+    <linearGradient id="brand" x1="31" y1="29" x2="97" y2="99" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#F2D66D"/>
+      <stop offset="0.45" stop-color="#43C6A7"/>
+      <stop offset="1" stop-color="#2F8EAD"/>
     </linearGradient>
-    <linearGradient id="jiandouAccent" x1="88" y1="24" x2="100" y2="40" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#FFD36B"/>
-      <stop offset="1" stop-color="#FF8A4C"/>
+    <linearGradient id="gloss" x1="30" y1="32" x2="106" y2="65" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFF7C7"/>
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0.36"/>
     </linearGradient>
-    <mask id="jiandouPlayCutout">
-      <rect width="128" height="128" fill="white"/>
-      <path d="M74 47.5L87.5 56.2C92 59.1 92 65.7 87.5 68.6L74 77.3C69 80.5 62.5 76.9 62.5 71V53.8C62.5 47.9 69 44.3 74 47.5Z" fill="black"/>
-    </mask>
   </defs>
-  <path d="M67.7 11.5C48.6 10.6 30.5 20.7 20.9 37.2C10.4 55.2 13.3 79.2 28.2 95.4C43.1 111.4 67.5 116.6 86.6 107.2C104.6 98.3 115.1 78.1 112.6 58.2C109.8 36.4 90.1 12.5 67.7 11.5Z" fill="url(#jiandouGradient)" fill-opacity="0.18" mask="url(#jiandouPlayCutout)"/>
-  <path d="M69.2 18.5C53.3 18 38.4 26.3 30.4 39.9C21.6 54.8 23.8 74.7 36.2 88.1C48.6 101.3 68.7 105.6 84.5 97.9C99.3 90.7 108 74 105.9 57.8C103.5 39.8 87.8 19 69.2 18.5Z" stroke="url(#jiandouGradient)" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
-  <path d="M52.2 25.5C44.3 35 42.2 48.1 46 59.7C48.8 68.3 54.4 74.3 59.2 81.1C64.2 88.2 67.4 96.9 64.8 106" stroke="url(#jiandouGradient)" stroke-width="7" stroke-linecap="round"/>
-  <circle cx="93.5" cy="31" r="5.5" fill="url(#jiandouAccent)"/>
+  <path d="M27 39C32.7 34 43.2 33.5 49.5 38.8" stroke="#0A171C" stroke-opacity="0.14" stroke-width="18" stroke-linecap="round"/>
+  <path d="M44 37C45.2 51.2 44.7 64.5 41.5 75C37.4 88.6 27.9 95.3 18.5 90.5" stroke="#0A171C" stroke-opacity="0.14" stroke-width="18" stroke-linecap="round"/>
+  <path d="M27 39C32.7 34 43.2 33.5 49.5 38.8" stroke="url(#brand)" stroke-width="14" stroke-linecap="round"/>
+  <path d="M44 37C45.2 51.2 44.7 64.5 41.5 75C37.4 88.6 27.9 95.3 18.5 90.5" stroke="url(#brand)" stroke-width="14" stroke-linecap="round"/>
+  <path fill-rule="evenodd" clip-rule="evenodd" d="M77 32H87C105.7 32 116 44.5 116 64C116 83.5 105.7 96 87 96H77C70.9 96 67 92.1 67 86V42C67 35.9 70.9 32 77 32ZM84 48V80H87C96.4 80 101.4 74.1 101.4 64C101.4 53.9 96.4 48 87 48H84Z" fill="#0A171C" fill-opacity="0.14"/>
+  <path fill-rule="evenodd" clip-rule="evenodd" d="M77 30H87C105.7 30 116 42.5 116 62C116 81.5 105.7 94 87 94H77C70.9 94 67 90.1 67 84V40C67 33.9 70.9 30 77 30ZM84 46V78H87C96.4 78 101.4 72.1 101.4 62C101.4 51.9 96.4 46 87 46H84Z" fill="url(#brand)"/>
+  <path d="M31 38.5C35.1 36.7 42 36.8 46.4 39" stroke="url(#gloss)" stroke-width="4.5" stroke-linecap="round"/>
+  <path d="M77 40C79.4 36.7 84.2 35.2 89.2 35.5" stroke="url(#gloss)" stroke-width="4.5" stroke-linecap="round"/>
 </svg>

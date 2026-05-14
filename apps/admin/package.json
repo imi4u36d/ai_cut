@@ -11,6 +11,9 @@
   },
   "dependencies": {
     "@element-plus/icons-vue": "^2.3.1",
+    "@jiandou/api-client": "file:../../packages/api-client",
+    "@jiandou/frontend-domain": "file:../../packages/frontend-domain",
+    "@jiandou/frontend-ui": "file:../../packages/frontend-ui",
     "element-plus": "^2.9.8",
     "vue": "^3.4.38",
     "vue-router": "^4.4.3"

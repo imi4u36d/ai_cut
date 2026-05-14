@@ -42,7 +42,7 @@ const statusClass = computed(() => {
 
 <style scoped>
 .status-badge {
-  --badge-color: rgba(255, 255, 255, 0.56);
+  --badge-color: var(--text-muted);
   display: inline-flex;
   align-items: center;
   gap: 0.4rem;
@@ -51,13 +51,11 @@ const statusClass = computed(() => {
   font-size: 0.72rem;
   font-weight: 700;
   letter-spacing: 0.15em;
-  background: rgba(9, 12, 18, 0.84);
+  background: #f5f8fa;
   color: var(--badge-color);
   text-transform: uppercase;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.05),
-    0 10px 20px rgba(0, 0, 0, 0.22);
+  border: 1px solid rgba(15, 20, 25, 0.06);
+  box-shadow: none;
 }
 
 .status-dot {
@@ -65,26 +63,25 @@ const statusClass = computed(() => {
   height: 0.55rem;
   border-radius: 50%;
   background: var(--badge-color);
-  box-shadow: 0 0 14px rgba(255, 255, 255, 0.16);
 }
 
 .status-completed {
-  --badge-color: #68e0b0;
+  --badge-color: #1b9f63;
 }
 
 .status-failed {
-  --badge-color: #ff8fa9;
+  --badge-color: #d73555;
 }
 
 .status-running {
-  --badge-color: #6ed5ff;
+  --badge-color: var(--accent-cyan);
 }
 
 .status-paused {
-  --badge-color: #ffce72;
+  --badge-color: #b7791f;
 }
 
 .status-idle {
-  --badge-color: rgba(255, 255, 255, 0.56);
+  --badge-color: var(--text-muted);
 }
 </style>

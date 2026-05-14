@@ -4,6 +4,7 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 WEB_DIR="$ROOT_DIR/apps/web"
+ENV_FILE="$ROOT_DIR/.env.dev"
 API_HOST="${API_HOST:-127.0.0.1}"
 API_PORT="${API_PORT:-8000}"
 WEB_HOST="${WEB_HOST:-127.0.0.1}"
@@ -170,6 +171,21 @@ stop_service_if_running() {
 
 require_command npm
 require_command mvn
+if ! java -version 2>&1 | grep -Eq 'version "21|version "2[2-9]|version "[3-9][0-9]'; then
+  echo "Spring 后端需要 Java 21+，请先切换 JAVA_HOME 后重试。"
+  exit 1
+fi
+
+if [[ -f "$ENV_FILE" ]]; then
+  set -a
+  # shellcheck disable=SC1090
+  source "$ENV_FILE"
+  set +a
+fi
+
+export JIANDOU_DATABASE_URL="${JIANDOU_DATABASE_URL:-jdbc:mysql://127.0.0.1:3306/${MYSQL_DATABASE:-jiandou}?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai}"
+export JIANDOU_DATABASE_USER="${JIANDOU_DATABASE_USER:-${MYSQL_USER:-jiandou}}"
+export JIANDOU_DATABASE_PASSWORD="${JIANDOU_DATABASE_PASSWORD:-${MYSQL_PASSWORD:-}}"
 
 if [[ ! -d "$WEB_DIR/node_modules" ]]; then
   echo "未找到前端依赖，请先执行: npm --prefix apps/web install"
@@ -184,7 +200,7 @@ trap cleanup EXIT INT TERM
 echo "启动 Spring Boot 后端: http://$(display_host "$API_HOST"):${API_PORT}"
 (
   cd "$ROOT_DIR/apps/api-spring"
-  exec env SERVER_ADDRESS="$API_HOST" SERVER_PORT="$API_PORT" mvn spring-boot:run
+  exec env SERVER_ADDRESS="$API_HOST" SERVER_PORT="$API_PORT" mvn -pl api-boot spring-boot:run
 ) &
 API_PID=$!
 

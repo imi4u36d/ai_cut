@@ -1,5 +1,5 @@
 {
-  "apiBaseUrl": "/api/v2",
+  "apiBaseUrl": "/api/v3",
   "storageBaseUrl": "/storage",
   "adminBaseUrl": ""
 }

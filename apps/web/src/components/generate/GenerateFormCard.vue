@@ -172,7 +172,7 @@ defineExpose({
 
 .form-head h2 {
   margin: 0;
-  font-family: "Sora", "PingFang SC", sans-serif;
+  font-family: inherit;
   font-size: 1.28rem;
   font-weight: 750;
   letter-spacing: -0.04em;

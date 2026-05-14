@@ -8,7 +8,11 @@ export default defineConfig({
   plugins: [vue()],
   resolve: {
     alias: {
-      "@": fileURLToPath(new URL("./src", import.meta.url))
+      "@": fileURLToPath(new URL("./src", import.meta.url)),
+      "@jiandou/api-client": fileURLToPath(new URL("../../packages/api-client/src/index.ts", import.meta.url)),
+      "@jiandou/api-client/generated": fileURLToPath(new URL("../../packages/api-client/src/generated/index.ts", import.meta.url)),
+      "@jiandou/frontend-domain": fileURLToPath(new URL("../../packages/frontend-domain/src/index.ts", import.meta.url)),
+      "@jiandou/frontend-ui": fileURLToPath(new URL("../../packages/frontend-ui/src/index.ts", import.meta.url))
     }
   },
   build: {
@@ -25,7 +29,7 @@ export default defineConfig({
     host: "0.0.0.0",
     port: 5174,
     proxy: {
-      "/api/v2": {
+      "/api/v3": {
         target: apiProxyTarget,
         changeOrigin: true
       },

@@ -3,7 +3,7 @@ export interface RuntimeConfig {
 }
 
 const defaultRuntimeConfig: RuntimeConfig = {
-  apiBaseUrl: "/api/v2"
+  apiBaseUrl: "/api/v3"
 };
 
 let runtimeConfig: RuntimeConfig = { ...defaultRuntimeConfig };

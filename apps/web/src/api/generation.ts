@@ -14,14 +14,14 @@ import type {
 
 type UnknownRecord = Record<string, unknown>;
 
-const CATALOG_ENDPOINT = "/api/v2/generation/catalog";
-const RUNS_ENDPOINT = "/api/v2/generation/runs";
+const CATALOG_ENDPOINT = "/api/v3/generation/catalog";
+const RUNS_ENDPOINT = "/api/v3/generation/runs";
 /**
  * 处理RUNDETAILSENDPOINT。
  * @param runId 运行标识值
  */
-const RUN_DETAILS_ENDPOINT = (runId: string) => `/api/v2/generation/runs/${encodeURIComponent(runId)}`;
-const USAGE_ENDPOINT = "/api/v2/generation/usage";
+const RUN_DETAILS_ENDPOINT = (runId: string) => `/api/v3/generation/runs/${encodeURIComponent(runId)}`;
+const USAGE_ENDPOINT = "/api/v3/generation/usage";
 const RUN_POLL_INTERVAL_MS = 1200;
 const RUN_POLL_TIMEOUT_MS = 120000;
 
@@ -133,13 +133,9 @@ function normalizeOptions(raw: unknown): GenerationOptionsResponse {
       ? (record.textAnalysisModels as GenerationOptionsResponse["textAnalysisModels"])
       : [],
     defaultTextAnalysisModel: asString(record.defaultTextAnalysisModel) || null,
-    visionModels: Array.isArray(record.visionModels)
-      ? (record.visionModels as GenerationOptionsResponse["visionModels"])
-      : [],
     imageModels: Array.isArray(record.imageModels)
       ? (record.imageModels as GenerationOptionsResponse["imageModels"])
       : [],
-    defaultVisionModel: asString(record.defaultVisionModel) || null,
     videoModels: Array.isArray(record.videoModels) ? (record.videoModels as GenerationOptionsResponse["videoModels"]) : [],
     defaultVideoModel: asString(record.defaultVideoModel) || null,
     videoSizes: Array.isArray(record.videoSizes) ? (record.videoSizes as GenerationOptionsResponse["videoSizes"]) : [],
@@ -271,6 +267,22 @@ function runStatus(rawRun: unknown): string {
   return asString(run.status).toLowerCase();
 }
 
+function runErrorMessage(rawRun: unknown): string {
+  const run = asRecord(rawRun) ?? {};
+  const resultRecord =
+    asRecord(run.result) ??
+    asRecord(run.resultImage) ??
+    asRecord(run.resultVideo) ??
+    {};
+  const metadata = asRecord(resultRecord.metadata) ?? {};
+  return (
+    asString(resultRecord.error) ||
+    asString(metadata.taskMessage) ||
+    asString(metadata.error) ||
+    "生成任务失败"
+  );
+}
+
 async function delay(ms: number) {
   await new Promise((resolve) => {
     setTimeout(resolve, ms);
@@ -287,7 +299,7 @@ async function waitForRunResult(runId: string, initialRun?: unknown) {
     if (latestRun) {
       const status = runStatus(latestRun);
       if (status === "failed" || status === "cancelled" || status === "canceled") {
-        return latestRun;
+        throw new Error(runErrorMessage(latestRun));
       }
     }
     await delay(RUN_POLL_INTERVAL_MS);
