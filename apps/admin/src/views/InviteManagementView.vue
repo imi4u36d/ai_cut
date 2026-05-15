@@ -22,15 +22,6 @@
         </div>
       </template>
 
-      <el-alert
-        v-if="errorMessage"
-        :closable="false"
-        class="invite-page__alert"
-        show-icon
-        type="error"
-        :title="errorMessage"
-      />
-
       <el-table v-loading="loading" :data="invites" class="invite-page__table">
         <el-table-column label="邀请码" min-width="180">
           <template #default="{ row }">
@@ -124,7 +115,6 @@ import type { AdminInvite, AdminInviteActor, InviteStatus, UserRole } from "@/ty
 
 const loading = ref(false);
 const submitting = ref(false);
-const errorMessage = ref("");
 const invites = ref<AdminInvite[]>([]);
 const createDialogVisible = ref(false);
 const createForm = reactive({
@@ -194,11 +184,10 @@ function statusTagType(status: InviteStatus) {
 
 async function loadInvites() {
   loading.value = true;
-  errorMessage.value = "";
   try {
     invites.value = await fetchAdminInvites();
   } catch (error) {
-    errorMessage.value = error instanceof Error ? error.message : "读取邀请码列表失败";
+    ElMessage.error(error instanceof Error ? error.message : "读取邀请码列表失败");
   } finally {
     loading.value = false;
   }

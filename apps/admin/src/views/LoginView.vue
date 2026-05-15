@@ -24,8 +24,6 @@
         </div>
       </template>
 
-      <el-alert v-if="errorMessage" :closable="false" class="login-view__alert" show-icon type="error" :title="errorMessage" />
-
       <el-form label-position="top" @submit.prevent="handleSubmit">
         <el-form-item label="用户名">
           <el-input v-model.trim="form.username" autocomplete="username" placeholder="请输入管理员用户名" />
@@ -55,7 +53,6 @@ const form = reactive({
   password: ""
 });
 const submitting = ref(false);
-const errorMessage = ref("");
 
 function normalizeRedirectTarget(value: unknown) {
   if (typeof value !== "string" || !value.startsWith("/") || value.startsWith("//")) {
@@ -66,7 +63,6 @@ function normalizeRedirectTarget(value: unknown) {
 
 async function handleSubmit() {
   submitting.value = true;
-  errorMessage.value = "";
   try {
     const session = await loginAndStoreSession({
       username: form.username,
@@ -79,7 +75,7 @@ async function handleSubmit() {
     ElMessage.success("登录成功");
     await router.replace(normalizeRedirectTarget(route.query.redirect));
   } catch (error) {
-    errorMessage.value = error instanceof Error ? error.message : "登录失败";
+    ElMessage.error(error instanceof Error ? error.message : "登录失败");
   } finally {
     submitting.value = false;
   }

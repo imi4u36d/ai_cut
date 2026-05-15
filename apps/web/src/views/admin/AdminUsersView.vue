@@ -38,10 +38,6 @@
       </article>
     </div>
 
-    <div v-if="errorMessage" class="mt-4 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
-      {{ errorMessage }}
-    </div>
-
     <section class="admin-panel mt-4 overflow-hidden">
       <div class="admin-panel-header">
         <div>
@@ -121,11 +117,11 @@
  */
 import { computed, onMounted, ref } from "vue";
 import { disableAdminUser, enableAdminUser, fetchAdminUsers } from "@/features/admin";
+import { messageApi } from "@/composables/useMessage";
 import type { AdminUser } from "@/types";
 
 const users = ref<AdminUser[]>([]);
 const loading = ref(false);
-const errorMessage = ref("");
 const pendingUserId = ref<number | null>(null);
 
 const activeCount = computed(() => users.value.filter((user) => user.status === "ACTIVE").length);
@@ -141,11 +137,10 @@ function formatDateTime(value?: string | null) {
 
 async function loadUsers() {
   loading.value = true;
-  errorMessage.value = "";
   try {
     users.value = await fetchAdminUsers();
   } catch (error) {
-    errorMessage.value = error instanceof Error ? error.message : "读取用户列表失败";
+    messageApi.error(error instanceof Error ? error.message : "读取用户列表失败");
   } finally {
     loading.value = false;
   }
@@ -153,12 +148,11 @@ async function loadUsers() {
 
 async function disableUser(id: number) {
   pendingUserId.value = id;
-  errorMessage.value = "";
   try {
     await disableAdminUser(id);
     await loadUsers();
   } catch (error) {
-    errorMessage.value = error instanceof Error ? error.message : "禁用用户失败";
+    messageApi.error(error instanceof Error ? error.message : "禁用用户失败");
   } finally {
     pendingUserId.value = null;
   }
@@ -166,12 +160,11 @@ async function disableUser(id: number) {
 
 async function enableUser(id: number) {
   pendingUserId.value = id;
-  errorMessage.value = "";
   try {
     await enableAdminUser(id);
     await loadUsers();
   } catch (error) {
-    errorMessage.value = error instanceof Error ? error.message : "启用用户失败";
+    messageApi.error(error instanceof Error ? error.message : "启用用户失败");
   } finally {
     pendingUserId.value = null;
   }

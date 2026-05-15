@@ -44,9 +44,6 @@
         <div v-if="loading" class="admin-panel-soft px-3 py-6 text-center text-sm text-slate-500">
           正在加载日志...
         </div>
-        <div v-else-if="errorMessage" class="admin-alert-error">
-          {{ errorMessage }}
-        </div>
         <div v-else-if="traces.length === 0" class="admin-empty">
           当前没有日志。
         </div>
@@ -89,12 +86,12 @@ import { onMounted, ref, watch } from "vue";
 import { fetchAdminTraces } from "@/features/admin";
 import AppSelect from "@/components/common/AppSelect.vue";
 import ModelStatusStrip from "@/components/ModelStatusStrip.vue";
+import { messageApi } from "@/composables/useMessage";
 import type { AppSelectOption } from "@/components/common/app-select";
 import type { AdminTraceEvent } from "@/types";
 
 const traces = ref<AdminTraceEvent[]>([]);
 const loading = ref(false);
-const errorMessage = ref("");
 const taskIdFilter = ref("");
 const levelFilter = ref("");
 const stageFilter = ref("");
@@ -139,7 +136,6 @@ function logLevelClass(level: string) {
 
 async function loadTraces() {
   loading.value = true;
-  errorMessage.value = "";
   try {
     traces.value = await fetchAdminTraces({
       limit: 30,
@@ -149,7 +145,7 @@ async function loadTraces() {
       q: keywordFilter.value || undefined,
     });
   } catch (error) {
-    errorMessage.value = error instanceof Error ? error.message : "读取日志失败";
+    messageApi.error(error instanceof Error ? error.message : "读取日志失败");
   } finally {
     loading.value = false;
   }

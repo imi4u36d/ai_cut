@@ -44,8 +44,6 @@
         </el-form-item>
       </el-form>
 
-      <el-alert v-if="errorMessage" :closable="false" class="user-page__alert" show-icon type="error" :title="errorMessage" />
-
       <el-table v-loading="loading" :data="users" class="user-page__table">
         <el-table-column label="用户名" min-width="140" prop="username" />
         <el-table-column label="显示名" min-width="140" prop="displayName" />
@@ -234,7 +232,6 @@ const submittingEditor = ref(false);
 const submittingPassword = ref(false);
 const loadingModelConfig = ref(false);
 const submittingModelKeys = ref(false);
-const errorMessage = ref("");
 const users = ref<AdminUser[]>([]);
 const modelConfigProviders = ref<AdminModelConfigProviderItem[]>([]);
 const filters = reactive({
@@ -324,11 +321,10 @@ function resetEditorForm() {
 
 async function loadUsers() {
   loading.value = true;
-  errorMessage.value = "";
   try {
     users.value = await fetchAdminUsers(filters);
   } catch (error) {
-    errorMessage.value = error instanceof Error ? error.message : "读取用户列表失败";
+    ElMessage.error(error instanceof Error ? error.message : "读取用户列表失败");
   } finally {
     loading.value = false;
   }

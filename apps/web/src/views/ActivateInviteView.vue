@@ -24,10 +24,6 @@
           <input v-model="password" autocomplete="new-password" placeholder="密码" type="password" />
         </label>
 
-        <div v-if="errorMessage" class="auth-form__error">
-          {{ errorMessage }}
-        </div>
-
         <button :disabled="submitting" class="auth-form__submit" type="submit">
           {{ submitting ? "激活中..." : "激活并登录" }}
         </button>
@@ -47,6 +43,7 @@
 import { computed, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { activateInviteAndStoreSession } from "@/auth/session";
+import { messageApi } from "@/composables/useMessage";
 
 const route = useRoute();
 const router = useRouter();
@@ -56,7 +53,6 @@ const username = ref("");
 const displayName = ref("");
 const password = ref("");
 const submitting = ref(false);
-const errorMessage = ref("");
 
 function normalizeRedirectTarget(value: unknown) {
   if (typeof value !== "string" || !value.startsWith("/") || value.startsWith("//")) {
@@ -73,7 +69,6 @@ const loginLink = computed(() => ({
 
 async function handleSubmit() {
   submitting.value = true;
-  errorMessage.value = "";
   try {
     await activateInviteAndStoreSession({
       code: code.value,
@@ -83,7 +78,7 @@ async function handleSubmit() {
     });
     await router.replace(redirectTarget.value);
   } catch (error) {
-    errorMessage.value = error instanceof Error ? error.message : "激活失败";
+    messageApi.error(error instanceof Error ? error.message : "激活失败");
   } finally {
     submitting.value = false;
   }

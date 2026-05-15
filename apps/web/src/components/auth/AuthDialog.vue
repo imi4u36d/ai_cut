@@ -29,7 +29,6 @@
             <span>密码</span>
             <input v-model="loginForm.password" autocomplete="current-password" placeholder="密码" type="password" />
           </label>
-          <p v-if="errorMessage" class="auth-dialog__error">{{ errorMessage }}</p>
           <button class="auth-dialog__submit" type="submit" :disabled="submitting">
             {{ submitting ? "登录中..." : "登录并继续" }}
           </button>
@@ -52,7 +51,6 @@
             <span>密码</span>
             <input v-model="registerForm.password" autocomplete="new-password" placeholder="至少 8 位密码" type="password" />
           </label>
-          <p v-if="errorMessage" class="auth-dialog__error">{{ errorMessage }}</p>
           <button class="auth-dialog__submit" type="submit" :disabled="submitting">
             {{ submitting ? "注册中..." : "注册并继续" }}
           </button>
@@ -68,11 +66,11 @@
  */
 import { reactive, ref, watch } from "vue";
 import { activateInviteAndStoreSession, loginAndStoreSession } from "@/auth/session";
+import { messageApi } from "@/composables/useMessage";
 import { closeAuthModal, switchAuthModalMode, useAuthModalState } from "@/auth/modal";
 
 const modal = useAuthModalState();
 const submitting = ref(false);
-const errorMessage = ref("");
 
 const loginForm = reactive({
   username: "",
@@ -95,7 +93,6 @@ function handleClose() {
 
 async function handleLogin() {
   submitting.value = true;
-  errorMessage.value = "";
   try {
     await loginAndStoreSession({
       username: loginForm.username,
@@ -103,7 +100,7 @@ async function handleLogin() {
     });
     closeAuthModal(true);
   } catch (error) {
-    errorMessage.value = error instanceof Error ? error.message : "登录失败";
+    messageApi.error(error instanceof Error ? error.message : "登录失败");
   } finally {
     submitting.value = false;
   }
@@ -111,7 +108,6 @@ async function handleLogin() {
 
 async function handleRegister() {
   submitting.value = true;
-  errorMessage.value = "";
   try {
     await activateInviteAndStoreSession({
       code: registerForm.code,
@@ -121,7 +117,7 @@ async function handleRegister() {
     });
     closeAuthModal(true);
   } catch (error) {
-    errorMessage.value = error instanceof Error ? error.message : "注册失败";
+    messageApi.error(error instanceof Error ? error.message : "注册失败");
   } finally {
     submitting.value = false;
   }
@@ -130,7 +126,7 @@ async function handleRegister() {
 watch(
   () => [modal.open, modal.mode],
   () => {
-    errorMessage.value = "";
+    // mode switch — no inline error state to clear anymore
   },
 );
 </script>
@@ -256,16 +252,6 @@ watch(
   border: 1px solid rgba(15, 20, 25, 0.08);
   background: #fff;
   color: var(--text-strong);
-}
-
-.auth-dialog__error {
-  margin: 0;
-  padding: 11px 12px;
-  border-radius: 12px;
-  border: 1px solid rgba(229, 72, 101, 0.18);
-  background: rgba(229, 72, 101, 0.1);
-  color: var(--accent-danger);
-  font-size: 0.84rem;
 }
 
 .auth-dialog__submit {
