@@ -34,12 +34,6 @@
       <p class="mt-3 text-xs text-slate-500">
         不填写过期时间时，后端按默认 7 天生效。
       </p>
-      <div v-if="errorMessage" class="mt-4 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
-        {{ errorMessage }}
-      </div>
-      <div v-if="successMessage" class="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
-        {{ successMessage }}
-      </div>
     </section>
 
     <section class="admin-panel mt-4 overflow-hidden">
@@ -127,6 +121,7 @@
  */
 import { onMounted, ref } from "vue";
 import { createAdminInvite, fetchAdminInvites, revokeAdminInvite } from "@/features/admin";
+import { messageApi } from "@/composables/useMessage";
 import AppSelect from "@/components/common/AppSelect.vue";
 import type { AppSelectOption } from "@/components/common/app-select";
 import type { AdminInvite } from "@/types";
@@ -135,8 +130,6 @@ const invites = ref<AdminInvite[]>([]);
 const loading = ref(false);
 const creating = ref(false);
 const pendingInviteId = ref<number | null>(null);
-const errorMessage = ref("");
-const successMessage = ref("");
 const inviteRole = ref<"USER" | "ADMIN">("USER");
 const expiresAtInput = ref("");
 const inviteRoleOptions: AppSelectOption[] = [
@@ -179,11 +172,10 @@ function statusClass(status: AdminInvite["status"]) {
 
 async function loadInvites() {
   loading.value = true;
-  errorMessage.value = "";
   try {
     invites.value = await fetchAdminInvites();
   } catch (error) {
-    errorMessage.value = error instanceof Error ? error.message : "读取邀请码失败";
+    messageApi.error(error instanceof Error ? error.message : "读取邀请码失败");
   } finally {
     loading.value = false;
   }
@@ -191,18 +183,16 @@ async function loadInvites() {
 
 async function createInvite() {
   creating.value = true;
-  errorMessage.value = "";
-  successMessage.value = "";
   try {
     const created = await createAdminInvite({
       role: inviteRole.value,
       expiresAt: expiresAtInput.value ? new Date(expiresAtInput.value).toISOString() : undefined
     });
-    successMessage.value = `邀请码 ${created.code} 创建成功`;
+    messageApi.success(`邀请码 ${created.code} 创建成功`);
     expiresAtInput.value = "";
     await loadInvites();
   } catch (error) {
-    errorMessage.value = error instanceof Error ? error.message : "创建邀请码失败";
+    messageApi.error(error instanceof Error ? error.message : "创建邀请码失败");
   } finally {
     creating.value = false;
   }
@@ -210,14 +200,12 @@ async function createInvite() {
 
 async function revokeInvite(id: number) {
   pendingInviteId.value = id;
-  errorMessage.value = "";
-  successMessage.value = "";
   try {
     const invite = await revokeAdminInvite(id);
-    successMessage.value = `邀请码 ${invite.code} 已撤销`;
+    messageApi.success(`邀请码 ${invite.code} 已撤销`);
     await loadInvites();
   } catch (error) {
-    errorMessage.value = error instanceof Error ? error.message : "撤销邀请码失败";
+    messageApi.error(error instanceof Error ? error.message : "撤销邀请码失败");
   } finally {
     pendingInviteId.value = null;
   }
@@ -226,9 +214,9 @@ async function revokeInvite(id: number) {
 async function copyInviteCode(code: string) {
   try {
     await navigator.clipboard.writeText(code);
-    successMessage.value = `邀请码 ${code} 已复制`;
+    messageApi.success(`邀请码 ${code} 已复制`);
   } catch {
-    successMessage.value = `邀请码 ${code}`;
+    messageApi.info(`邀请码 ${code}`);
   }
 }
 

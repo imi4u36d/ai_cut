@@ -50,7 +50,6 @@
         </el-form-item>
       </el-form>
 
-      <el-alert v-if="errorMessage" :closable="false" class="task-page__alert" show-icon type="error" :title="errorMessage" />
       <el-alert v-if="successMessage" :closable="false" class="task-page__alert" show-icon type="success" :title="successMessage" />
 
       <el-table
@@ -154,7 +153,6 @@ import type { AdminTaskListItem, AdminTaskSortMode, TaskStatus } from "@/types";
 
 const loading = ref(false);
 const actionLoading = ref(false);
-const errorMessage = ref("");
 const successMessage = ref("");
 const tasks = ref<AdminTaskListItem[]>([]);
 const selectedTasks = ref<AdminTaskListItem[]>([]);
@@ -292,13 +290,12 @@ function handleSelectionChange(selection: AdminTaskListItem[]) {
 
 async function loadTasks() {
   loading.value = true;
-  errorMessage.value = "";
   successMessage.value = "";
   try {
     tasks.value = await fetchAdminTasks(filters);
     selectedTasks.value = selectedTasks.value.filter((selected) => tasks.value.some((task) => task.id === selected.id));
   } catch (error) {
-    errorMessage.value = error instanceof Error ? error.message : "读取任务列表失败";
+    ElMessage.error(error instanceof Error ? error.message : "读取任务列表失败");
   } finally {
     loading.value = false;
   }
@@ -307,7 +304,7 @@ async function loadTasks() {
 async function terminateSingle(task: AdminTaskListItem) {
   try {
     await ElMessageBox.confirm(
-      `确认终止任务“${task.title || task.id}”吗？终止后任务会进入失败状态。`,
+      `确认终止任务"${task.title || task.id}"吗？终止后任务会进入失败状态。`,
       "终止任务",
       {
         confirmButtonText: "终止",
@@ -316,7 +313,6 @@ async function terminateSingle(task: AdminTaskListItem) {
       }
     );
     actionLoading.value = true;
-    errorMessage.value = "";
     successMessage.value = "";
     await terminateAdminTask(task.id);
     selectedTasks.value = selectedTasks.value.filter((item) => item.id !== task.id);
@@ -327,7 +323,7 @@ async function terminateSingle(task: AdminTaskListItem) {
     if (error === "cancel") {
       return;
     }
-    errorMessage.value = error instanceof Error ? error.message : "终止任务失败";
+    ElMessage.error(error instanceof Error ? error.message : "终止任务失败");
   } finally {
     actionLoading.value = false;
   }
@@ -350,7 +346,6 @@ async function terminateSelected() {
       }
     );
     actionLoading.value = true;
-    errorMessage.value = "";
     successMessage.value = "";
     const result = await bulkTerminateAdminTasks(taskIds);
     const failedIds = new Set(result.failed.map((item) => item.taskId));
@@ -366,7 +361,7 @@ async function terminateSelected() {
     if (error === "cancel") {
       return;
     }
-    errorMessage.value = error instanceof Error ? error.message : "批量终止任务失败";
+    ElMessage.error(error instanceof Error ? error.message : "批量终止任务失败");
   } finally {
     actionLoading.value = false;
   }

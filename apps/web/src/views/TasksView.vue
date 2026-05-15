@@ -34,11 +34,6 @@
           </div>
         </label>
 
-        <div v-if="errorMessage" class="tasks-alert">
-          <p>{{ errorMessage }}</p>
-          <button class="btn-secondary btn-sm" type="button" @click="loadTasks">重新加载</button>
-        </div>
-
         <div v-if="loading" class="tasks-loading">正在加载任务...</div>
 
         <div v-else-if="filteredTasks.length === 0" class="tasks-empty-board">
@@ -214,8 +209,7 @@
             <h3>最近追踪</h3>
             <span class="surface-chip">{{ selectedTaskTrace.length }}</span>
           </div>
-          <div v-if="selectedTaskError" class="task-details-panel__error">{{ selectedTaskError }}</div>
-          <div v-else class="detail-traces">
+          <div class="detail-traces">
             <div v-if="selectedTaskTrace.length === 0" class="detail-traces__empty">暂时还没有追踪记录。</div>
             <div v-for="event in selectedTaskTracePreview" :key="`${event.timestamp}-${event.event}-${event.stage}`" class="detail-traces__item">
               <p>{{ event.message }}</p>
@@ -244,6 +238,7 @@ import { useRoute, useRouter } from "vue-router";
 import { requireAuth } from "@/auth/modal";
 import { usePolling } from "@/composables/usePolling";
 import { continueTask, fetchTask, fetchTaskTrace, fetchTasks, pauseTask, retryTask, terminateTask } from "@/features/tasks";
+import { messageApi } from "@/composables/useMessage";
 import type { TaskDetail, TaskListItem, TaskStatus, TaskTraceEvent } from "@/types";
 import {
   formatTaskDurationMode,
@@ -277,7 +272,6 @@ const STATUS_SORT_PRIORITY: Record<TaskStatus, number> = {
 
 const tasks = ref<TaskListItem[]>([]);
 const loading = ref(true);
-const errorMessage = ref("");
 const searchText = ref("");
 const statusFilter = ref<TaskStatus | "all">("all");
 const sortMode = ref<TaskSortMode>(DEFAULT_SORT_MODE);
@@ -287,7 +281,6 @@ const selectedTaskId = ref("");
 const selectedTaskDetail = ref<TaskDetail | null>(null);
 const selectedTaskTrace = ref<TaskTraceEvent[]>([]);
 const selectedTaskLoading = ref(false);
-const selectedTaskError = ref("");
 let querySyncTimer: number | null = null;
 
 const isFilterActive = computed(() => {
@@ -664,11 +657,10 @@ async function loadTasks() {
   });
   if (!authenticated) {
     tasks.value = [];
-    errorMessage.value = "登录后可查看任务管理。";
+    messageApi.error("登录后可查看任务管理");
     loading.value = false;
     return;
   }
-  errorMessage.value = "";
   loading.value = tasks.value.length === 0;
   try {
     // 将筛选保留在前端本地，避免输入和视图切换时额外触发请求。
@@ -677,7 +669,7 @@ async function loadTasks() {
     });
     tasks.value = reconcileTaskList(tasks.value, nextTasks);
   } catch (error) {
-    errorMessage.value = error instanceof Error ? error.message : "加载任务列表失败";
+    messageApi.error(error instanceof Error ? error.message : "加载任务列表失败");
   } finally {
     loading.value = false;
   }
@@ -687,12 +679,10 @@ async function loadSelectedTaskDetails(options: { silent?: boolean } = {}) {
   if (!selectedTaskId.value) {
     selectedTaskDetail.value = null;
     selectedTaskTrace.value = [];
-    selectedTaskError.value = "";
     return;
   }
   if (!options.silent) {
     selectedTaskLoading.value = true;
-    selectedTaskError.value = "";
   }
   try {
     const [detail, trace] = await Promise.all([
@@ -704,7 +694,7 @@ async function loadSelectedTaskDetails(options: { silent?: boolean } = {}) {
     selectedTaskTrace.value = [...trace].reverse();
   } catch (error) {
     if (!options.silent) {
-      selectedTaskError.value = error instanceof Error ? error.message : "任务详情加载失败";
+      messageApi.error(error instanceof Error ? error.message : "任务详情加载失败");
     }
   } finally {
     if (!options.silent) {
@@ -778,7 +768,6 @@ function clearSelectedTask() {
   selectedTaskId.value = "";
   selectedTaskDetail.value = null;
   selectedTaskTrace.value = [];
-  selectedTaskError.value = "";
   writeQuery();
 }
 
@@ -818,11 +807,10 @@ async function handleRetry(task: TaskListItem) {
     message: "任务重试会重新加入队列，请先登录或使用邀请码注册。",
   });
   if (!authenticated) {
-    errorMessage.value = "登录后可继续操作任务。";
+    messageApi.error("登录后可继续操作任务");
     return;
   }
   managingTaskId.value = task.id;
-  errorMessage.value = "";
   try {
     await retryTask(task.id);
     await Promise.all([
@@ -830,7 +818,7 @@ async function handleRetry(task: TaskListItem) {
       task.id === selectedTaskId.value ? loadSelectedTaskDetails() : Promise.resolve(),
     ]);
   } catch (error) {
-    errorMessage.value = error instanceof Error ? error.message : "重试任务失败";
+    messageApi.error(error instanceof Error ? error.message : "重试任务失败");
   } finally {
     managingTaskId.value = "";
   }
@@ -845,16 +833,15 @@ async function handlePause(task: TaskListItem) {
     message: "任务操作会修改你的任务状态，请先登录或使用邀请码注册。",
   });
   if (!authenticated) {
-    errorMessage.value = "登录后可继续操作任务。";
+    messageApi.error("登录后可继续操作任务");
     return;
   }
   managingTaskId.value = task.id;
-  errorMessage.value = "";
   try {
     await pauseTask(task.id);
     await Promise.all([loadTasks(), loadSelectedTaskDetails()]);
   } catch (error) {
-    errorMessage.value = error instanceof Error ? error.message : "暂停任务失败";
+    messageApi.error(error instanceof Error ? error.message : "暂停任务失败");
   } finally {
     managingTaskId.value = "";
   }
@@ -869,16 +856,15 @@ async function handleContinueTask(task: TaskListItem) {
     message: "任务操作会修改你的任务状态，请先登录或使用邀请码注册。",
   });
   if (!authenticated) {
-    errorMessage.value = "登录后可继续操作任务。";
+    messageApi.error("登录后可继续操作任务");
     return;
   }
   managingTaskId.value = task.id;
-  errorMessage.value = "";
   try {
     await continueTask(task.id);
     await Promise.all([loadTasks(), loadSelectedTaskDetails()]);
   } catch (error) {
-    errorMessage.value = error instanceof Error ? error.message : "继续任务失败";
+    messageApi.error(error instanceof Error ? error.message : "继续任务失败");
   } finally {
     managingTaskId.value = "";
   }
@@ -893,20 +879,19 @@ async function handleTerminate(task: TaskListItem) {
     message: "任务操作会修改你的任务状态，请先登录或使用邀请码注册。",
   });
   if (!authenticated) {
-    errorMessage.value = "登录后可继续操作任务。";
+    messageApi.error("登录后可继续操作任务");
     return;
   }
-  const ok = window.confirm(`确认终止任务“${task.title}”吗？终止后任务会变为失败状态，可再删除或重试。`);
+  const ok = window.confirm(`确认终止任务"${task.title}"吗？终止后任务会变为失败状态，可再删除或重试。`);
   if (!ok) {
     return;
   }
   managingTaskId.value = task.id;
-  errorMessage.value = "";
   try {
     await terminateTask(task.id);
     await Promise.all([loadTasks(), loadSelectedTaskDetails()]);
   } catch (error) {
-    errorMessage.value = error instanceof Error ? error.message : "终止任务失败";
+    messageApi.error(error instanceof Error ? error.message : "终止任务失败");
   } finally {
     managingTaskId.value = "";
   }

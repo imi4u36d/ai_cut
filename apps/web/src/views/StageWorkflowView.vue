@@ -37,9 +37,7 @@
         </button>
       </label>
 
-      <p v-if="listError" class="workflow-error">{{ listError }}</p>
-
-      <div v-else-if="loadingWorkflows" class="workflow-empty-state">
+      <div v-if="loadingWorkflows" class="workflow-empty-state">
         <div class="workflow-empty-state__icon">
           <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
             <path d="M22 12h-4l-3 9L9 3l-3 9H2"></path>
@@ -345,14 +343,13 @@
                 </button>
               </div>
             </div>
-            <p v-if="createError" class="workflow-error workflow-composer-error">{{ createError }}</p>
           </form>
 
         </div>
       </section>
 
-      <div v-else-if="detailError" class="surface-panel workflow-banner workflow-banner-error">
-        <p>{{ detailError }}</p>
+      <div v-else-if="showDetailLoadFailed" class="surface-panel workflow-banner workflow-banner-error">
+        <p>工作流详情加载失败</p>
         <button class="btn-secondary btn-sm" type="button" :disabled="loadingDetail" @click="reloadCurrentWorkflow">重新加载</button>
       </div>
 
@@ -932,6 +929,7 @@ import {
 } from "@/features/workflows/summary";
 import type { WorkflowCanvasStageKey, WorkflowCreateStageKey, WorkflowDetailRouteStageKey } from "@/features/workflows/summary";
 import { formatApiErrorMessage } from "@/utils/api-error";
+import { messageApi } from "@/composables/useMessage";
 import { renderMarkdownToHtml } from "@/utils/markdown";
 import type {
   CreateWorkflowRequest,
@@ -1008,9 +1006,6 @@ const uploadingCreateText = ref(false);
 const createComposerMenu = ref<"" | "models" | "output" | "duration" | "seed">("");
 const createStatusText = ref("参数加载中...");
 
-const listError = ref("");
-const detailError = ref("");
-const createError = ref("");
 const characterAssetPicker = reactive({
   openKey: "",
   keyword: "",
@@ -1072,6 +1067,10 @@ const selectedWorkflowId = computed(() => {
   const workflowId = route.params.workflowId;
   return typeof workflowId === "string" ? workflowId : "";
 });
+
+const showDetailLoadFailed = computed(
+  () => selectedWorkflowId.value !== "" && !selectedWorkflow.value && !loadingDetail.value
+);
 
 const workflowCharacterSheets = computed(() => selectedWorkflow.value?.characterSheets ?? []);
 const missingCharacterSheets = computed(() =>
@@ -1871,7 +1870,7 @@ async function openCharacterAssetPicker(sheet: WorkflowCharacterSheet) {
     message: "素材库只展示你的个人素材，请先登录或使用邀请码注册。",
   });
   if (!authenticated) {
-    detailError.value = "登录后可继续选择素材。";
+    messageApi.warning("登录后可继续选择素材。");
     return;
   }
   characterAssetPicker.openKey = characterSheetKey(sheet);
@@ -2081,7 +2080,6 @@ const isStoryboardDurationConfigured = computed(() => {
 });
 
 async function closeCreateReview() {
-  createError.value = "";
   createComposerVisible.value = false;
   createComposerMenu.value = "";
   selectedWorkflow.value = null;
@@ -2091,7 +2089,6 @@ async function closeCreateReview() {
 }
 
 function startCreateWorkflow() {
-  createError.value = "";
   createComposerVisible.value = true;
   createComposerMenu.value = "";
   createStatusText.value = "在这里输入正文，创建一个新的阶段画布。";
@@ -2234,7 +2231,6 @@ async function handleCreateTextFileChange(event: Event) {
   }
   uploadingCreateText.value = true;
   createStatusText.value = "正在读取正文...";
-  createError.value = "";
   try {
     const [, content] = await Promise.all([uploadText(file), readTextFile(file)]);
     if (content.trim()) {
@@ -2246,7 +2242,6 @@ async function handleCreateTextFileChange(event: Event) {
     createStatusText.value = "正文已填入画布输入框。";
   } catch (error) {
     const message = error instanceof Error ? error.message : "正文上传失败";
-    createError.value = message;
     createStatusText.value = message;
   } finally {
     uploadingCreateText.value = false;
@@ -2261,15 +2256,14 @@ async function loadWorkflows() {
   });
   if (!authenticated) {
     workflows.value = [];
-    listError.value = "登录后可查看阶段工作流。";
+    messageApi.warning("登录后可查看阶段工作流。");
     return;
   }
   loadingWorkflows.value = true;
-  listError.value = "";
   try {
     workflows.value = await fetchWorkflows();
   } catch (error) {
-    listError.value = error instanceof Error ? error.message : "工作流列表加载失败";
+    messageApi.error(error instanceof Error ? error.message : "工作流列表加载失败");
   } finally {
     loadingWorkflows.value = false;
   }
@@ -2277,7 +2271,6 @@ async function loadWorkflows() {
 
 async function loadWorkflowDetail(workflowId: string) {
   loadingDetail.value = true;
-  detailError.value = "";
   try {
     selectedWorkflow.value = await fetchWorkflow(workflowId);
     const routeStage = normalizeWorkflowDetailStage(route.query.stage);
@@ -2307,7 +2300,7 @@ async function loadWorkflowDetail(workflowId: string) {
       selectedCanvasClipIndex.value = null;
     }
   } catch (error) {
-    detailError.value = error instanceof Error ? error.message : "工作流详情加载失败";
+    messageApi.error(error instanceof Error ? error.message : "工作流详情加载失败");
     selectedWorkflow.value = null;
   } finally {
     loadingDetail.value = false;
@@ -2357,9 +2350,7 @@ function buildWorkflowSettingsPayload(): UpdateWorkflowSettingsRequest {
 }
 
 async function handleCreateWorkflow() {
-  createError.value = "";
   if (storyboardDurationMode.value === "manual" && storyboardManualDurationValidationMessage.value) {
-    createError.value = storyboardManualDurationValidationMessage.value;
     return;
   }
   const authenticated = await requireAuth({
@@ -2367,7 +2358,6 @@ async function handleCreateWorkflow() {
     message: "阶段工作流会保存到你的账号下，请先登录或使用邀请码注册。",
   });
   if (!authenticated) {
-    createError.value = "登录后可继续创建画布。";
     return;
   }
   creatingWorkflow.value = true;
@@ -2386,8 +2376,8 @@ async function handleCreateWorkflow() {
     await loadWorkflows();
     openWorkflow(workflow.id, workflow.currentStage);
   } catch (error) {
-    createError.value = formatApiErrorMessage(error, "创建工作流失败");
-    createStatusText.value = createError.value;
+    const message = formatApiErrorMessage(error, "创建工作流失败");
+    createStatusText.value = message;
   } finally {
     creatingWorkflow.value = false;
   }
@@ -2404,18 +2394,17 @@ async function runAndRefresh(actionKey: string, runner: () => Promise<WorkflowDe
     message: "工作流操作会修改你的个人数据，请先登录或使用邀请码注册。",
   });
   if (!authenticated) {
-    detailError.value = "登录后可继续操作工作流。";
+    messageApi.warning("登录后可继续操作工作流。");
     return false;
   }
   busyActionKey.value = actionKey;
-  detailError.value = "";
   try {
     selectedWorkflow.value = await runner();
     applyWorkflowDrafts(selectedWorkflow.value);
     await loadWorkflows();
     return true;
   } catch (error) {
-    detailError.value = formatApiErrorMessage(error, "操作失败");
+    messageApi.error(formatApiErrorMessage(error, "操作失败"));
     return false;
   } finally {
     busyActionKey.value = "";
@@ -2475,7 +2464,6 @@ async function handleGenerateMissingCharacterSheets() {
     return;
   }
   busyActionKey.value = "character-missing";
-  detailError.value = "";
   try {
     for (const clipIndex of pendingClipIndexes) {
       selectedWorkflow.value = await generateKeyframe(selectedWorkflowId.value, clipIndex);
@@ -2483,7 +2471,7 @@ async function handleGenerateMissingCharacterSheets() {
     }
     await loadWorkflows();
   } catch (error) {
-    detailError.value = formatApiErrorMessage(error, "角色三视图生成失败");
+    messageApi.error(formatApiErrorMessage(error, "角色三视图生成失败"));
   } finally {
     busyActionKey.value = "";
   }
@@ -2516,13 +2504,12 @@ async function handleSelectCharacterSheetAsset(sheet: WorkflowCharacterSheet, as
     return;
   }
   busyActionKey.value = `character-sheet-asset-${clipIndex}`;
-  detailError.value = "";
   try {
     await selectCharacterSheetAsset(selectedWorkflowId.value, clipIndex, assetId);
     closeCharacterAssetPicker();
     await reloadCurrentWorkflow();
   } catch (error) {
-    detailError.value = error instanceof Error ? error.message : "角色三视图素材选择失败";
+    messageApi.error(error instanceof Error ? error.message : "角色三视图素材选择失败");
   } finally {
     busyActionKey.value = "";
   }
@@ -2583,7 +2570,7 @@ async function handleDeleteWorkflow(workflow: WorkflowSummary) {
     message: "删除工作流会修改你的个人数据，请先登录或使用邀请码注册。",
   });
   if (!authenticated) {
-    listError.value = "登录后可继续删除工作流。";
+    messageApi.warning("登录后可继续删除工作流。");
     return;
   }
   if (!window.confirm(deleteWorkflowConfirmMessage(workflow))) {
@@ -2591,8 +2578,6 @@ async function handleDeleteWorkflow(workflow: WorkflowSummary) {
   }
   const actionKey = `delete-workflow-${workflow.id}`;
   busyActionKey.value = actionKey;
-  listError.value = "";
-  detailError.value = "";
   try {
     const result: WorkflowDeleteResult = await deleteWorkflow(workflow.id);
     if (result.deleted && selectedWorkflowId.value === workflow.id) {
@@ -2601,9 +2586,7 @@ async function handleDeleteWorkflow(workflow: WorkflowSummary) {
     }
     await loadWorkflows();
   } catch (error) {
-    const message = error instanceof Error ? error.message : "工作流删除失败";
-    listError.value = message;
-    detailError.value = message;
+    messageApi.error(error instanceof Error ? error.message : "工作流删除失败");
   } finally {
     busyActionKey.value = "";
   }
@@ -2615,7 +2598,7 @@ async function handleDeleteStageVersion(version: StageVersion) {
     message: "删除版本会修改你的工作流数据，请先登录或使用邀请码注册。",
   });
   if (!authenticated) {
-    detailError.value = "登录后可继续删除版本。";
+    messageApi.warning("登录后可继续删除版本。");
     return;
   }
   if (!selectedWorkflowId.value || !window.confirm(deleteVersionConfirmMessage(version))) {
@@ -2623,13 +2606,12 @@ async function handleDeleteStageVersion(version: StageVersion) {
   }
   const actionKey = `delete-${version.id}`;
   busyActionKey.value = actionKey;
-  detailError.value = "";
   try {
     selectedWorkflow.value = await deleteStageVersion(selectedWorkflowId.value, version.id);
     applyWorkflowDrafts(selectedWorkflow.value);
     await loadWorkflows();
   } catch (error) {
-    detailError.value = error instanceof Error ? error.message : "版本删除失败";
+    messageApi.error(error instanceof Error ? error.message : "版本删除失败");
   } finally {
     busyActionKey.value = "";
   }
@@ -2644,17 +2626,16 @@ async function handleReuseAsset(assetId: string, versionId: string) {
     message: "复用素材会创建你的阶段工作流，请先登录或使用邀请码注册。",
   });
   if (!authenticated) {
-    detailError.value = "登录后可继续复用素材。";
+    messageApi.warning("登录后可继续复用素材。");
     return;
   }
   busyActionKey.value = `reuse-${versionId}`;
-  detailError.value = "";
   try {
     const workflow = await reuseMaterialAsset(assetId, { mode: "clone" });
     await loadWorkflows();
     openWorkflow(workflow.id, workflow.currentStage);
   } catch (error) {
-    detailError.value = error instanceof Error ? error.message : "素材复用失败";
+    messageApi.error(error instanceof Error ? error.message : "素材复用失败");
   } finally {
     busyActionKey.value = "";
   }

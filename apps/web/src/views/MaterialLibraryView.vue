@@ -81,8 +81,6 @@
       </button>
     </section>
 
-    <p v-if="errorMessage" class="material-error">{{ errorMessage }}</p>
-
     <section v-if="loading && !assets.length" class="material-empty">
       正在加载素材库...
     </section>
@@ -219,12 +217,12 @@ import AppSelect from "@/components/common/AppSelect.vue";
 import type { AppSelectOption } from "@/components/common/app-select";
 import type { MaterialAssetLibraryItem, MaterialAssetQuery, MaterialAssetType } from "@/types";
 import { renderMarkdownToHtml } from "@/utils/markdown";
+import { messageApi } from "@/composables/useMessage";
 
 const route = useRoute();
 const router = useRouter();
 const loading = ref(false);
 const loadingMore = ref(false);
-const errorMessage = ref("");
 const busyActionKey = ref("");
 const activeLibraryTab = ref("all");
 const advancedFiltersOpen = ref(false);
@@ -420,13 +418,12 @@ async function loadAssets() {
   if (!authenticated) {
     assets.value = [];
     hasMoreAssets.value = false;
-    errorMessage.value = "登录后可查看素材库。";
+    messageApi.error("登录后可查看素材库");
     return;
   }
   const requestId = ++assetLoadRequestId;
   loading.value = true;
   loadingMore.value = false;
-  errorMessage.value = "";
   try {
     const page = await fetchMaterialAssetPage(buildPageQuery(0));
     if (requestId !== assetLoadRequestId) {
@@ -438,7 +435,7 @@ async function loadAssets() {
     selectedAssetIds.value = selectedAssetIds.value.filter((id) => assets.value.some((asset) => asset.id === id));
   } catch (error) {
     if (requestId === assetLoadRequestId) {
-      errorMessage.value = error instanceof Error ? error.message : "素材列表加载失败";
+      messageApi.error(error instanceof Error ? error.message : "素材列表加载失败");
     }
   } finally {
     if (requestId === assetLoadRequestId) {
@@ -453,7 +450,6 @@ async function loadMoreAssets() {
   }
   const requestId = assetLoadRequestId;
   loadingMore.value = true;
-  errorMessage.value = "";
   try {
     const page = await fetchMaterialAssetPage(buildPageQuery(nextAssetOffset.value));
     if (requestId !== assetLoadRequestId) {
@@ -468,7 +464,7 @@ async function loadMoreAssets() {
     hasMoreAssets.value = page.hasMore;
   } catch (error) {
     if (requestId === assetLoadRequestId) {
-      errorMessage.value = error instanceof Error ? error.message : "更多素材加载失败";
+      messageApi.error(error instanceof Error ? error.message : "更多素材加载失败");
     }
   } finally {
     if (requestId === assetLoadRequestId) {
@@ -499,12 +495,11 @@ async function handleBatchUpload() {
     message: "批量上传会更新你的素材记录，请先登录或使用邀请码注册。",
   });
   if (!authenticated) {
-    errorMessage.value = "登录后可继续批量上传。";
+    messageApi.warning("登录后可继续批量上传。");
     return;
   }
   const ids = [...selectedAssetIds.value];
   busyActionKey.value = "batch-upload";
-  errorMessage.value = "";
   try {
     for (const assetId of ids) {
       const asset = assets.value.find((item) => item.id === assetId);
@@ -515,7 +510,7 @@ async function handleBatchUpload() {
     selectedAssetIds.value = [];
     await loadAssets();
   } catch (error) {
-    errorMessage.value = error instanceof Error ? error.message : "批量上传失败";
+    messageApi.error(error instanceof Error ? error.message : "批量上传失败");
   } finally {
     busyActionKey.value = "";
   }
@@ -530,12 +525,11 @@ async function handleBatchDelete() {
     message: "批量删除会修改你的素材库，请先登录或使用邀请码注册。",
   });
   if (!authenticated) {
-    errorMessage.value = "登录后可继续批量删除。";
+    messageApi.warning("登录后可继续批量删除。");
     return;
   }
   const ids = [...selectedAssetIds.value];
   busyActionKey.value = "batch-delete";
-  errorMessage.value = "";
   try {
     for (const assetId of ids) {
       await deleteMaterialAsset(assetId);
@@ -543,7 +537,7 @@ async function handleBatchDelete() {
     selectedAssetIds.value = [];
     await loadAssets();
   } catch (error) {
-    errorMessage.value = error instanceof Error ? error.message : "批量删除失败";
+    messageApi.error(error instanceof Error ? error.message : "批量删除失败");
   } finally {
     busyActionKey.value = "";
   }
@@ -555,16 +549,15 @@ async function refreshAfterMutation(mutator: () => Promise<unknown>, actionKey: 
     message: "素材操作会修改你的素材库，请先登录或使用邀请码注册。",
   });
   if (!authenticated) {
-    errorMessage.value = "登录后可继续操作素材。";
+    messageApi.warning("登录后可继续操作素材。");
     return;
   }
   busyActionKey.value = actionKey;
-  errorMessage.value = "";
   try {
     await mutator();
     await loadAssets();
   } catch (error) {
-    errorMessage.value = error instanceof Error ? error.message : "素材操作失败";
+    messageApi.error(error instanceof Error ? error.message : "素材操作失败");
   } finally {
     busyActionKey.value = "";
   }
@@ -596,7 +589,7 @@ async function copyRemoteUrl(remoteUrl?: string | null) {
   try {
     await navigator.clipboard.writeText(value);
   } catch {
-    errorMessage.value = "远程路径复制失败，请手动复制";
+    messageApi.error("远程路径复制失败，请手动复制");
   }
 }
 
@@ -617,17 +610,16 @@ async function handleReuseAsset(assetId: string) {
     message: "复用素材会创建你的阶段工作流，请先登录或使用邀请码注册。",
   });
   if (!authenticated) {
-    errorMessage.value = "登录后可继续复用素材。";
+    messageApi.warning("登录后可继续复用素材。");
     return;
   }
   busyActionKey.value = `reuse-${assetId}`;
-  errorMessage.value = "";
   try {
     const workflow = await reuseMaterialAsset(assetId, { mode: "clone" });
     await loadAssets();
     await router.push(`/workflows/${workflow.id}`);
   } catch (error) {
-    errorMessage.value = error instanceof Error ? error.message : "素材操作失败";
+    messageApi.error(error instanceof Error ? error.message : "素材操作失败");
   } finally {
     busyActionKey.value = "";
   }

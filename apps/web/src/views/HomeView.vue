@@ -64,7 +64,7 @@
         <div class="home-composer__body">
           <label class="home-composer__prompt">
             <div v-if="showPromptPlaceholder" class="home-composer__placeholder" aria-hidden="true">
-              <span>输入想法、剧本或上传参考，支持 “/” 使用技能，</span>
+              <span>输入想法、剧本或上传参考，支持 "/" 使用技能，</span>
               <span class="home-composer__placeholder-tag">@</span>
               <span> 添加主体，和Agent一起创作</span>
             </div>

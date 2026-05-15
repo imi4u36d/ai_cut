@@ -37,9 +37,6 @@
         <div v-if="loading" class="surface-panel state-panel">
           正在读取模型配置...
         </div>
-        <div v-else-if="errorMessage" class="surface-panel state-panel state-panel-error">
-          {{ errorMessage }}
-        </div>
         <div v-else-if="runtimeConfig" class="settings-section__content">
           <div class="settings-layout">
             <aside class="settings-overview-rail">
@@ -255,6 +252,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
 import HintBell from "@/components/HintBell.vue";
+import { messageApi } from "@/composables/useMessage";
 import { fetchUserModelConfig, saveUserModelConfigKeys, validateUserModelConfig } from "@/api/auth";
 import type {
   AdminModelConfigKeyUpdateRequest,
@@ -292,7 +290,6 @@ const validationResult = ref<AdminModelConfigValidationResponse | null>(null);
 const loading = ref(false);
 const validating = ref(false);
 const saving = ref(false);
-const errorMessage = ref("");
 const successMessage = ref("");
 
 const displayedConfig = computed(() => validationResult.value?.snapshot ?? runtimeConfig.value);
@@ -477,13 +474,11 @@ function resetDraft() {
   }
   providerDrafts.value = toKeyDraft(runtimeConfig.value);
   validationResult.value = null;
-  errorMessage.value = "";
   successMessage.value = "";
 }
 
 async function loadConfig() {
   loading.value = true;
-  errorMessage.value = "";
   successMessage.value = "";
   try {
     const response = await fetchUserModelConfig();
@@ -491,7 +486,7 @@ async function loadConfig() {
     providerDrafts.value = toKeyDraft(response);
     validationResult.value = null;
   } catch (error) {
-    errorMessage.value = error instanceof Error ? error.message : "读取模型配置失败";
+    messageApi.error(error instanceof Error ? error.message : "读取模型配置失败");
   } finally {
     loading.value = false;
   }
@@ -502,12 +497,11 @@ async function validateDraft() {
     return;
   }
   validating.value = true;
-  errorMessage.value = "";
   successMessage.value = "";
   try {
     validationResult.value = await validateUserModelConfig(buildRequest());
   } catch (error) {
-    errorMessage.value = error instanceof Error ? error.message : "密钥校验失败";
+    messageApi.error(error instanceof Error ? error.message : "密钥校验失败");
   } finally {
     validating.value = false;
   }
@@ -518,7 +512,6 @@ async function saveDraft() {
     return;
   }
   saving.value = true;
-  errorMessage.value = "";
   successMessage.value = "";
   try {
     const response = await saveUserModelConfigKeys(buildRequest());
@@ -527,7 +520,7 @@ async function saveDraft() {
     validationResult.value = null;
     successMessage.value = "API Key 已保存，并刷新了当前运行时配置。";
   } catch (error) {
-    errorMessage.value = error instanceof Error ? error.message : "保存 API Key 失败";
+    messageApi.error(error instanceof Error ? error.message : "保存 API Key 失败");
   } finally {
     saving.value = false;
   }

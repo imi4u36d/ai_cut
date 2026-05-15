@@ -11,9 +11,6 @@
     </div>
 
     <div v-if="loading" class="px-5 py-8 text-sm text-slate-500">正在读取运行时状态...</div>
-    <div v-else-if="errorMessage" class="m-5 admin-alert-error">
-      {{ errorMessage }}
-    </div>
     <div v-else-if="health" class="p-5">
       <div class="mb-3 flex flex-wrap items-center gap-2">
         <span :class="health.runtime.model.ready ? 'admin-chip admin-chip-success' : 'admin-chip admin-chip-warn'">
@@ -99,10 +96,10 @@
 import { computed, onMounted, ref } from "vue";
 import { fetchHealth } from "@/api/health";
 import type { HealthResponse } from "@/types";
+import { messageApi } from "@/composables/useMessage";
 
 const health = ref<HealthResponse | null>(null);
 const loading = ref(true);
-const errorMessage = ref("");
 
 const capabilityRows = computed(() => {
   if (!health.value) {
@@ -123,11 +120,10 @@ const capabilityRows = computed(() => {
 
 async function loadHealth() {
   loading.value = true;
-  errorMessage.value = "";
   try {
     health.value = await fetchHealth();
   } catch (error) {
-    errorMessage.value = error instanceof Error ? error.message : "读取运行时状态失败";
+    messageApi.error(error instanceof Error ? error.message : "读取运行时状态失败");
   } finally {
     loading.value = false;
   }

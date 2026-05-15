@@ -38,9 +38,6 @@
         <div v-if="redirectHint" class="auth-form__hint">
           登录成功后会返回到 `{{ redirectHint }}`
         </div>
-        <div v-if="errorMessage" class="auth-form__error">
-          {{ errorMessage }}
-        </div>
 
         <button :disabled="submitting" class="auth-form__submit" type="submit">
           {{ submitting ? "登录中..." : "登录" }}
@@ -61,6 +58,7 @@
 import { computed, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { loginAndStoreSession } from "@/auth/session";
+import { messageApi } from "@/composables/useMessage";
 
 const route = useRoute();
 const router = useRouter();
@@ -69,7 +67,6 @@ const username = ref("");
 const password = ref("");
 const showPassword = ref(false);
 const submitting = ref(false);
-const errorMessage = ref("");
 
 function normalizeRedirectTarget(value: unknown) {
   if (typeof value !== "string" || !value.startsWith("/") || value.startsWith("//")) {
@@ -87,7 +84,6 @@ const activateLink = computed(() => ({
 
 async function handleSubmit() {
   submitting.value = true;
-  errorMessage.value = "";
   try {
     await loginAndStoreSession({
       username: username.value,
@@ -95,7 +91,7 @@ async function handleSubmit() {
     });
     await router.replace(redirectTarget.value);
   } catch (error) {
-    errorMessage.value = error instanceof Error ? error.message : "登录失败";
+    messageApi.error(error instanceof Error ? error.message : "登录失败");
   } finally {
     submitting.value = false;
   }

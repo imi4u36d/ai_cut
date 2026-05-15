@@ -60,7 +60,7 @@
     </section>
 
     <p class="workflow-note reveal-on-scroll">
-      传统 AI 视频工具只解决“生成一个片段”；JianDou 解决的是完整创作链路的可控、可复用、可协作。
+      传统 AI 视频工具只解决"生成一个片段"；JianDou 解决的是完整创作链路的可控、可复用、可协作。
     </p>
 
     <section class="capability-section reveal-on-scroll" id="capabilities">

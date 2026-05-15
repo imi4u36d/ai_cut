@@ -63,15 +63,6 @@
       </div>
     </section>
 
-    <div v-if="errorMessage" class="admin-alert-error">
-      {{ errorMessage }}
-    </div>
-    <div
-      v-else-if="actionMessage"
-      :class="actionMessageTone === 'warn' ? 'admin-alert-warn' : 'admin-alert-success'"
-    >
-      {{ actionMessage }}
-    </div>
 
     <section class="admin-panel overflow-hidden">
       <div class="admin-panel-header">
@@ -181,6 +172,7 @@
  */
 import { computed, onMounted, ref, watch } from "vue";
 import { bulkDeleteAdminTasks, bulkRetryAdminTasks, deleteAdminTask, fetchAdminTasks, retryAdminTask } from "@/features/admin";
+import { messageApi } from "@/composables/useMessage";
 import AppSelect from "@/components/common/AppSelect.vue";
 import type { AppSelectOption } from "@/components/common/app-select";
 import { usePolling } from "@/composables/usePolling";
@@ -189,9 +181,6 @@ import type { TaskListItem, TaskStatus } from "@/types";
 const tasks = ref<TaskListItem[]>([]);
 const loading = ref(true);
 const actionLoading = ref(false);
-const errorMessage = ref("");
-const actionMessage = ref("");
-const actionMessageTone = ref<"success" | "warn">("success");
 const searchText = ref("");
 const statusFilter = ref<TaskStatus | "all">("all");
 const sortMode = ref<"updated_desc" | "created_desc" | "progress_desc" | "status_desc">("updated_desc");
@@ -510,12 +499,11 @@ async function loadTasks() {
 }
 
 async function refreshAll() {
-  errorMessage.value = "";
   loading.value = true;
   try {
     await loadTasks();
   } catch (error) {
-    errorMessage.value = error instanceof Error ? error.message : "读取任务失败";
+    messageApi.error(error instanceof Error ? error.message : "读取任务失败");
   } finally {
     loading.value = false;
   }
@@ -523,35 +511,29 @@ async function refreshAll() {
 
 async function retrySingle(taskId: string) {
   actionLoading.value = true;
-  errorMessage.value = "";
-  actionMessage.value = "";
   try {
     await retryAdminTask(taskId);
-    actionMessage.value = "任务已提交重试。";
-    actionMessageTone.value = "success";
+    messageApi.success("任务已提交重试。");
     await refreshAll();
   } catch (error) {
-    errorMessage.value = error instanceof Error ? error.message : "重试失败";
+    messageApi.error(error instanceof Error ? error.message : "重试失败");
   } finally {
     actionLoading.value = false;
   }
 }
 
 async function deleteSingle(taskId: string, title: string) {
-  if (!window.confirm(`确认删除任务“${title}”吗？`)) {
+  if (!window.confirm(`确认删除任务"${title}"吗？`)) {
     return;
   }
   actionLoading.value = true;
-  errorMessage.value = "";
-  actionMessage.value = "";
   try {
     await deleteAdminTask(taskId);
     selectedIds.value = selectedIds.value.filter((id) => id !== taskId);
-    actionMessage.value = "任务已删除。";
-    actionMessageTone.value = "success";
+    messageApi.success("任务已删除。");
     await refreshAll();
   } catch (error) {
-    errorMessage.value = error instanceof Error ? error.message : "删除失败";
+    messageApi.error(error instanceof Error ? error.message : "删除失败");
   } finally {
     actionLoading.value = false;
   }
@@ -562,8 +544,6 @@ async function handleBulkRetry() {
     return;
   }
   actionLoading.value = true;
-  errorMessage.value = "";
-  actionMessage.value = "";
   try {
     const result = await bulkRetryAdminTasks(selectedIds.value);
     const failedIds = new Set(result.failed.map((item) => item.taskId));
@@ -571,18 +551,16 @@ async function handleBulkRetry() {
       ? selectedIds.value.filter((id) => failedIds.has(id))
       : [];
     if (result.failed.length) {
-      actionMessage.value = `已重试 ${result.succeededTaskIds.length} 条，${result.failed.length} 条未成功：${result.failed
+      messageApi.warning(`已重试 ${result.succeededTaskIds.length} 条，${result.failed.length} 条未成功：${result.failed
         .slice(0, 3)
         .map((item) => `${item.taskId}（${item.reason}）`)
-        .join("；")}`;
-      actionMessageTone.value = "warn";
+        .join("；")}`);
     } else {
-      actionMessage.value = `已批量重试 ${result.succeededTaskIds.length} 条任务。`;
-      actionMessageTone.value = "success";
+      messageApi.success(`已批量重试 ${result.succeededTaskIds.length} 条任务。`);
     }
     await refreshAll();
   } catch (error) {
-    errorMessage.value = error instanceof Error ? error.message : "批量重试失败";
+    messageApi.error(error instanceof Error ? error.message : "批量重试失败");
   } finally {
     actionLoading.value = false;
   }
@@ -596,8 +574,6 @@ async function handleBulkDelete() {
     return;
   }
   actionLoading.value = true;
-  errorMessage.value = "";
-  actionMessage.value = "";
   try {
     const result = await bulkDeleteAdminTasks(selectedIds.value);
     const failedIds = new Set(result.failed.map((item) => item.taskId));
@@ -605,18 +581,16 @@ async function handleBulkDelete() {
       ? selectedIds.value.filter((id) => failedIds.has(id))
       : [];
     if (result.failed.length) {
-      actionMessage.value = `已删除 ${result.succeededTaskIds.length} 条，${result.failed.length} 条未成功：${result.failed
+      messageApi.warning(`已删除 ${result.succeededTaskIds.length} 条，${result.failed.length} 条未成功：${result.failed
         .slice(0, 3)
         .map((item) => `${item.taskId}（${item.reason}）`)
-        .join("；")}`;
-      actionMessageTone.value = "warn";
+        .join("；")}`);
     } else {
-      actionMessage.value = `已批量删除 ${result.succeededTaskIds.length} 条任务。`;
-      actionMessageTone.value = "success";
+      messageApi.success(`已批量删除 ${result.succeededTaskIds.length} 条任务。`);
     }
     await refreshAll();
   } catch (error) {
-    errorMessage.value = error instanceof Error ? error.message : "批量删除失败";
+    messageApi.error(error instanceof Error ? error.message : "批量删除失败");
   } finally {
     actionLoading.value = false;
   }

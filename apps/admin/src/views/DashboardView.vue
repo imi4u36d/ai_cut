@@ -1,14 +1,5 @@
 <template>
   <section class="dashboard-page">
-    <el-alert
-      v-if="errorMessage"
-      :closable="false"
-      class="dashboard-page__alert"
-      show-icon
-      type="error"
-      :title="errorMessage"
-    />
-
     <div class="surface-card dashboard-page__hero">
       <div>
         <p class="dashboard-page__eyebrow">Operations Overview</p>
@@ -178,12 +169,12 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
+import { ElMessage } from "element-plus";
 import { Refresh } from "@element-plus/icons-vue";
 import { fetchAdminOverview, fetchAdminUsers } from "@/features/dashboard/services/dashboardService";
 import type { AdminOverviewResponse, AdminTaskListItem, AdminUser, TaskStatus } from "@/types";
 
 const loading = ref(false);
-const errorMessage = ref("");
 const overview = ref<AdminOverviewResponse | null>(null);
 const users = ref<AdminUser[]>([]);
 
@@ -305,7 +296,6 @@ function severityTagType(severity?: AdminTaskListItem["diagnosisSeverity"]): "" 
 
 async function loadDashboard() {
   loading.value = true;
-  errorMessage.value = "";
   const [overviewResult, usersResult] = await Promise.allSettled([fetchAdminOverview(), fetchAdminUsers()]);
   const errors: string[] = [];
 
@@ -321,7 +311,9 @@ async function loadDashboard() {
     errors.push(usersResult.reason instanceof Error ? usersResult.reason.message : "读取用户统计失败");
   }
 
-  errorMessage.value = errors.join("；");
+  if (errors.length) {
+    ElMessage.error(errors.join("；"));
+  }
   loading.value = false;
 }
 

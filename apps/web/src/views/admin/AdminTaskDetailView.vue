@@ -13,9 +13,6 @@
       </div>
     </div>
 
-    <div v-if="errorMessage" class="admin-alert-error">
-      {{ errorMessage }}
-    </div>
 
     <div v-if="loading" class="admin-panel px-4 py-8 text-sm text-slate-500">
       正在读取任务详情...
@@ -293,6 +290,7 @@
  * 管理任务详情页面组件。
  */
 import { computed, ref, watch } from "vue";
+import { messageApi } from "@/composables/useMessage";
 import { useRoute, useRouter } from "vue-router";
 import { deleteAdminTask, fetchAdminTask, fetchAdminTaskDiagnosis, fetchAdminTaskTrace, retryAdminTask } from "@/features/admin";
 import type { AdminTaskDiagnosis, TaskDetail, TaskDurationDiagnosticClip, TaskTraceEvent } from "@/types";
@@ -316,7 +314,6 @@ const traceEvents = ref<TaskTraceEvent[]>([]);
 const diagnosis = ref<AdminTaskDiagnosis | null>(null);
 const loading = ref(true);
 const actionLoading = ref(false);
-const errorMessage = ref("");
 const traceExpanded = ref(false);
 
 const ghostButtonClass = "admin-btn-ghost";
@@ -603,11 +600,10 @@ async function loadDiagnosis() {
 
 async function refresh() {
   loading.value = true;
-  errorMessage.value = "";
   try {
     await Promise.all([loadTask(), loadTrace(), loadDiagnosis()]);
   } catch (error) {
-    errorMessage.value = error instanceof Error ? error.message : "读取任务详情失败";
+    messageApi.error(error instanceof Error ? error.message : "读取任务详情失败");
   } finally {
     loading.value = false;
   }
@@ -619,14 +615,14 @@ async function retryTaskAction() {
     await retryAdminTask(taskId.value);
     await refresh();
   } catch (error) {
-    errorMessage.value = error instanceof Error ? error.message : "重试失败";
+    messageApi.error(error instanceof Error ? error.message : "重试失败");
   } finally {
     actionLoading.value = false;
   }
 }
 
 async function deleteTaskAction() {
-  if (!window.confirm(`确认删除任务“${task.value?.title || taskId.value}”吗？`)) {
+  if (!window.confirm(`确认删除任务"${task.value?.title || taskId.value}"吗？`)) {
     return;
   }
   actionLoading.value = true;
@@ -634,7 +630,7 @@ async function deleteTaskAction() {
     await deleteAdminTask(taskId.value);
     router.push("/admin/tasks");
   } catch (error) {
-    errorMessage.value = error instanceof Error ? error.message : "删除失败";
+    messageApi.error(error instanceof Error ? error.message : "删除失败");
   } finally {
     actionLoading.value = false;
   }
